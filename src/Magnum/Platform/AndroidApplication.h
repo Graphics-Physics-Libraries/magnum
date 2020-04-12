@@ -56,13 +56,10 @@ namespace Magnum { namespace Platform {
 
 @m_keywords{Application}
 
-Application running on Android.
-
-This application library is available only on
+Application running on Android. Available only on
 @ref CORRADE_TARGET_ANDROID "Android", see respective sections
 in the @ref building-corrade-cross-android "Corrade" and
-@ref building-cross-android "Magnum" building documentation. It is built if
-`WITH_ANDROIDAPPLICATION` is enabled when building Magnum.
+@ref building-cross-android "Magnum" building documentation.
 
 @section Platform-AndroidApplication-bootstrap Bootstrap application
 
@@ -90,12 +87,12 @@ together with a troubleshooting guide is available in @ref platforms-android.
 
 @section Platform-AndroidApplication-usage General usage
 
-In order to use this library from CMake, you need to copy `FindEGL.cmake`
-and `FindOpenGLES2.cmake` (or `FindOpenGLES3.cmake`) from the `modules/`
-directory in Magnum source to the `modules/` dir in your project (so it is able
-to find EGL and OpenGL ES libraries). Request the `AndroidApplication`
-component of the `Magnum` package and link to the `Magnum::AndroidApplication`
-target:
+This application library is built if `WITH_ANDROIDAPPLICATION` is enabled when
+building Magnum. To use this library with CMake, put [FindEGL.cmake](https://github.com/mosra/magnum/blob/master/modules/FindEGL.cmake)
+and [FindOpenGLES2.cmake](https://github.com/mosra/magnum/blob/master/modules/FindOpenGLES2.cmake) (or
+[FindOpenGLES3.cmake](https://github.com/mosra/magnum/blob/master/modules/FindOpenGLES3.cmake))
+into your `modules/` directory, request the `AndroidApplication` component of
+the `Magnum` package and link to the `Magnum::AndroidApplication` target:
 
 @code{.cmake}
 find_package(Magnum REQUIRED)
@@ -105,14 +102,31 @@ endif()
 
 # ...
 if(CORRADE_TARGET_ANDROID)
-    target_link_libraries(your-app Magnum::AndroidApplication)
+    target_link_libraries(your-app PRIVATE Magnum::AndroidApplication)
 endif()
+@endcode
+
+Additionally, if you're using Magnum as a CMake subproject, do the following
+* *before* calling @cmake find_package() @ce to ensure it's enabled, as the
+library is not built by default:
+
+@code{.cmake}
+set(WITH_ANDROIDAPPLICATION ON CACHE BOOL "" FORCE)
+add_subdirectory(magnum EXCLUDE_FROM_ALL)
 @endcode
 
 If no other application is requested, you can also use the generic
 `Magnum::Application` alias to simplify porting. Again, see @ref building and
 @ref cmake for more information. Note that unlike on other platforms you need
-to create *shared library* instead of executable.
+to create a *shared library* instead of an executable:
+
+@code{.cmake}
+if(NOT CORRADE_TARGET_ANDROID)
+    add_executable(your-app ...)
+else()
+    add_library(your-app SHARED ...)
+endif()
+@endcode
 
 In C++ code you need to implement at least @ref drawEvent() to be able to draw
 on the screen. The subclass must be then made accessible from JNI using
@@ -371,7 +385,11 @@ class AndroidApplication {
         /** @copydoc Sdl2Application::drawEvent() */
         virtual void drawEvent() = 0;
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Mouse handling */
 
@@ -399,7 +417,11 @@ class AndroidApplication {
          */
         virtual void mouseMoveEvent(MouseMoveEvent& event);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
     private:
         struct LogOutput;
@@ -418,6 +440,7 @@ class AndroidApplication {
         EGLDisplay _display;
         EGLSurface _surface;
         EGLContext _glContext;
+        Vector2i _previousMouseMovePosition{-1};
 
         Containers::Pointer<Platform::GLContext> _context;
         Containers::Pointer<LogOutput> _logOutput;
@@ -452,7 +475,7 @@ class AndroidApplication::GLConfiguration {
         /**
          * @brief Set color buffer size
          *
-         * Default is @cpp {8, 8, 8, 0} @ce (8-bit-per-channel RGB, no alpha).
+         * Default is @cpp {8, 8, 8, 8} @ce (8-bit-per-channel RGBA).
          * @see @ref setDepthBufferSize(), @ref setStencilBufferSize()
          */
         GLConfiguration& setColorBufferSize(const Vector4i& size) {
@@ -765,6 +788,17 @@ class AndroidApplication::MouseMoveEvent: public InputEvent {
                     Int(AMotionEvent_getY(_event, 0))};
         }
 
+        /**
+         * @brief Relative position
+         * @m_since{2019,10}
+         *
+         * Position relative to previous move event. Unlike
+         * @ref Sdl2Application, Android APIs don't provide relative position
+         * directly, so this is calculated explicitly as a delta from previous
+         * move event position.
+         */
+        Vector2i relativePosition() const { return _relativePosition; }
+
         /** @brief Mouse buttons */
         Buttons buttons() const {
             #if __ANDROID_API__ >= 14
@@ -775,7 +809,9 @@ class AndroidApplication::MouseMoveEvent: public InputEvent {
         }
 
     private:
-        explicit MouseMoveEvent(AInputEvent* event): InputEvent(event) {}
+        explicit MouseMoveEvent(AInputEvent* event, Vector2i relativePosition): InputEvent{event}, _relativePosition{relativePosition} {}
+
+        const Vector2i _relativePosition;
 };
 
 CORRADE_ENUMSET_OPERATORS(AndroidApplication::MouseMoveEvent::Buttons)
@@ -783,6 +819,8 @@ CORRADE_ENUMSET_OPERATORS(AndroidApplication::MouseMoveEvent::Buttons)
 /** @hideinitializer
 @brief Entry point for Android applications
 @param className Class name
+
+@m_keywords{MAGNUM_APPLICATION_MAIN()}
 
 See @ref Magnum::Platform::AndroidApplication "Platform::AndroidApplication"
 for usage information. This macro abstracts out platform-specific entry point

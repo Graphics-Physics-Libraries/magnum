@@ -25,24 +25,22 @@
 
 #include "DistanceFieldVector.h"
 
+#include <Corrade/Containers/EnumSet.hpp>
 #include <Corrade/Containers/Reference.h>
 #include <Corrade/Utility/Resource.h>
 
 #include "Magnum/GL/Context.h"
 #include "Magnum/GL/Extensions.h"
 #include "Magnum/GL/Shader.h"
+#include "Magnum/Math/Color.h"
+#include "Magnum/Math/Matrix3.h"
+#include "Magnum/Math/Matrix4.h"
 
 #include "Magnum/Shaders/Implementation/CreateCompatibilityShader.h"
 
 namespace Magnum { namespace Shaders {
 
-namespace {
-    template<UnsignedInt> constexpr const char* vertexShaderName();
-    template<> constexpr const char* vertexShaderName<2>() { return "AbstractVector2D.vert"; }
-    template<> constexpr const char* vertexShaderName<3>() { return "AbstractVector3D.vert"; }
-}
-
-template<UnsignedInt dimensions> DistanceFieldVector<dimensions>::DistanceFieldVector() {
+template<UnsignedInt dimensions> DistanceFieldVector<dimensions>::DistanceFieldVector(const Flags flags): _flags{flags} {
     #ifdef MAGNUM_BUILD_STATIC
     /* Import resources on static build, if not already */
     if(!Utility::Resource::hasGroup("MagnumShaders"))
@@ -59,8 +57,10 @@ template<UnsignedInt dimensions> DistanceFieldVector<dimensions>::DistanceFieldV
     GL::Shader vert = Implementation::createCompatibilityShader(rs, version, GL::Shader::Type::Vertex);
     GL::Shader frag = Implementation::createCompatibilityShader(rs, version, GL::Shader::Type::Fragment);
 
-    vert.addSource(rs.get("generic.glsl"))
-        .addSource(rs.get(vertexShaderName<dimensions>()));
+    vert.addSource(flags & Flag::TextureTransformation ? "#define TEXTURE_TRANSFORMATION\n" : "")
+        .addSource(dimensions == 2 ? "#define TWO_DIMENSIONS\n" : "#define THREE_DIMENSIONS\n")
+        .addSource(rs.get("generic.glsl"))
+        .addSource(rs.get("AbstractVector.vert"));
     frag.addSource(rs.get("generic.glsl"))
         .addSource(rs.get("DistanceFieldVector.frag"));
 
@@ -86,6 +86,8 @@ template<UnsignedInt dimensions> DistanceFieldVector<dimensions>::DistanceFieldV
     #endif
     {
         _transformationProjectionMatrixUniform = GL::AbstractShaderProgram::uniformLocation("transformationProjectionMatrix");
+        if(flags & Flag::TextureTransformation)
+            _textureMatrixUniform = GL::AbstractShaderProgram::uniformLocation("textureMatrix");
         _colorUniform = GL::AbstractShaderProgram::uniformLocation("color");
         _outlineColorUniform = GL::AbstractShaderProgram::uniformLocation("outlineColor");
         _outlineRangeUniform = GL::AbstractShaderProgram::uniformLocation("outlineRange");
@@ -97,19 +99,76 @@ template<UnsignedInt dimensions> DistanceFieldVector<dimensions>::DistanceFieldV
     #endif
     {
         GL::AbstractShaderProgram::setUniform(GL::AbstractShaderProgram::uniformLocation("vectorTexture"),
-            AbstractVector<dimensions>::VectorTextureLayer);
+            AbstractVector<dimensions>::VectorTextureUnit);
     }
 
     /* Set defaults in OpenGL ES (for desktop they are set in shader code itself) */
     #ifdef MAGNUM_TARGET_GLES
     setTransformationProjectionMatrix({});
+    if(flags & Flag::TextureTransformation) setTextureMatrix({});
     setColor(Color4{1.0f}); /* Outline color is zero by default */
     setOutlineRange(0.5f, 1.0f);
     setSmoothness(0.04f);
     #endif
 }
 
+template<UnsignedInt dimensions> DistanceFieldVector<dimensions>& DistanceFieldVector<dimensions>::setTransformationProjectionMatrix(const MatrixTypeFor<dimensions, Float>& matrix) {
+    GL::AbstractShaderProgram::setUniform(_transformationProjectionMatrixUniform, matrix);
+    return *this;
+}
+
+template<UnsignedInt dimensions> DistanceFieldVector<dimensions>& DistanceFieldVector<dimensions>::setTextureMatrix(const Matrix3& matrix) {
+    CORRADE_ASSERT(_flags & Flag::TextureTransformation,
+        "Shaders::DistanceFieldVector::setTextureMatrix(): the shader was not created with texture transformation enabled", *this);
+    GL::AbstractShaderProgram::setUniform(_textureMatrixUniform, matrix);
+    return *this;
+}
+
+template<UnsignedInt dimensions> DistanceFieldVector<dimensions>& DistanceFieldVector<dimensions>::setColor(const Color4& color) {
+    GL::AbstractShaderProgram::setUniform(_colorUniform, color);
+    return *this;
+}
+
+template<UnsignedInt dimensions> DistanceFieldVector<dimensions>& DistanceFieldVector<dimensions>::setOutlineColor(const Color4& color) {
+    GL::AbstractShaderProgram::setUniform(_outlineColorUniform, color);
+    return *this;
+}
+
+template<UnsignedInt dimensions> DistanceFieldVector<dimensions>& DistanceFieldVector<dimensions>::setOutlineRange(Float start, Float end) {
+    GL::AbstractShaderProgram::setUniform(_outlineRangeUniform, Vector2(start, end));
+    return *this;
+}
+
+template<UnsignedInt dimensions> DistanceFieldVector<dimensions>& DistanceFieldVector<dimensions>::setSmoothness(Float value) {
+    GL::AbstractShaderProgram::setUniform(_smoothnessUniform, value);
+    return *this;
+}
+
 template class DistanceFieldVector<2>;
 template class DistanceFieldVector<3>;
+
+namespace Implementation {
+
+Debug& operator<<(Debug& debug, const DistanceFieldVectorFlag value) {
+    debug << "Shaders::DistanceFieldVector::Flag" << Debug::nospace;
+
+    switch(value) {
+        /* LCOV_EXCL_START */
+        #define _c(v) case DistanceFieldVectorFlag::v: return debug << "::" #v;
+        _c(TextureTransformation)
+        #undef _c
+        /* LCOV_EXCL_STOP */
+    }
+
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(UnsignedByte(value)) << Debug::nospace << ")";
+}
+
+Debug& operator<<(Debug& debug, const DistanceFieldVectorFlags value) {
+    return Containers::enumSetDebugOutput(debug, value, "Shaders::DistanceFieldVector::Flags{}", {
+        DistanceFieldVectorFlag::TextureTransformation
+        });
+}
+
+}
 
 }}

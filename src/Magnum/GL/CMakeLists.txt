@@ -25,8 +25,7 @@
 
 set(MagnumGL_SRCS
     AbstractObject.cpp
-    AbstractShaderProgram.cpp
-    Attribute.cpp
+    AbstractQuery.cpp
     Buffer.cpp
     Context.cpp
     DefaultFramebuffer.cpp
@@ -36,12 +35,14 @@ set(MagnumGL_SRCS
     Renderer.cpp
     Shader.cpp
     Texture.cpp
+    TextureFormat.cpp
     Version.cpp
 
     Implementation/BufferState.cpp
     Implementation/ContextState.cpp
     Implementation/FramebufferState.cpp
     Implementation/MeshState.cpp
+    Implementation/QueryState.cpp
     Implementation/RendererState.cpp
     Implementation/ShaderProgramState.cpp
     Implementation/ShaderState.cpp
@@ -52,7 +53,9 @@ set(MagnumGL_SRCS
 
 set(MagnumGL_GracefulAssert_SRCS
     AbstractFramebuffer.cpp
+    AbstractShaderProgram.cpp
     AbstractTexture.cpp
+    Attribute.cpp
     CubeMapTexture.cpp
     Mesh.cpp
     MeshView.cpp
@@ -62,6 +65,7 @@ set(MagnumGL_GracefulAssert_SRCS
 set(MagnumGL_HEADERS
     AbstractFramebuffer.h
     AbstractObject.h
+    AbstractQuery.h
     AbstractShaderProgram.h
     AbstractTexture.h
     Attribute.h
@@ -83,6 +87,7 @@ set(MagnumGL_HEADERS
     Shader.h
     Texture.h
     TextureFormat.h
+    TimeQuery.h
     Version.h
 
     visibility.h)
@@ -94,6 +99,7 @@ set(MagnumGL_PRIVATE_HEADERS
     Implementation/FramebufferState.h
     Implementation/maxTextureSize.h
     Implementation/MeshState.h
+    Implementation/QueryState.h
     Implementation/RendererState.h
     Implementation/ShaderProgramState.h
     Implementation/ShaderState.h
@@ -136,8 +142,7 @@ if(NOT TARGET_WEBGL)
         Implementation/DebugState.cpp)
 
     list(APPEND MagnumGL_HEADERS
-        DebugOutput.h
-        TimeQuery.h)
+        DebugOutput.h)
 
     list(APPEND MagnumGL_PRIVATE_HEADERS
         Implementation/DebugState.h)
@@ -159,17 +164,8 @@ endif()
 
 # Desktop, OpenGL ES and WebGL 2.0 stuff that is not available in WebGL 1.0
 if(NOT (TARGET_WEBGL AND TARGET_GLES2))
-    list(APPEND MagnumGL_SRCS
-        AbstractQuery.cpp
-
-        Implementation/QueryState.cpp)
-
     list(APPEND MagnumGL_HEADERS
-        AbstractQuery.h
         SampleQuery.h)
-
-    list(APPEND MagnumGL_PRIVATE_HEADERS
-        Implementation/QueryState.h)
 endif()
 
 # Objects shared between main and test library
@@ -181,8 +177,7 @@ add_library(MagnumGLObjects OBJECT
 # be overriden with system ones or explicit (MagnumExternal/OpenGL/GLES2/gl2ext.h)
 # where only our headers will be used
 target_include_directories(MagnumGLObjects PUBLIC
-    $<TARGET_PROPERTY:Magnum,INTERFACE_INCLUDE_DIRECTORIES>
-    ${PROJECT_SOURCE_DIR}/src/MagnumExternal/OpenGL)
+    $<TARGET_PROPERTY:Magnum,INTERFACE_INCLUDE_DIRECTORIES>)
 if(NOT BUILD_STATIC)
     target_compile_definitions(MagnumGLObjects PRIVATE "MagnumGLObjects_EXPORTS" "FlextGL_EXPORTS")
 endif()
@@ -210,11 +205,6 @@ if(NOT BUILD_STATIC)
 elseif(BUILD_STATIC_PIC)
     set_target_properties(MagnumGL PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
-# We can use both implicit include path (GLES2/gl2.h) where our headers can
-# be overriden with system ones or explicit (MagnumExternal/OpenGL/GLES2/gl2ext.h)
-# where only our headers will be used
-target_include_directories(MagnumGL PUBLIC
-    ${PROJECT_SOURCE_DIR}/src/MagnumExternal/OpenGL)
 target_link_libraries(MagnumGL PUBLIC Magnum)
 if(NOT TARGET_GLES OR TARGET_DESKTOP_GLES)
     # If the GLVND library (CMake 3.11+) was found, link to the imported
@@ -294,8 +284,6 @@ if(BUILD_TESTS)
         $<TARGET_OBJECTS:MagnumGLObjects>
         ${MagnumGL_FlextGL_SRCS}
         ${MagnumGL_GracefulAssert_SRCS})
-    target_include_directories(MagnumGLTestLib PUBLIC
-        ${PROJECT_SOURCE_DIR}/src/MagnumExternal/OpenGL)
     set_target_properties(MagnumGLTestLib PROPERTIES
         DEBUG_POSTFIX "-d"
         FOLDER "Magnum/GL")
@@ -322,15 +310,6 @@ if(BUILD_TESTS)
         target_link_libraries(MagnumGLTestLib PUBLIC OpenGLES2::OpenGLES2)
     else()
         target_link_libraries(MagnumGLTestLib PUBLIC OpenGLES3::OpenGLES3)
-    endif()
-
-    # On Windows we need to install first and then run the tests to avoid "DLL
-    # not found" hell, thus we need to install this too
-    if(CORRADE_TARGET_WINDOWS AND NOT CMAKE_CROSSCOMPILING AND NOT BUILD_STATIC)
-        install(TARGETS MagnumGLTestLib
-            RUNTIME DESTINATION ${MAGNUM_BINARY_INSTALL_DIR}
-            LIBRARY DESTINATION ${MAGNUM_LIBRARY_INSTALL_DIR}
-            ARCHIVE DESTINATION ${MAGNUM_LIBRARY_INSTALL_DIR})
     endif()
 
     if(BUILD_GL_TESTS)

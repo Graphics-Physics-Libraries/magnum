@@ -30,6 +30,7 @@
 #include <Corrade/Utility/Debug.h>
 
 #include "Magnum/PixelFormat.h"
+#include "Magnum/GL/TextureFormat.h"
 
 namespace Magnum { namespace GL {
 
@@ -40,10 +41,24 @@ constexpr struct {
     PixelFormat format;
     PixelType type;
 } FormatMapping[] {
-    #define _c(input, format, type) {PixelFormat::format, PixelType::type},
+    #define _c(input, format, type, textureFormat) {PixelFormat::format, PixelType::type},
+    /* GCC 4.8 doesn't like just a {} for default enum values */
+    #define _n(input, format, type) {PixelFormat::format, PixelType::type},
     #define _s(input) {PixelFormat{}, PixelType{}},
     #include "Magnum/GL/Implementation/pixelFormatMapping.hpp"
     #undef _s
+    #undef _n
+    #undef _c
+};
+
+constexpr TextureFormat TextureFormatMapping[] {
+    #define _c(input, format, type, textureFormat) TextureFormat::textureFormat,
+    /* GCC 4.8 doesn't like just a {} for default enum values */
+    #define _n(input, format, type) TextureFormat{},
+    #define _s(input) TextureFormat{},
+    #include "Magnum/GL/Implementation/pixelFormatMapping.hpp"
+    #undef _s
+    #undef _n
     #undef _c
 };
 #endif
@@ -54,18 +69,27 @@ bool hasPixelFormat(const Magnum::PixelFormat format) {
     if(isPixelFormatImplementationSpecific(format))
         return true;
 
-    CORRADE_ASSERT(UnsignedInt(format) < Containers::arraySize(FormatMapping),
+    CORRADE_ASSERT(UnsignedInt(format) - 1 < Containers::arraySize(FormatMapping),
         "GL::hasPixelFormat(): invalid format" << format, {});
-    return UnsignedInt(FormatMapping[UnsignedInt(format)].format);
+    return UnsignedInt(FormatMapping[UnsignedInt(format) - 1].format);
+}
+
+bool hasTextureFormat(const Magnum::PixelFormat format) {
+    CORRADE_ASSERT(!isPixelFormatImplementationSpecific(format),
+        "GL::hasTextureFormat(): cannot map an implementation-specific pixel format to an OpenGL texture format", {});
+
+    CORRADE_ASSERT(UnsignedInt(format) - 1 < Containers::arraySize(TextureFormatMapping),
+        "GL::hasTextureFormat(): invalid format" << format, {});
+    return UnsignedInt(TextureFormatMapping[UnsignedInt(format) - 1]);
 }
 
 PixelFormat pixelFormat(const Magnum::PixelFormat format) {
     if(isPixelFormatImplementationSpecific(format))
         return pixelFormatUnwrap<GL::PixelFormat>(format);
 
-    CORRADE_ASSERT(UnsignedInt(format) < Containers::arraySize(FormatMapping),
+    CORRADE_ASSERT(UnsignedInt(format) - 1 < Containers::arraySize(FormatMapping),
         "GL::pixelFormat(): invalid format" << format, {});
-    const PixelFormat out = FormatMapping[UnsignedInt(format)].format;
+    const PixelFormat out = FormatMapping[UnsignedInt(format) - 1].format;
     CORRADE_ASSERT(UnsignedInt(out),
         "GL::pixelFormat(): format" << format << "is not supported on this target", {});
     return out;
@@ -78,11 +102,23 @@ PixelType pixelType(const Magnum::PixelFormat format, const UnsignedInt extra) {
         return PixelType(extra);
     }
 
-    CORRADE_ASSERT(UnsignedInt(format) < Containers::arraySize(FormatMapping),
+    CORRADE_ASSERT(UnsignedInt(format) - 1 < Containers::arraySize(FormatMapping),
         "GL::pixelType(): invalid format" << format, {});
-    const PixelType out = FormatMapping[UnsignedInt(format)].type;
+    const PixelType out = FormatMapping[UnsignedInt(format) - 1].type;
     CORRADE_ASSERT(UnsignedInt(out),
         "GL::pixelType(): format" << format << "is not supported on this target", {});
+    return out;
+}
+
+TextureFormat textureFormat(const Magnum::PixelFormat format) {
+    CORRADE_ASSERT(!isPixelFormatImplementationSpecific(format),
+        "GL::textureFormat(): cannot map an implementation-specific pixel format to an OpenGL texture format", {});
+
+    CORRADE_ASSERT(UnsignedInt(format) - 1 < Containers::arraySize(FormatMapping),
+        "GL::textureFormat(): invalid format" << format, {});
+    const TextureFormat out = TextureFormatMapping[UnsignedInt(format) - 1];
+    CORRADE_ASSERT(UnsignedInt(out),
+        "GL::textureFormat(): format" << format << "is not supported on this target", {});
     return out;
 }
 
@@ -102,7 +138,7 @@ UnsignedInt pixelSize(const PixelFormat format, const PixelType type) {
         #ifndef MAGNUM_TARGET_GLES2
         case PixelType::Short:
         #endif
-        case PixelType::HalfFloat:
+        case PixelType::Half:
             size = 2; break;
         case PixelType::UnsignedInt:
         #ifndef MAGNUM_TARGET_GLES2
@@ -227,13 +263,15 @@ UnsignedInt pixelSize(const PixelFormat format, const PixelType type) {
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
 Debug& operator<<(Debug& debug, const PixelFormat value) {
+    debug << "GL::PixelFormat" << Debug::nospace;
+
     #ifdef __GNUC__
     #pragma GCC diagnostic push
     #pragma GCC diagnostic error "-Wswitch"
     #endif
     switch(value) {
         /* LCOV_EXCL_START */
-        #define _c(value) case PixelFormat::value: return debug << "GL::PixelFormat::" #value;
+        #define _c(value) case PixelFormat::value: return debug << "::" #value;
         #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
         _c(Red)
         #endif
@@ -288,17 +326,19 @@ Debug& operator<<(Debug& debug, const PixelFormat value) {
     #pragma GCC diagnostic pop
     #endif
 
-    return debug << "GL::PixelFormat(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
 }
 
 Debug& operator<<(Debug& debug, const PixelType value) {
+    debug << "GL::PixelType" << Debug::nospace;
+
     #ifdef __GNUC__
     #pragma GCC diagnostic push
     #pragma GCC diagnostic error "-Wswitch"
     #endif
     switch(value) {
         /* LCOV_EXCL_START */
-        #define _c(value) case PixelType::value: return debug << "GL::PixelType::" #value;
+        #define _c(value) case PixelType::value: return debug << "::" #value;
         _c(UnsignedByte)
         #ifndef MAGNUM_TARGET_GLES2
         _c(Byte)
@@ -311,7 +351,7 @@ Debug& operator<<(Debug& debug, const PixelType value) {
         #ifndef MAGNUM_TARGET_GLES2
         _c(Int)
         #endif
-        _c(HalfFloat)
+        _c(Half)
         _c(Float)
         #ifndef MAGNUM_TARGET_GLES
         _c(UnsignedByte332)
@@ -352,15 +392,17 @@ Debug& operator<<(Debug& debug, const PixelType value) {
     #pragma GCC diagnostic pop
     #endif
 
-    return debug << "GL::PixelType(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
 }
 
 namespace {
 
 #ifndef DOXYGEN_GENERATING_OUTPUT /* It gets *really* confused */
+/* Enum values are the same between CompressedPixelFormat and TextureFormat, so
+   having just a single table for both */
 constexpr CompressedPixelFormat CompressedFormatMapping[] {
-    #define _c(input, format) GL::CompressedPixelFormat::format,
-    #define _s(input) GL::CompressedPixelFormat{},
+    #define _c(input, format) CompressedPixelFormat::format,
+    #define _s(input) CompressedPixelFormat{},
     #include "Magnum/GL/Implementation/compressedPixelFormatMapping.hpp"
     #undef _s
     #undef _c
@@ -373,31 +415,56 @@ bool hasCompressedPixelFormat(const Magnum::CompressedPixelFormat format) {
     if(isCompressedPixelFormatImplementationSpecific(format))
         return true;
 
-    CORRADE_ASSERT(UnsignedInt(format) < Containers::arraySize(CompressedFormatMapping),
+    CORRADE_ASSERT(UnsignedInt(format) - 1 < Containers::arraySize(CompressedFormatMapping),
         "GL::hasCompressedPixelFormat(): invalid format" << format, {});
-    return UnsignedInt(CompressedFormatMapping[UnsignedInt(format)]);
+    return UnsignedInt(CompressedFormatMapping[UnsignedInt(format) - 1]);
+}
+
+bool hasTextureFormat(const Magnum::CompressedPixelFormat format) {
+    if(isCompressedPixelFormatImplementationSpecific(format))
+        return true;
+
+    CORRADE_ASSERT(UnsignedInt(format) - 1 < Containers::arraySize(CompressedFormatMapping),
+        "GL::hasTextureFormat(): invalid format" << format, {});
+    return UnsignedInt(CompressedFormatMapping[UnsignedInt(format) - 1]);
 }
 
 CompressedPixelFormat compressedPixelFormat(const Magnum::CompressedPixelFormat format) {
     if(isCompressedPixelFormatImplementationSpecific(format))
         return compressedPixelFormatUnwrap<GL::CompressedPixelFormat>(format);
 
-    CORRADE_ASSERT(UnsignedInt(format) < Containers::arraySize(CompressedFormatMapping),
+    CORRADE_ASSERT(UnsignedInt(format) - 1 < Containers::arraySize(CompressedFormatMapping),
         "GL::compressedPixelFormat(): invalid format" << format, {});
-    const CompressedPixelFormat out = CompressedFormatMapping[UnsignedInt(format)];
+    const CompressedPixelFormat out = CompressedFormatMapping[UnsignedInt(format) - 1];
     CORRADE_ASSERT(UnsignedInt(out),
         "GL::compressedPixelFormat(): format" << format << "is not supported on this target", {});
     return out;
 }
 
+TextureFormat textureFormat(const Magnum::CompressedPixelFormat format) {
+    if(isCompressedPixelFormatImplementationSpecific(format))
+        return compressedPixelFormatUnwrap<GL::TextureFormat>(format);
+
+    CORRADE_ASSERT(UnsignedInt(format) - 1 < Containers::arraySize(CompressedFormatMapping),
+        "GL::textureFormat(): invalid format" << format, {});
+    /* Enum values are the same between CompressedPixelFormat and
+       TextureFormat, so having just a single table for both and casting */
+    const auto out = TextureFormat(GLenum(CompressedFormatMapping[UnsignedInt(format) - 1]));
+    CORRADE_ASSERT(UnsignedInt(out),
+        "GL::textureFormat(): format" << format << "is not supported on this target", {});
+    return out;
+}
+
 Debug& operator<<(Debug& debug, const CompressedPixelFormat value) {
+    debug << "GL::CompressedPixelFormat" << Debug::nospace;
+
     #ifdef __GNUC__
     #pragma GCC diagnostic push
     #pragma GCC diagnostic error "-Wswitch"
     #endif
     switch(value) {
         /* LCOV_EXCL_START */
-        #define _c(value) case CompressedPixelFormat::value: return debug << "GL::CompressedPixelFormat::" #value;
+        #define _c(value) case CompressedPixelFormat::value: return debug << "::" #value;
         #ifndef MAGNUM_TARGET_GLES
         _c(Red)
         _c(RG)
@@ -462,6 +529,28 @@ Debug& operator<<(Debug& debug, const CompressedPixelFormat value) {
         _c(SRGB8Alpha8Astc12x10)
         _c(RGBAAstc12x12)
         _c(SRGB8Alpha8Astc12x12)
+        #if defined(MAGNUM_TARGET_GLES) && !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
+        _c(RGBAAstc3x3x3)
+        _c(SRGB8Alpha8Astc3x3x3)
+        _c(RGBAAstc4x3x3)
+        _c(SRGB8Alpha8Astc4x3x3)
+        _c(RGBAAstc4x4x3)
+        _c(SRGB8Alpha8Astc4x4x3)
+        _c(RGBAAstc4x4x4)
+        _c(SRGB8Alpha8Astc4x4x4)
+        _c(RGBAAstc5x4x4)
+        _c(SRGB8Alpha8Astc5x4x4)
+        _c(RGBAAstc5x5x4)
+        _c(SRGB8Alpha8Astc5x5x4)
+        _c(RGBAAstc5x5x5)
+        _c(SRGB8Alpha8Astc5x5x5)
+        _c(RGBAAstc6x5x5)
+        _c(SRGB8Alpha8Astc6x5x5)
+        _c(RGBAAstc6x6x5)
+        _c(SRGB8Alpha8Astc6x6x5)
+        _c(RGBAAstc6x6x6)
+        _c(SRGB8Alpha8Astc6x6x6)
+        #endif
         #ifdef MAGNUM_TARGET_GLES
         _c(RGBPvrtc2bppV1)
         #ifndef MAGNUM_TARGET_WEBGL
@@ -487,7 +576,7 @@ Debug& operator<<(Debug& debug, const CompressedPixelFormat value) {
     #pragma GCC diagnostic pop
     #endif
 
-    return debug << "GL::CompressedPixelFormat(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
 }
 #endif
 

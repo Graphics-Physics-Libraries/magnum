@@ -56,8 +56,9 @@ template<class T> inline T cross(const Vector2<T>& a, const Vector2<T>& b) {
 @tparam T   Data type
 
 See @ref matrix-vector for brief introduction.
-@see @ref Magnum::Vector2, @ref Magnum::Vector2i, @ref Magnum::Vector2ui,
-    @ref Magnum::Vector2d
+@see @ref Magnum::Vector2, @ref Magnum::Vector3h, @ref Magnum::Vector2d,
+    @ref Magnum::Vector2ub, @ref Magnum::Vector2b, @ref Magnum::Vector2us,
+    @ref Magnum::Vector2s, @ref Magnum::Vector2ui, @ref Magnum::Vector2i
 @configurationvalueref{Magnum::Math::Vector2}
 */
 template<class T> class Vector2: public Vector<2, T> {
@@ -149,14 +150,21 @@ template<class T> class Vector2: public Vector<2, T> {
         /**
          * @brief Perpendicular vector
          *
-         * Returns vector rotated 90° counterclockwise. @f[
+         * Returns vector rotated 90° counterclockwise. Enabled only for signed
+         * types. @f[
          *      \boldsymbol v_\bot = \begin{pmatrix} -v_y \\ v_x \end{pmatrix}
          * @f]
          * @see @ref cross(),
          *      @ref dot(const Vector<size, T>&, const Vector<size, T>&),
-         *      @ref operator-() const
+         *      @ref Vector::operator-() const "operator-() const"
          */
-        Vector2<T> perpendicular() const { return {-y(), x()}; }
+        /* For some reason @ref operator-() const doesn't work since 1.8.17 */
+        #ifdef DOXYGEN_GENERATING_OUTPUT
+        Vector2<T>
+        #else
+        template<class U = T> typename std::enable_if<std::is_signed<U>::value, Vector2<T>>::type
+        #endif
+        perpendicular() const { return {-y(), x()}; }
 
         /**
          * @brief Aspect ratio

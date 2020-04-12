@@ -3,7 +3,7 @@
 
     Copyright © 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019
               Vladimír Vondruš <mosra@centrum.cz>
-    Copyright © 2016 Jonathan Hale <squareys@googlemail.com>
+    Copyright © 2016, 2020 Jonathan Hale <squareys@googlemail.com>
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -119,17 +119,42 @@ void FrustumTest::construct() {
         {-7.0f,  8.0f, -9.0f, 0.5f},
         { 7.0f,  8.0f,  9.0f, 0.6f}};
 
-    constexpr Frustum frustum = {
+    Frustum a = {
+        planes[0], planes[1],
+        planes[2], planes[3],
+        planes[4], planes[5]};
+    constexpr Frustum ca = {
         planes[0], planes[1],
         planes[2], planes[3],
         planes[4], planes[5]};
 
-    CORRADE_COMPARE(frustum[0], planes[0]);
-    CORRADE_COMPARE(frustum[1], planes[1]);
-    CORRADE_COMPARE(frustum[2], planes[2]);
-    CORRADE_COMPARE(frustum[3], planes[3]);
-    CORRADE_COMPARE(frustum[4], planes[4]);
-    CORRADE_COMPARE(frustum[5], planes[5]);
+    constexpr Vector4 c3 = ca[3];
+    CORRADE_COMPARE(c3, planes[3]);
+    CORRADE_COMPARE(a[3], planes[3]);
+
+    constexpr Vector4 cleft = ca.left();
+    CORRADE_COMPARE(a.left(), planes[0]);
+    CORRADE_COMPARE(cleft, planes[0]);
+
+    constexpr Vector4 cright = ca.right();
+    CORRADE_COMPARE(a.right(), planes[1]);
+    CORRADE_COMPARE(cright, planes[1]);
+
+    constexpr Vector4 cbottom = ca.bottom();
+    CORRADE_COMPARE(a.bottom(), planes[2]);
+    CORRADE_COMPARE(cbottom, planes[2]);
+
+    constexpr Vector4 ctop = ca.top();
+    CORRADE_COMPARE(a.top(), planes[3]);
+    CORRADE_COMPARE(ctop, planes[3]);
+
+    constexpr Vector4 cnear = ca.near();
+    CORRADE_COMPARE(a.near(), planes[4]);
+    CORRADE_COMPARE(cnear, planes[4]);
+
+    constexpr Vector4 cfar = ca.far();
+    CORRADE_COMPARE(cfar, planes[5]);
+    CORRADE_COMPARE(a.far(), planes[5]);
 
     CORRADE_VERIFY((std::is_nothrow_constructible<Frustum, Vector4, Vector4, Vector4, Vector4, Vector4, Vector4>::value));
 }

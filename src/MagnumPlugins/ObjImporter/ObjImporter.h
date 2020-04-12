@@ -60,18 +60,43 @@ Loads Wavefront OBJ (`*.obj`) files, with the following supported features:
 -   vertex positions, normals and 2D texture coordinates
 -   triangles, lines and points
 
+@section Trade-ObjImporter-usage Usage
+
 This plugin depends on the @ref Trade library and is built if `WITH_OBJIMPORTER`
-is enabled when building Magnum. To use as a dynamic plugin, you need to load
-the @cpp "ObjImporter" @ce plugin from `MAGNUM_PLUGINS_IMPORTER_DIR`. To use as
-a static plugin or as a dependency of another plugin with CMake, you need to
-request the `ObjImporter` component of the `Magnum` package and link to the
-`Magnum::ObjImporter` target. See @ref building, @ref cmake and @ref plugins
-for more information.
+is enabled when building Magnum. To use as a dynamic plugin, load
+@cpp "ObjImporter" @ce via @ref Corrade::PluginManager::Manager.
+
+Additionally, if you're using Magnum as a CMake subproject, do the following:
+
+@code{.cmake}
+set(WITH_OBJIMPORTER ON CACHE BOOL "" FORCE)
+add_subdirectory(magnum EXCLUDE_FROM_ALL)
+
+# So the dynamically loaded plugin gets built implicitly
+add_dependencies(your-app Magnum::ObjImporter)
+@endcode
+
+To use as a static plugin or as a dependency of another plugin with CMake, you
+need to request the `ObjImporter` component of the `Magnum` package and link to
+the `Magnum::ObjImporter` target:
+
+@code{.cmake}
+find_package(Magnum REQUIRED ObjImporter)
+
+# ...
+target_link_libraries(your-app PRIVATE Magnum::ObjImporter)
+@endcode
+
+See @ref building, @ref cmake and @ref plugins for more information.
 
 @section Trade-ObjImporter-limitations Behavior and limitations
 
-Polygons (quads etc.), automatic normal generation and material properties are
-currently not supported.
+Meshes are imported as @ref MeshPrimitive::Triangles with
+@ref MeshIndexType::UnsignedInt indices, interleaved @ref VertexFormat::Vector3
+positions with optional @ref VertexFormat::Vector3 normals and
+@ref VertexFormat::Vector2 texture coordinates, if present in the source file.
+
+Polygons (quads etc.) and material properties are currently not supported.
 */
 class MAGNUM_OBJIMPORTER_EXPORT ObjImporter: public AbstractImporter {
     public:
@@ -86,17 +111,17 @@ class MAGNUM_OBJIMPORTER_EXPORT ObjImporter: public AbstractImporter {
     private:
         struct File;
 
-        MAGNUM_OBJIMPORTER_LOCAL Features doFeatures() const override;
+        MAGNUM_OBJIMPORTER_LOCAL ImporterFeatures doFeatures() const override;
 
         MAGNUM_OBJIMPORTER_LOCAL bool doIsOpened() const override;
         MAGNUM_OBJIMPORTER_LOCAL void doOpenData(Containers::ArrayView<const char> data) override;
         MAGNUM_OBJIMPORTER_LOCAL void doOpenFile(const std::string& filename) override;
         MAGNUM_OBJIMPORTER_LOCAL void doClose() override;
 
-        MAGNUM_OBJIMPORTER_LOCAL UnsignedInt doMesh3DCount() const override;
-        MAGNUM_OBJIMPORTER_LOCAL Int doMesh3DForName(const std::string& name) override;
-        MAGNUM_OBJIMPORTER_LOCAL std::string doMesh3DName(UnsignedInt id) override;
-        MAGNUM_OBJIMPORTER_LOCAL Containers::Optional<MeshData3D> doMesh3D(UnsignedInt id) override;
+        MAGNUM_OBJIMPORTER_LOCAL UnsignedInt doMeshCount() const override;
+        MAGNUM_OBJIMPORTER_LOCAL Int doMeshForName(const std::string& name) override;
+        MAGNUM_OBJIMPORTER_LOCAL std::string doMeshName(UnsignedInt id) override;
+        MAGNUM_OBJIMPORTER_LOCAL Containers::Optional<MeshData> doMesh(UnsignedInt id, UnsignedInt level) override;
 
         MAGNUM_OBJIMPORTER_LOCAL void parseMeshNames();
 

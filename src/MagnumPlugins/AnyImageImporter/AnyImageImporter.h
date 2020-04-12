@@ -54,18 +54,10 @@ namespace Magnum { namespace Trade {
 @brief Any image importer plugin
 
 Detects file type based on file extension, loads corresponding plugin and then
-tries to open the file with it.
+tries to open the file with it. Supported formats:
 
-This plugin depends on the @ref Trade library and is built if
-`WITH_ANYIMAGEIMPORTER` is enabled when building Magnum. To use as a dynamic
-plugin, you need to load the @cpp "AnyImageImporter" @ce plugin from
-`MAGNUM_PLUGINS_IMPORTER_DIR`. To use as a static plugin or as a dependency of
-another plugin with CMake, you need to request the `AnyImageImporter` component
-of the `Magnum` package and link to the `Magnum::AnyImageImporter` target. See
-@ref building, @ref cmake and @ref plugins for more information.
-
-Supported formats:
-
+-   Basis Universal (`*.basis`), loaded @ref BasisImporter or any other plugin
+    that provides it
 -   Windows Bitmap (`*.bmp`), loaded with any plugin that provides `BmpImporter`
 -   DirectDraw Surface (`*.dds` or data with corresponding signature), loaded
     with @ref DdsImporter or any other plugin that provides it
@@ -102,6 +94,36 @@ Supported formats:
 
 Detecting file type through @ref openData() is supported only for a subset of
 formats that are marked as such in the list above.
+
+@section Trade-AnyImageImporter-usage Usage
+
+This plugin depends on the @ref Trade library and is built if
+`WITH_ANYIMAGEIMPORTER` is enabled when building Magnum. To use as a dynamic
+plugin, load @cpp "AnyImageImporter" @ce via
+@ref Corrade::PluginManager::Manager.
+
+Additionally, if you're using Magnum as a CMake subproject, do the following:
+
+@code{.cmake}
+set(WITH_ANYIMAGEIMPORTER ON CACHE BOOL "" FORCE)
+add_subdirectory(magnum EXCLUDE_FROM_ALL)
+
+# So the dynamically loaded plugin gets built implicitly
+add_dependencies(your-app Magnum::AnyImageImporter)
+@endcode
+
+To use as a static plugin or as a dependency of another plugin with CMake, you
+need to request the `AnyImageImporter` component of the `Magnum` package and
+link to the `Magnum::AnyImageImporter` target:
+
+@code{.cmake}
+find_package(Magnum REQUIRED AnyImageImporter)
+
+# ...
+target_link_libraries(your-app PRIVATE Magnum::AnyImageImporter)
+@endcode
+
+See @ref building, @ref cmake and @ref plugins for more information.
 */
 class MAGNUM_ANYIMAGEIMPORTER_EXPORT AnyImageImporter: public AbstractImporter {
     public:
@@ -111,17 +133,35 @@ class MAGNUM_ANYIMAGEIMPORTER_EXPORT AnyImageImporter: public AbstractImporter {
         /** @brief Plugin manager constructor */
         explicit AnyImageImporter(PluginManager::AbstractManager& manager, const std::string& plugin);
 
+        /** @brief Copying is not allowed */
+        AnyImageImporter(const AnyImageImporter&) = delete;
+
+        /**
+         * @brief Move constructor
+         *
+         * See @ref Corrade::PluginManager::AbstractPlugin::AbstractPlugin(AbstractPlugin&&)
+         * for caveats.
+        */
+        AnyImageImporter(AnyImageImporter&&) noexcept;
+
+        /** @brief Copying is not allowed */
+        AnyImageImporter& operator=(const AnyImageImporter&) = delete;
+
+        /** @brief Only move construction is allowed */
+        AnyImageImporter& operator=(AnyImageImporter&&) = delete;
+
         ~AnyImageImporter();
 
     private:
-        MAGNUM_ANYIMAGEIMPORTER_LOCAL Features doFeatures() const override;
+        MAGNUM_ANYIMAGEIMPORTER_LOCAL ImporterFeatures doFeatures() const override;
         MAGNUM_ANYIMAGEIMPORTER_LOCAL bool doIsOpened() const override;
         MAGNUM_ANYIMAGEIMPORTER_LOCAL void doClose() override;
         MAGNUM_ANYIMAGEIMPORTER_LOCAL void doOpenFile(const std::string& filename) override;
         MAGNUM_ANYIMAGEIMPORTER_LOCAL void doOpenData(Containers::ArrayView<const char> data) override;
 
         MAGNUM_ANYIMAGEIMPORTER_LOCAL UnsignedInt doImage2DCount() const override;
-        MAGNUM_ANYIMAGEIMPORTER_LOCAL Containers::Optional<ImageData2D> doImage2D(UnsignedInt id) override;
+        MAGNUM_ANYIMAGEIMPORTER_LOCAL UnsignedInt doImage2DLevelCount(UnsignedInt id) override;
+        MAGNUM_ANYIMAGEIMPORTER_LOCAL Containers::Optional<ImageData2D> doImage2D(UnsignedInt id, UnsignedInt level) override;
 
         Containers::Pointer<AbstractImporter> _in;
 };

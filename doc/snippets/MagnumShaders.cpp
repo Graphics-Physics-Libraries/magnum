@@ -27,6 +27,9 @@
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/ArrayViewStl.h>
 
+#include "Magnum/ImageView.h"
+#include "Magnum/PixelFormat.h"
+#include "Magnum/DebugTools/ColorMap.h"
 #include "Magnum/GL/Buffer.h"
 #include "Magnum/GL/DefaultFramebuffer.h"
 #include "Magnum/GL/Framebuffer.h"
@@ -34,7 +37,11 @@
 #include "Magnum/GL/Renderbuffer.h"
 #include "Magnum/GL/RenderbufferFormat.h"
 #include "Magnum/GL/Texture.h"
+#include "Magnum/GL/TextureFormat.h"
 #include "Magnum/Math/Color.h"
+#include "Magnum/Math/Matrix3.h"
+#include "Magnum/Math/Matrix4.h"
+#include "Magnum/Math/FunctionsBatch.h"
 #include "Magnum/MeshTools/Duplicate.h"
 #include "Magnum/Shaders/DistanceFieldVector.h"
 #include "Magnum/Shaders/Flat.h"
@@ -48,6 +55,8 @@ using namespace Magnum::Math::Literals;
 
 int main() {
 
+/* internal compiler error: in gimplify_init_constructor, at gimplify.c:4271
+   on GCC 4.8 in the [60] array */
 #if !defined(__GNUC__) || defined(__clang__) || __GNUC__*100 + __GNUC_MINOR__ >= 500
 {
 /* [shaders-setup] */
@@ -80,10 +89,9 @@ Shaders::Phong shader{Shaders::Phong::Flag::DiffuseTexture};
 shader.bindDiffuseTexture(diffuseTexture)
     .setLightPosition({5.0f, 5.0f, 7.0f})
     .setTransformationMatrix(transformationMatrix)
-    .setNormalMatrix(transformationMatrix.rotation())
-    .setProjectionMatrix(projectionMatrix);
-
-mesh.draw(shader);
+    .setNormalMatrix(transformationMatrix.normalMatrix())
+    .setProjectionMatrix(projectionMatrix)
+    .draw(mesh);
 /* [shaders-rendering] */
 
 /* [shaders-generic] */
@@ -94,14 +102,14 @@ mesh.addVertexBuffer(vertices, 0,
 /* [shaders-generic] */
 
 /* [shaders-meshvisualizer] */
-Shaders::MeshVisualizer visualizerShader{Shaders::MeshVisualizer::Flag::Wireframe};
+Shaders::MeshVisualizer3D visualizerShader{Shaders::MeshVisualizer3D::Flag::Wireframe};
 visualizerShader
     .setColor(0x2f83cc_rgbf)
     .setWireframeColor(0xdcdcdc_rgbf)
     .setViewportSize(Vector2{GL::defaultFramebuffer.viewport().size()})
-    .setTransformationProjectionMatrix(projectionMatrix*transformationMatrix);
-
-mesh.draw(visualizerShader);
+    .setTransformationMatrix(transformationMatrix)
+    .setProjectionMatrix(projectionMatrix)
+    .draw(mesh);
 /* [shaders-meshvisualizer] */
 }
 
@@ -138,9 +146,8 @@ shader.setColor(0x2f83cc_rgbf)
     .setOutlineColor(0xdcdcdc_rgbf)
     .setOutlineRange(0.6f, 0.4f)
     .bindVectorTexture(texture)
-    .setTransformationProjectionMatrix(projectionMatrix*transformationMatrix);
-
-mesh.draw(shader);
+    .setTransformationProjectionMatrix(projectionMatrix*transformationMatrix)
+    .draw(mesh);
 /* [DistanceFieldVector-usage2] */
 }
 
@@ -169,9 +176,8 @@ Matrix4 projectionMatrix =
 
 Shaders::Flat3D shader;
 shader.setColor(0x2f83cc_rgbf)
-    .setTransformationProjectionMatrix(projectionMatrix*transformationMatrix);
-
-mesh.draw(shader);
+    .setTransformationProjectionMatrix(projectionMatrix*transformationMatrix)
+    .draw(mesh);
 /* [Flat-usage-colored2] */
 }
 
@@ -202,9 +208,8 @@ GL::Texture2D texture;
 
 Shaders::Flat3D shader{Shaders::Flat3D::Flag::Textured};
 shader.setTransformationProjectionMatrix(projectionMatrix*transformationMatrix)
-    .bindTexture(texture);
-
-mesh.draw(shader);
+    .bindTexture(texture)
+    .draw(mesh);
 /* [Flat-usage-textured2] */
 }
 
@@ -232,8 +237,8 @@ framebuffer.mapForDraw({
     .clearColor(1, Vector4ui{0})
     .bind();
 
-shader.setObjectId(meshId);
-mesh.draw(shader);
+shader.setObjectId(meshId)
+    .draw(mesh);
 /* [Flat-usage-object-id] */
 
 /* [shaders-generic-object-id] */
@@ -243,6 +248,48 @@ framebuffer.mapForDraw({
 /* [shaders-generic-object-id] */
 }
 #endif
+
+{
+GL::Mesh mesh;
+/* [Flat-usage-instancing] */
+struct {
+    Matrix4 transformation;
+    Color3 color;
+} instanceData[] {
+    {Matrix4::translation({1.0f, 2.0f, 0.0f}), 0xff3333_rgbf},
+    {Matrix4::translation({2.0f, 1.0f, 0.0f}), 0x33ff33_rgbf},
+    {Matrix4::translation({3.0f, 0.0f, 1.0f}), 0x3333ff_rgbf},
+    // ...
+};
+
+mesh.setInstanceCount(Containers::arraySize(instanceData))
+    .addVertexBufferInstanced(GL::Buffer{instanceData}, 1, 0,
+        Shaders::Flat3D::TransformationMatrix{},
+        Shaders::Flat3D::Color3{});
+/* [Flat-usage-instancing] */
+}
+
+{
+GL::Mesh mesh;
+/* [Phong-usage-instancing] */
+struct {
+    Matrix4 transformation;
+    Matrix3x3 normal;
+} instanceData[] {
+    {Matrix4::translation({1.0f, 2.0f, 0.0f})*Matrix4::rotationX(90.0_degf), {}},
+    {Matrix4::translation({2.0f, 1.0f, 0.0f})*Matrix4::rotationY(90.0_degf), {}},
+    {Matrix4::translation({3.0f, 0.0f, 1.0f})*Matrix4::rotationZ(90.0_degf), {}},
+    // ...
+};
+for(auto& instance: instanceData)
+    instance.normal = instance.transformation.normalMatrix();
+
+mesh.setInstanceCount(Containers::arraySize(instanceData))
+    .addVertexBufferInstanced(GL::Buffer{instanceData}, 1, 0,
+        Shaders::Phong::TransformationMatrix{},
+        Shaders::Phong::NormalMatrix{});
+/* [Phong-usage-instancing] */
+}
 
 {
 /* [MeshVisualizer-usage-geom1] */
@@ -257,7 +304,7 @@ GL::Buffer vertices;
 vertices.setData(data, GL::BufferUsage::StaticDraw);
 
 GL::Mesh mesh;
-mesh.addVertexBuffer(vertices, 0, Shaders::MeshVisualizer::Position{});
+mesh.addVertexBuffer(vertices, 0, Shaders::MeshVisualizer3D::Position{});
 /* [MeshVisualizer-usage-geom1] */
 
 /* [MeshVisualizer-usage-geom2] */
@@ -265,60 +312,127 @@ Matrix4 transformationMatrix = Matrix4::translation(Vector3::zAxis(-5.0f));
 Matrix4 projectionMatrix =
     Matrix4::perspectiveProjection(35.0_degf, 1.0f, 0.001f, 100.0f);
 
-Shaders::MeshVisualizer shader{Shaders::MeshVisualizer::Flag::Wireframe};
+Shaders::MeshVisualizer3D shader{Shaders::MeshVisualizer3D::Flag::Wireframe};
 shader.setColor(0x2f83cc_rgbf)
     .setWireframeColor(0xdcdcdc_rgbf)
     .setViewportSize(Vector2{GL::defaultFramebuffer.viewport().size()})
-    .setTransformationProjectionMatrix(projectionMatrix*transformationMatrix);
-
-mesh.draw(shader);
+    .setTransformationMatrix(transformationMatrix)
+    .setProjectionMatrix(projectionMatrix)
+    .draw(mesh);
 /* [MeshVisualizer-usage-geom2] */
 
-/* [MeshVisualizer-usage-no-geom-old1] */
+/* [MeshVisualizer-usage-no-geom-old] */
 Containers::Array<Float> vertexIndex{Containers::arraySize(data)};
 std::iota(vertexIndex.begin(), vertexIndex.end(), 0.0f);
 
 GL::Buffer vertexIndices;
 vertexIndices.setData(vertexIndex, GL::BufferUsage::StaticDraw);
 
-mesh.addVertexBuffer(vertexIndices, 0, Shaders::MeshVisualizer::VertexIndex{});
-/* [MeshVisualizer-usage-no-geom-old1] */
+mesh.addVertexBuffer(vertexIndices, 0, Shaders::MeshVisualizer3D::VertexIndex{});
+/* [MeshVisualizer-usage-no-geom-old] */
 }
 #endif
 
+#if !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
+/* internal compiler error: in gimplify_init_constructor, at gimplify.c:4271
+   on GCC 4.8 in the [60] array */
+#if !defined(__GNUC__) || defined(__clang__) || __GNUC__*100 + __GNUC_MINOR__ >= 500
 {
+/* [MeshVisualizer-usage-tbn1] */
+struct Vertex {
+    Vector3 position;
+    Vector4 tangent;
+    Vector3 normal;
+};
+Vertex data[60]{
+    // ...
+};
+
+GL::Buffer vertices;
+vertices.setData(data);
+
 GL::Mesh mesh;
-/* [MeshVisualizer-usage-no-geom-old2] */
+mesh.addVertexBuffer(vertices, 0,
+    Shaders::MeshVisualizer3D::Position{},
+    Shaders::MeshVisualizer3D::Tangent4{},
+    Shaders::MeshVisualizer3D::Normal{});
+/* [MeshVisualizer-usage-tbn1] */
+
+/* [MeshVisualizer-usage-tbn2] */
 Matrix4 transformationMatrix, projectionMatrix;
 
-Shaders::MeshVisualizer shader{Shaders::MeshVisualizer::Flag::Wireframe|
-                               Shaders::MeshVisualizer::Flag::NoGeometryShader};
-shader.setColor(0x2f83cc_rgbf)
-    .setWireframeColor(0xdcdcdc_rgbf)
-    .setTransformationProjectionMatrix(projectionMatrix*transformationMatrix);
+Shaders::MeshVisualizer3D shader{
+    Shaders::MeshVisualizer3D::Flag::TangentDirection|
+    Shaders::MeshVisualizer3D::Flag::BitangentFromTangentDirection|
+    Shaders::MeshVisualizer3D::Flag::NormalDirection};
+shader.setViewportSize(Vector2{GL::defaultFramebuffer.viewport().size()})
+    .setTransformationMatrix(transformationMatrix)
+    .setProjectionMatrix(projectionMatrix)
+    .setNormalMatrix(transformationMatrix.normalMatrix())
+    .setLineLength(0.3f)
+    .draw(mesh);
+/* [MeshVisualizer-usage-tbn2] */
 
-mesh.draw(shader);
-/* [MeshVisualizer-usage-no-geom-old2] */
+}
+#endif
+#endif
+
+{
+/* [MeshVisualizer-usage-no-geom1] */
+Containers::StridedArrayView1D<const UnsignedInt> indices;
+Containers::StridedArrayView1D<const Vector3> indexedPositions;
+
+/* De-indexing the position array */
+GL::Buffer vertices{MeshTools::duplicate(indices, indexedPositions)};
+
+GL::Mesh mesh;
+mesh.addVertexBuffer(vertices, 0, Shaders::MeshVisualizer3D::Position{});
+/* [MeshVisualizer-usage-no-geom1] */
 }
 
 {
-/* [MeshVisualizer-usage-no-geom] */
-std::vector<UnsignedInt> indices{
-    // ...
-};
-std::vector<Vector3> indexedPositions{
-    // ...
-};
-
-/* De-indexing the position array */
-GL::Buffer vertices;
-vertices.setData(MeshTools::duplicate(indices, indexedPositions),
-                 GL::BufferUsage::StaticDraw);
-
 GL::Mesh mesh;
-mesh.addVertexBuffer(vertices, 0, Shaders::MeshVisualizer::Position{});
-/* [MeshVisualizer-usage-no-geom] */
+/* [MeshVisualizer-usage-no-geom2] */
+Matrix4 transformationMatrix, projectionMatrix;
+
+Shaders::MeshVisualizer3D shader{
+    Shaders::MeshVisualizer3D::Flag::Wireframe|
+    Shaders::MeshVisualizer3D::Flag::NoGeometryShader};
+shader.setColor(0x2f83cc_rgbf)
+    .setWireframeColor(0xdcdcdc_rgbf)
+    .setTransformationMatrix(transformationMatrix)
+    .setProjectionMatrix(projectionMatrix)
+    .draw(mesh);
+/* [MeshVisualizer-usage-no-geom2] */
 }
+
+#ifndef MAGNUM_TARGET_GLES2
+{
+GL::Mesh mesh;
+Containers::ArrayView<UnsignedInt> objectIds;
+Matrix4 transformationMatrix, projectionMatrix;
+/* [MeshVisualizer-usage-object-id] */
+const auto map = DebugTools::ColorMap::turbo();
+const Vector2i size{Int(map.size()), 1};
+
+GL::Texture2D colorMapTexture;
+colorMapTexture
+    .setMinificationFilter(SamplerFilter::Linear)
+    .setMagnificationFilter(SamplerFilter::Linear)
+    .setWrapping(SamplerWrapping::ClampToEdge)
+    .setStorage(1, GL::TextureFormat::RGBA8, size)
+    .setSubImage(0, {}, ImageView2D{PixelFormat::RGB8Srgb, size, map});
+
+Shaders::MeshVisualizer3D shader{
+    Shaders::MeshVisualizer3D::Flag::InstancedObjectId};
+shader.setColorMapTransformation(0.0f, 1.0f/Math::max(objectIds))
+    .setTransformationMatrix(transformationMatrix)
+    .setProjectionMatrix(projectionMatrix)
+    .bindColorMapTexture(colorMapTexture)
+    .draw(mesh);
+/* [MeshVisualizer-usage-object-id] */
+}
+#endif
 
 #if !defined(__GNUC__) || defined(__clang__) || __GNUC__*100 + __GNUC_MINOR__ >= 500
 {
@@ -350,10 +464,9 @@ shader.setDiffuseColor(0x2f83cc_rgbf)
     .setShininess(200.0f)
     .setLightPosition({5.0f, 5.0f, 7.0f})
     .setTransformationMatrix(transformationMatrix)
-    .setNormalMatrix(transformationMatrix.rotation())
-    .setProjectionMatrix(projectionMatrix);
-
-mesh.draw(shader);
+    .setNormalMatrix(transformationMatrix.normalMatrix())
+    .setProjectionMatrix(projectionMatrix)
+    .draw(mesh);
 /* [Phong-usage-colored2] */
 }
 
@@ -387,10 +500,9 @@ Shaders::Phong shader{Shaders::Phong::Flag::DiffuseTexture|
 shader.bindTextures(nullptr, &diffuseTexture, &specularTexture, nullptr)
     .setLightPosition({5.0f, 5.0f, 7.0f})
     .setTransformationMatrix(transformationMatrix)
-    .setNormalMatrix(transformationMatrix.rotation())
-    .setProjectionMatrix(projectionMatrix);
-
-mesh.draw(shader);
+    .setNormalMatrix(transformationMatrix.normalMatrix())
+    .setProjectionMatrix(projectionMatrix)
+    .draw(mesh);
 /* [Phong-usage-texture2] */
 }
 #endif
@@ -435,9 +547,8 @@ GL::Texture2D texture;
 Shaders::Vector2D shader;
 shader.setColor(0x2f83cc_rgbf)
     .bindVectorTexture(texture)
-    .setTransformationProjectionMatrix(projectionMatrix*transformationMatrix);
-
-mesh.draw(shader);
+    .setTransformationProjectionMatrix(projectionMatrix*transformationMatrix)
+    .draw(mesh);
 /* [Vector-usage2] */
 }
 
@@ -466,9 +577,8 @@ Matrix4 projectionMatrix =
     Matrix4::perspectiveProjection(35.0_degf, 1.0f, 0.001f, 100.0f);
 
 Shaders::VertexColor3D shader;
-shader.setTransformationProjectionMatrix(projectionMatrix*transformationMatrix);
-
-mesh.draw(shader);
+shader.setTransformationProjectionMatrix(projectionMatrix*transformationMatrix)
+    .draw(mesh);
 /* [VertexColor-usage2] */
 }
 #endif

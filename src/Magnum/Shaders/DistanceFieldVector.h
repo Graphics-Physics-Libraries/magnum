@@ -30,19 +30,23 @@
  */
 
 #include "Magnum/DimensionTraits.h"
-#include "Magnum/Math/Color.h"
-#include "Magnum/Math/Matrix3.h"
-#include "Magnum/Math/Matrix4.h"
 #include "Magnum/Shaders/AbstractVector.h"
 #include "Magnum/Shaders/visibility.h"
 
 namespace Magnum { namespace Shaders {
 
+namespace Implementation {
+    enum class DistanceFieldVectorFlag: UnsignedByte {
+        TextureTransformation = 1 << 0
+    };
+    typedef Containers::EnumSet<DistanceFieldVectorFlag> DistanceFieldVectorFlags;
+}
+
 /**
 @brief Distance field vector shader
 
 Renders vector graphics in a form of signed distance field. See
-@ref TextureTools::distanceField() for more information. Note that the final
+@ref TextureTools::DistanceField for more information. Note that the final
 rendered outlook will greatly depend on radius of input distance field and
 value passed to @ref setSmoothness(). You need to provide @ref Position and
 @ref TextureCoordinates attributes in your triangle mesh and call at least
@@ -70,7 +74,41 @@ Common rendering setup:
 */
 template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT DistanceFieldVector: public AbstractVector<dimensions> {
     public:
-        explicit DistanceFieldVector();
+        #ifdef DOXYGEN_GENERATING_OUTPUT
+        /**
+         * @brief Flag
+         * @m_since_latest
+         *
+         * @see @ref Flags, @ref flags()
+         */
+        enum class Flag: UnsignedByte {
+            /**
+             * Enable texture coordinate transformation.
+             * @see @ref setTextureMatrix()
+             * @m_since_latest
+             */
+            TextureTransformation = 1 << 0
+        };
+
+        /**
+         * @brief Flags
+         * @m_since_latest
+         *
+         * @see @ref flags()
+         */
+        typedef Containers::EnumSet<Flag> Flags;
+        #else
+        /* Done this way to be prepared for possible future diversion of 2D
+           and 3D flags (e.g. introducing 3D-specific features) */
+        typedef Implementation::DistanceFieldVectorFlag Flag;
+        typedef Implementation::DistanceFieldVectorFlags Flags;
+        #endif
+
+        /**
+         * @brief Constructor
+         * @param flags     Flags
+         */
+        explicit DistanceFieldVector(Flags flags = {});
 
         /**
          * @brief Construct without creating the underlying OpenGL object
@@ -81,6 +119,8 @@ template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT DistanceFieldVector
          *
          * This function can be safely used for constructing (and later
          * destructing) objects even without any OpenGL context being active.
+         * However note that this is a low-level and a potentially dangerous
+         * API, see the documentation of @ref NoCreate for alternatives.
          */
         explicit DistanceFieldVector(NoCreateT) noexcept
             /** @todoc remove workaround when doxygen is sane */
@@ -102,15 +142,29 @@ template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT DistanceFieldVector
         DistanceFieldVector<dimensions>& operator=(DistanceFieldVector<dimensions>&&) noexcept = default;
 
         /**
+         * @brief Flags
+         * @m_since_latest
+         */
+        Flags flags() const { return _flags; }
+
+        /**
          * @brief Set transformation and projection matrix
          * @return Reference to self (for method chaining)
          *
          * Initial value is an identity matrix.
          */
-        DistanceFieldVector& setTransformationProjectionMatrix(const MatrixTypeFor<dimensions, Float>& matrix) {
-            GL::AbstractShaderProgram::setUniform(_transformationProjectionMatrixUniform, matrix);
-            return *this;
-        }
+        DistanceFieldVector<dimensions>& setTransformationProjectionMatrix(const MatrixTypeFor<dimensions, Float>& matrix);
+
+        /**
+         * @brief Set texture coordinate transformation matrix
+         * @return Reference to self (for method chaining)
+         * @m_since_latest
+         *
+         * Expects that the shader was created with
+         * @ref Flag::TextureTransformation enabled. Initial value is an
+         * identity matrix.
+         */
+        DistanceFieldVector<dimensions>& setTextureMatrix(const Matrix3& matrix);
 
         /**
          * @brief Set fill color
@@ -119,10 +173,7 @@ template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT DistanceFieldVector
          * Initial value is @cpp 0xffffffff_rgbaf @ce.
          * @see @ref setOutlineColor()
          */
-        DistanceFieldVector& setColor(const Color4& color) {
-            GL::AbstractShaderProgram::setUniform(_colorUniform, color);
-            return *this;
-        }
+        DistanceFieldVector<dimensions>& setColor(const Color4& color);
 
         /**
          * @brief Set outline color
@@ -132,10 +183,7 @@ template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT DistanceFieldVector
          * drawn --- see @ref setOutlineRange() for more information.
          * @see @ref setOutlineRange(), @ref setColor()
          */
-        DistanceFieldVector& setOutlineColor(const Color4& color) {
-            GL::AbstractShaderProgram::setUniform(_outlineColorUniform, color);
-            return *this;
-        }
+        DistanceFieldVector<dimensions>& setOutlineColor(const Color4& color);
 
         /**
          * @brief Set outline range
@@ -151,10 +199,7 @@ template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT DistanceFieldVector
          *
          * @see @ref setOutlineColor()
          */
-        DistanceFieldVector& setOutlineRange(Float start, Float end) {
-            GL::AbstractShaderProgram::setUniform(_outlineRangeUniform, Vector2(start, end));
-            return *this;
-        }
+        DistanceFieldVector<dimensions>& setOutlineRange(Float start, Float end);
 
         /**
          * @brief Set smoothness radius
@@ -164,10 +209,7 @@ template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT DistanceFieldVector
          * smaller values will make them look more crisp (but possibly
          * aliased). Initial value is @cpp 0.04f @ce.
          */
-        DistanceFieldVector& setSmoothness(Float value) {
-            GL::AbstractShaderProgram::setUniform(_smoothnessUniform, value);
-            return *this;
-        }
+        DistanceFieldVector<dimensions>& setSmoothness(Float value);
 
         #ifndef DOXYGEN_GENERATING_OUTPUT
         /* Overloads to remove WTF-factor from method chaining order */
@@ -175,19 +217,24 @@ template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT DistanceFieldVector
             AbstractVector<dimensions>::bindVectorTexture(texture);
             return *this;
         }
-        #ifdef MAGNUM_BUILD_DEPRECATED
-        CORRADE_DEPRECATED("use bindVectorTexture() instead") DistanceFieldVector<dimensions>& setVectorTexture(GL::Texture2D& texture) {
-            return bindVectorTexture(texture);
-        }
-        #endif
         #endif
 
     private:
+        /* Prevent accidentally calling irrelevant functions */
+        #ifndef MAGNUM_TARGET_GLES
+        using GL::AbstractShaderProgram::drawTransformFeedback;
+        #endif
+        #if !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
+        using GL::AbstractShaderProgram::dispatchCompute;
+        #endif
+
+        Flags _flags;
         Int _transformationProjectionMatrixUniform{0},
-            _colorUniform{1},
-            _outlineColorUniform{2},
-            _outlineRangeUniform{3},
-            _smoothnessUniform{4};
+            _textureMatrixUniform{1},
+            _colorUniform{2},
+            _outlineColorUniform{3},
+            _outlineRangeUniform{4},
+            _smoothnessUniform{5};
 };
 
 /** @brief Two-dimensional distance field vector shader */
@@ -195,6 +242,20 @@ typedef DistanceFieldVector<2> DistanceFieldVector2D;
 
 /** @brief Three-dimensional distance field vector shader */
 typedef DistanceFieldVector<3> DistanceFieldVector3D;
+
+#ifdef DOXYGEN_GENERATING_OUTPUT
+/** @debugoperatorclassenum{DistanceFieldVector,DistanceFieldVector::Flag} */
+template<UnsignedInt dimensions> Debug& operator<<(Debug& debug, DistanceFieldVector<dimensions>::Flag value);
+
+/** @debugoperatorclassenum{DistanceFieldVector,DistanceFieldVector::Flags} */
+template<UnsignedInt dimensions> Debug& operator<<(Debug& debug, DistanceFieldVector<dimensions>::Flags value);
+#else
+namespace Implementation {
+    MAGNUM_SHADERS_EXPORT Debug& operator<<(Debug& debug, DistanceFieldVectorFlag value);
+    MAGNUM_SHADERS_EXPORT Debug& operator<<(Debug& debug, DistanceFieldVectorFlags value);
+    CORRADE_ENUMSET_OPERATORS(DistanceFieldVectorFlags)
+}
+#endif
 
 }}
 

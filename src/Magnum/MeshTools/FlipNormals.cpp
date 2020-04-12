@@ -25,11 +25,16 @@
 
 #include "FlipNormals.h"
 
+#include <vector>
+#include <Corrade/Containers/StridedArrayView.h>
+
 #include "Magnum/Math/Vector3.h"
 
 namespace Magnum { namespace MeshTools {
 
-void flipFaceWinding(std::vector<UnsignedInt>& indices) {
+namespace {
+
+template<class T> inline void flipFaceWindingInPlaceImplementation(const Containers::StridedArrayView1D<T>& indices) {
     CORRADE_ASSERT(!(indices.size()%3), "MeshTools::flipNormals(): index count is not divisible by 3!", );
 
     using std::swap;
@@ -37,9 +42,49 @@ void flipFaceWinding(std::vector<UnsignedInt>& indices) {
         swap(indices[i+1], indices[i+2]);
 }
 
-void flipNormals(std::vector<Vector3>& normals) {
+}
+
+void flipFaceWindingInPlace(const Containers::StridedArrayView1D<UnsignedInt>& indices) {
+    flipFaceWindingInPlaceImplementation(indices);
+}
+
+void flipFaceWindingInPlace(const Containers::StridedArrayView1D<UnsignedShort>& indices) {
+    flipFaceWindingInPlaceImplementation(indices);
+}
+
+void flipFaceWindingInPlace(const Containers::StridedArrayView1D<UnsignedByte>& indices) {
+    flipFaceWindingInPlaceImplementation(indices);
+}
+
+void flipFaceWindingInPlace(const Containers::StridedArrayView2D<char>& indices) {
+    CORRADE_ASSERT(indices.isContiguous<1>(), "MeshTools::flipFaceWindingInPlace(): second index view dimension is not contiguous", );
+    if(indices.size()[1] == 4)
+        return flipFaceWindingInPlaceImplementation(Containers::arrayCast<1, UnsignedInt>(indices));
+    else if(indices.size()[1] == 2)
+        return flipFaceWindingInPlaceImplementation(Containers::arrayCast<1, UnsignedShort>(indices));
+    else {
+        CORRADE_ASSERT(indices.size()[1] == 1, "MeshTools::flipFaceWindingInPlace(): expected index type size 1, 2 or 4 but got" << indices.size()[1], );
+        return flipFaceWindingInPlaceImplementation(Containers::arrayCast<1, UnsignedByte>(indices));
+    }
+}
+
+void flipNormalsInPlace(const Containers::StridedArrayView1D<Vector3>& normals) {
     for(Vector3& normal: normals)
         normal = -normal;
 }
+
+#ifdef MAGNUM_BUILD_DEPRECATED
+void flipNormals(std::vector<UnsignedInt>& indices, std::vector<Vector3>& normals) {
+    flipNormalsInPlace(indices, normals);
+}
+
+void flipFaceWinding(std::vector<UnsignedInt>& indices) {
+    flipFaceWindingInPlace(indices);
+}
+
+void flipNormals(std::vector<Vector3>& normals) {
+    flipNormalsInPlace(normals);
+}
+#endif
 
 }}

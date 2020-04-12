@@ -40,13 +40,21 @@ namespace Magnum { namespace Vk {
 
 In particular, Vulkan doesn't support the @ref MeshPrimitive::LineLoop
 primitive. Returns @cpp false @ce if Vulkan doesn't support such primitive,
-@cpp true @ce otherwise. The @p primitive value is expected to be valid.
+@cpp true @ce otherwise. Moreover, returns @cpp true @ce also for all types
+that are @ref isMeshPrimitiveImplementationSpecific(). The @p primitive value
+is expected to be valid.
 @see @ref vkPrimitiveTopology()
 */
 MAGNUM_VK_EXPORT bool hasVkPrimitiveTopology(Magnum::MeshPrimitive primitive);
 
 /**
 @brief Convert generic mesh primitive to Vulkan primitive topology
+
+In case @ref isMeshPrimitiveImplementationSpecific() returns @cpp false @ce for
+@p primitive, maps it to a corresponding Vulkan primitive topology. In case
+@ref isMeshPrimitiveImplementationSpecific() returns @cpp true @ce, assumes
+@p primitive stores a Vulkan-specific primitive topology and returns
+@ref meshPrimitiveUnwrap() cast to @type_vk{VkPrimitiveTopology}.
 
 Not all generic mesh primitives are available in Vulkan and this function
 expects that given primitive is available. Use @ref hasVkPrimitiveTopology() to
@@ -58,10 +66,14 @@ MAGNUM_VK_EXPORT VkPrimitiveTopology vkPrimitiveTopology(Magnum::MeshPrimitive p
 /**
 @brief Check availability of a generic index type
 
-In particular, Vulkan doesn't support the @ref MeshIndexType::UnsignedByte
-type. Returns @cpp false @ce if Vulkan doesn't support such type, @cpp true @ce
+Returns @cpp false @ce if Vulkan doesn't support such type, @cpp true @ce
 otherwise. The @p type value is expected to be valid.
-@see @ref vkIndexType()
+
+@note Support of some types depends on presence of a particular Vulkan
+    extension. Such check is outside of the scope of this function and you are
+    expected to verify extension availability before using such type.
+
+@see @ref vkIndexType(), @vk_extension{EXT,index_type_uint8}
 */
 MAGNUM_VK_EXPORT bool hasVkIndexType(Magnum::MeshIndexType type);
 
@@ -76,6 +88,27 @@ of given index type.
 MAGNUM_VK_EXPORT VkIndexType vkIndexType(Magnum::MeshIndexType type);
 
 /**
+@brief Check availability of a generic vertex format
+@m_since_latest
+
+Some Vulkan targets don't support all generic vertex formats. Returns
+@cpp false @ce if current target can't support such format, @cpp true @ce
+otherwise. Moreover, returns @cpp true @ce also for all formats that are
+@ref isVertexFormatImplementationSpecific(). The @p format value is expected
+to be valid. Note that for matrix formats the function only returns a
+corresponding vector type, and the user is expected to bind the remaining
+vectors to consecutive attribute locations based on what
+@ref vertexFormatVectorCount() and @ref vertexFormatVectorStride() return.
+
+@note Support of some formats depends on presence of a particular Vulkan
+    extension. Such check is outside of the scope of this function and you are
+    expected to verify extension availability before using such format.
+
+@see @ref vkFormat(Magnum::VertexFormat)
+*/
+MAGNUM_VK_EXPORT bool hasVkFormat(Magnum::VertexFormat format);
+
+/**
 @brief Check availability of a generic pixel format
 
 Some Vulkan targets don't support all generic formats. Returns @cpp false @ce
@@ -88,7 +121,7 @@ be valid.
     extension. Such check is outside of the scope of this function and you are
     expected to verify extension availability before using such format.
 
-@see @ref vkFormat()
+@see @ref vkFormat(Magnum::PixelFormat)
 */
 MAGNUM_VK_EXPORT bool hasVkFormat(Magnum::PixelFormat format);
 
@@ -105,9 +138,25 @@ expected to be valid.
     extension. Such check is outside of the scope of this function and you are
     expected to verify extension availability before using such format.
 
-@see @ref vkFormat()
+@see @ref vkFormat(Magnum::CompressedPixelFormat)
 */
 MAGNUM_VK_EXPORT bool hasVkFormat(Magnum::CompressedPixelFormat format);
+
+/**
+@brief Convert a generic vertex format to Vulkan format
+@m_since_latest
+
+In case @ref isVertexFormatImplementationSpecific() returns @cpp false @ce for
+@p format, maps it to a corresponding Vulkan format. In case
+@ref isVertexFormatImplementationSpecific() returns @cpp true @ce, assumes
+@p format stores a Vulkan-specific format and returns @ref vertexFormatUnwrap()
+cast to @type_vk{Format}.
+
+Not all generic vertex formats may be available on all targets and this
+function expects that given format is available on the target. Use
+@ref hasVkFormat(Magnum::VertexFormat) to query availability of given format.
+*/
+MAGNUM_VK_EXPORT VkFormat vkFormat(Magnum::VertexFormat format);
 
 /**
 @brief Convert a generic pixel format to Vulkan format
@@ -115,12 +164,12 @@ MAGNUM_VK_EXPORT bool hasVkFormat(Magnum::CompressedPixelFormat format);
 In case @ref isPixelFormatImplementationSpecific() returns @cpp false @ce for
 @p format, maps it to a corresponding Vulkan format. In case
 @ref isPixelFormatImplementationSpecific() returns @cpp true @ce, assumes
-@p format stores Vulkan-specific format and returns @ref pixelFormatUnwrap()
+@p format stores a Vulkan-specific format and returns @ref pixelFormatUnwrap()
 cast to @type_vk{Format}.
 
 Not all generic pixel formats may be available on all targets and this function
-expects that given format is available on the target. Use @ref hasVkFormat() to
-query availability of given format.
+expects that given format is available on the target. Use
+@ref hasVkFormat(Magnum::PixelFormat) to query availability of given format.
 */
 MAGNUM_VK_EXPORT VkFormat vkFormat(Magnum::PixelFormat format);
 
@@ -130,12 +179,13 @@ MAGNUM_VK_EXPORT VkFormat vkFormat(Magnum::PixelFormat format);
 In case @ref isCompressedPixelFormatImplementationSpecific() returns
 @cpp false @ce for @p format, maps it to a corresponding Vulkan format. In case
 @ref isCompressedPixelFormatImplementationSpecific() returns @cpp true @ce,
-assumes @p format stores Vulkan-specific format and returns
+assumes @p format stores a Vulkan-specific format and returns
 @ref compressedPixelFormatUnwrap() cast to @type_vk{Format}.
 
 Not all generic pixel formats may be available on all targets and this function
-expects that given format is available on the target. Use @ref hasVkFormat() to
-query availability of given format.
+expects that given format is available on the target. Use
+@ref hasVkFormat(Magnum::CompressedPixelFormat) to query availability of given
+format.
 */
 MAGNUM_VK_EXPORT VkFormat vkFormat(Magnum::CompressedPixelFormat format);
 

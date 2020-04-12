@@ -37,11 +37,47 @@
 namespace Magnum { namespace Audio {
 
 /**
+@brief Features supported by an audio importer
+@m_since_latest
+
+@see @ref ImporterFeatures, @ref AbstractImporter::features()
+*/
+enum class ImporterFeature: UnsignedByte {
+    /** Opening files from raw data using @ref AbstractImporter::openData() */
+    OpenData = 1 << 0
+};
+
+/**
+@brief Features supported by an audio importer
+@m_since_latest
+
+@see @ref AbstractImporter::features()
+*/
+typedef Containers::EnumSet<ImporterFeature> ImporterFeatures;
+
+CORRADE_ENUMSET_OPERATORS(ImporterFeatures)
+
+/** @debugoperatorenum{ImporterFeatures} */
+MAGNUM_AUDIO_EXPORT Debug& operator<<(Debug& debug, ImporterFeature value);
+
+/** @debugoperatorenum{ImporterFeatures} */
+MAGNUM_AUDIO_EXPORT Debug& operator<<(Debug& debug, ImporterFeatures value);
+
+/**
 @brief Base for audio importer plugins
 
 Provides interface for importing various audio formats. See @ref plugins for
 more information and `*Importer` classes in @ref Audio namespace for available
 importer plugins.
+
+@section Audio-AbstractImporter-data-dependency Data dependency
+
+The data returned from various functions *by design* have no dependency on the
+importer instance and neither on the dynamic plugin module. In other words, you don't need to keep the importer instance (or the plugin manager instance)
+around in order to have the returned data valid. Moreover, all returned
+@ref Corrade::Containers::Array instances are only allowed to have default
+deleters --- this is to avoid potential dangling function pointer calls when
+destructing such instances after the plugin module has been unloaded.
 
 @section Audio-AbstractImporter-subclassing Subclassing
 
@@ -55,34 +91,34 @@ checked by the implementation:
 -   Functions @ref doOpenData() and @ref doOpenFile() are called after the
     previous file was closed, function @ref doClose() is called only if there
     is any file opened.
--   Function @ref doOpenData() is called only if @ref Feature::OpenData is
-    supported.
+-   Function @ref doOpenData() is called only if @ref ImporterFeature::OpenData
+    is supported.
 -   All `do*()` implementations working on opened file are called only if
     there is any file opened.
 
-@attention @ref Corrade::Containers::Array instances returned from the plugin
-    should *not* use anything else than the default deleter, otherwise this can
-    cause dangling function pointer call on array destruction if the plugin
-    gets unloaded before the array is destroyed.
+@m_class{m-block m-warning}
+
+@par Dangling function pointers on plugin unload
+    As @ref Trade-AbstractImporter-data-dependency "mentioned above",
+    @ref Corrade::Containers::Array instances returned from plugin
+    implementations are not allowed to use anything else than the default
+    deleter, otherwise this could cause dangling function pointer call on array
+    destruction if the plugin gets unloaded before the array is destroyed. This
+    is asserted by the base implementation on return.
 */
 class MAGNUM_AUDIO_EXPORT AbstractImporter: public PluginManager::AbstractManagingPlugin<AbstractImporter> {
     public:
-        /**
-         * @brief Features supported by this importer
-         *
-         * @see @ref Features, @ref features()
+        #ifdef MAGNUM_BUILD_DEPRECATED
+        /** @brief @copybrief ImporterFeature
+         * @m_deprecated_since_latest Use @ref ImporterFeature instead.
          */
-        enum class Feature: UnsignedByte {
-            /** Opening files from raw data using @ref openData() */
-            OpenData = 1 << 0
-        };
+        typedef CORRADE_DEPRECATED("use ImporterFeature instead") ImporterFeature Feature;
 
-        /**
-         * @brief Features supported by this importer
-         *
-         * @see @ref features()
+        /** @brief @copybrief ImporterFeatures
+         * @m_deprecated_since_latest Use @ref ImporterFeatures instead.
          */
-        typedef Containers::EnumSet<Feature> Features;
+        typedef CORRADE_DEPRECATED("use ImporterFeatures instead") ImporterFeatures Features;
+        #endif
 
         /**
          * @brief Plugin interface
@@ -98,8 +134,8 @@ class MAGNUM_AUDIO_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          * @brief Plugin search paths
          *
          * First looks in `magnum/audioimporters/` or `magnum-d/audioimporters/`
-         * next to the executable (or, in case of Windows and a non-static
-         * build, next to the DLL of the @ref Audio library) and as a fallback
+         * next to the dynamic @ref Audio library (unless it's a static build),
+         * then in the same location next to the executable and as a fallback
          * in `magnum/audioimporters/` or `magnum-d/audioimporters/` in the
          * runtime install location (`lib[64]/` on Unix-like systems, `bin/` on
          * Windows). The system-wide plugin search directory is configurable
@@ -122,7 +158,7 @@ class MAGNUM_AUDIO_EXPORT AbstractImporter: public PluginManager::AbstractManagi
         explicit AbstractImporter(PluginManager::AbstractManager& manager, const std::string& plugin);
 
         /** @brief Features supported by this importer */
-        Features features() const { return doFeatures(); }
+        ImporterFeatures features() const { return doFeatures(); }
 
         /** @brief Whether any file is opened */
         bool isOpened() const { return doIsOpened(); }
@@ -131,8 +167,8 @@ class MAGNUM_AUDIO_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          * @brief Open raw data
          *
          * Closes previous file, if it was opened, and tries to open given
-         * file. Available only if @ref Feature::OpenData is supported. Returns
-         * @cpp true @ce on success, @cpp false @ce otherwise.
+         * file. Available only if @ref ImporterFeature::OpenData is supported.
+         * Returns @cpp true @ce on success, @cpp false @ce otherwise.
          * @see @ref features(), @ref openFile()
          */
         bool openData(Containers::ArrayView<const char> data);
@@ -160,11 +196,15 @@ class MAGNUM_AUDIO_EXPORT AbstractImporter: public PluginManager::AbstractManagi
         /** @brief Sample data */
         Containers::Array<char> data();
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
     private:
         /** @brief Implementation for @ref features() */
-        virtual Features doFeatures() const = 0;
+        virtual ImporterFeatures doFeatures() const = 0;
 
         /** @brief Implementation for @ref isOpened() */
         virtual bool doIsOpened() const = 0;
@@ -175,8 +215,9 @@ class MAGNUM_AUDIO_EXPORT AbstractImporter: public PluginManager::AbstractManagi
         /**
          * @brief Implementation for @ref openFile()
          *
-         * If @ref Feature::OpenData is supported, default implementation opens
-         * the file and calls @ref doOpenData() with its contents.
+         * If @ref ImporterFeature::OpenData is supported, default
+         * implementation opens the file and calls @ref doOpenData() with its
+         * contents.
          */
         virtual void doOpenFile(const std::string& filename);
 

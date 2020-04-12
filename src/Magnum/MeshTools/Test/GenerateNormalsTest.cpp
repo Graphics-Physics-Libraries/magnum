@@ -37,7 +37,7 @@
 #include "Magnum/MeshTools/Duplicate.h"
 #include "Magnum/MeshTools/GenerateNormals.h"
 #include "Magnum/Primitives/Cylinder.h"
-#include "Magnum/Trade/MeshData3D.h"
+#include "Magnum/Trade/MeshData.h"
 
 namespace Magnum { namespace MeshTools { namespace Test { namespace {
 
@@ -51,14 +51,19 @@ struct GenerateNormalsTest: TestSuite::Tester {
     void flatWrongCount();
     void flatIntoWrongSize();
 
-    void smoothTwoTriangles();
+    template<class T> void smoothTwoTriangles();
     void smoothCube();
     void smoothBeveledCube();
     void smoothCylinder();
     void smoothZeroAreaTriangle();
     void smoothNanPosition();
     void smoothWrongCount();
+    void smoothOutOfBounds();
     void smoothIntoWrongSize();
+
+    template<class T> void smoothErased();
+    void smoothErasedNonContiguous();
+    void smoothErasedWrongIndexSize();
 
     void benchmarkFlat();
     void benchmarkSmooth();
@@ -72,14 +77,23 @@ GenerateNormalsTest::GenerateNormalsTest() {
               &GenerateNormalsTest::flatWrongCount,
               &GenerateNormalsTest::flatIntoWrongSize,
 
-              &GenerateNormalsTest::smoothTwoTriangles,
+              &GenerateNormalsTest::smoothTwoTriangles<UnsignedByte>,
+              &GenerateNormalsTest::smoothTwoTriangles<UnsignedShort>,
+              &GenerateNormalsTest::smoothTwoTriangles<UnsignedInt>,
               &GenerateNormalsTest::smoothCube,
               &GenerateNormalsTest::smoothBeveledCube,
               &GenerateNormalsTest::smoothCylinder,
               &GenerateNormalsTest::smoothZeroAreaTriangle,
               &GenerateNormalsTest::smoothNanPosition,
               &GenerateNormalsTest::smoothWrongCount,
-              &GenerateNormalsTest::smoothIntoWrongSize});
+              &GenerateNormalsTest::smoothOutOfBounds,
+              &GenerateNormalsTest::smoothIntoWrongSize,
+
+              &GenerateNormalsTest::smoothErased<UnsignedByte>,
+              &GenerateNormalsTest::smoothErased<UnsignedShort>,
+              &GenerateNormalsTest::smoothErased<UnsignedInt>,
+              &GenerateNormalsTest::smoothErasedNonContiguous,
+              &GenerateNormalsTest::smoothErasedWrongIndexSize});
 
     addBenchmarks({&GenerateNormalsTest::benchmarkFlat,
                    &GenerateNormalsTest::benchmarkSmooth}, 150);
@@ -98,14 +112,14 @@ constexpr Vector3 TwoTriangles[]{
 
 void GenerateNormalsTest::flat() {
     CORRADE_COMPARE_AS(generateFlatNormals(TwoTriangles),
-        (Containers::Array<Vector3>{Containers::InPlaceInit, {
+        Containers::arrayView<Vector3>({
             Vector3::zAxis(),
             Vector3::zAxis(),
             Vector3::zAxis(),
             -Vector3::zAxis(),
             -Vector3::zAxis(),
             -Vector3::zAxis()
-        }}), TestSuite::Compare::Container);
+        }), TestSuite::Compare::Container);
 }
 
 #ifdef MAGNUM_BUILD_DEPRECATED
@@ -155,20 +169,21 @@ void GenerateNormalsTest::flatIntoWrongSize() {
     CORRADE_COMPARE(out.str(), "MeshTools::generateFlatNormalsInto(): bad output size, expected 6 but got 7\n");
 }
 
-void GenerateNormalsTest::smoothTwoTriangles() {
-    const UnsignedInt indices[]{0, 1, 2, 3, 4, 5};
+template<class T> void GenerateNormalsTest::smoothTwoTriangles() {
+    setTestCaseTemplateName(Math::TypeTraits<T>::name());
+
+    const T indices[]{0, 1, 2, 3, 4, 5};
 
     /* Should generate the same output as flat normals */
-    CORRADE_COMPARE_AS(
-        generateSmoothNormals(Containers::stridedArrayView(indices), TwoTriangles),
-        (Containers::Array<Vector3>{Containers::InPlaceInit, {
+    CORRADE_COMPARE_AS(generateSmoothNormals(indices, TwoTriangles),
+        Containers::arrayView<Vector3>({
             Vector3::zAxis(),
             Vector3::zAxis(),
             Vector3::zAxis(),
             -Vector3::zAxis(),
             -Vector3::zAxis(),
             -Vector3::zAxis()
-        }}), TestSuite::Compare::Container);
+        }), TestSuite::Compare::Container);
 }
 
 void GenerateNormalsTest::smoothCube() {
@@ -193,9 +208,8 @@ void GenerateNormalsTest::smoothCube() {
     };
 
     /* Normals should be the same as positions, only normalized */
-    CORRADE_COMPARE_AS(
-        generateSmoothNormals(Containers::stridedArrayView(indices), positions),
-        (Containers::Array<Vector3>{Containers::InPlaceInit, {
+    CORRADE_COMPARE_AS(generateSmoothNormals(indices, positions),
+        Containers::arrayView<Vector3>({
             positions[0]/Constants::sqrt3(),
             positions[1]/Constants::sqrt3(),
             positions[2]/Constants::sqrt3(),
@@ -204,9 +218,8 @@ void GenerateNormalsTest::smoothCube() {
             positions[5]/Constants::sqrt3(),
             positions[6]/Constants::sqrt3(),
             positions[7]/Constants::sqrt3()
-        }}), TestSuite::Compare::Container);
+        }), TestSuite::Compare::Container);
 }
-
 
 constexpr Vector3 BeveledCubePositions[] {
     {-1.0f, -0.6f,  1.1f},
@@ -283,9 +296,8 @@ void GenerateNormalsTest::smoothBeveledCube() {
     Vector3 z{0.0462723f, 0.0754969f, 0.996072f};
     Vector3 x{0.996072f, 0.0754969f, 0.0462723f};
     Vector3 y{0.0467958f, 0.997808f, 0.0467958f};
-    CORRADE_COMPARE_AS(generateSmoothNormals(
-        Containers::stridedArrayView(BeveledCubeIndices), BeveledCubePositions),
-        (Containers::Array<Vector3>{Containers::InPlaceInit, {
+    CORRADE_COMPARE_AS(generateSmoothNormals(BeveledCubeIndices, BeveledCubePositions),
+        Containers::arrayView<Vector3>({
             z*Math::sign(BeveledCubePositions[ 0]),
             z*Math::sign(BeveledCubePositions[ 1]),
             z*Math::sign(BeveledCubePositions[ 2]), /* +Z */
@@ -315,17 +327,18 @@ void GenerateNormalsTest::smoothBeveledCube() {
             x*Math::sign(BeveledCubePositions[21]),
             x*Math::sign(BeveledCubePositions[22]), /* -X */
             x*Math::sign(BeveledCubePositions[23])
-        }}), TestSuite::Compare::Container);
+        }), TestSuite::Compare::Container);
 }
 
 void GenerateNormalsTest::smoothCylinder() {
-    const Trade::MeshData3D data = Primitives::cylinderSolid(1, 5, 1.0f);
+    const Trade::MeshData data = Primitives::cylinderSolid(1, 5, 1.0f);
 
     /* Output should be exactly the same as the cylinder normals */
     CORRADE_COMPARE_AS(Containers::arrayView(generateSmoothNormals(
-        Containers::stridedArrayView(data.indices()),
-        Containers::stridedArrayView(data.positions(0)))),
-        Containers::arrayView(data.normals(0)), TestSuite::Compare::Container);
+        data.indices(),
+        data.attribute<Vector3>(Trade::MeshAttribute::Position))),
+        data.attribute<Vector3>(Trade::MeshAttribute::Normal),
+        TestSuite::Compare::Container);
 }
 
 void GenerateNormalsTest::smoothZeroAreaTriangle() {
@@ -341,8 +354,7 @@ void GenerateNormalsTest::smoothZeroAreaTriangle() {
         0, 1, 2, 1, 2, 1
     };
 
-    CORRADE_COMPARE_AS(generateSmoothNormals(
-        Containers::stridedArrayView(indices), positions),
+    CORRADE_COMPARE_AS(generateSmoothNormals(indices, positions),
         (Containers::Array<Vector3>{Containers::InPlaceInit, {
             Vector3::zAxis(),
             Vector3::zAxis(),
@@ -358,21 +370,17 @@ void GenerateNormalsTest::smoothNanPosition() {
         { 0.0f, Constants::nan(), 0.0f},
     };
 
-    /* Second triangle is just an edge, so it shouldn't contribute to the first
-       triangle normal */
+    /* Second triangle will poison a part of the first with NaNs, but it won't
+       crash */
     constexpr UnsignedInt indices[] {
-        0, 1, 2, 1, 2, 1
+        0, 1, 2, 1, 2, 3
     };
 
-    Containers::Array<Vector3> generated = generateSmoothNormals(
-        Containers::stridedArrayView(indices), positions);
-    CORRADE_COMPARE_AS(generated.prefix(3),
-        (Containers::Array<Vector3>{Containers::InPlaceInit, {
-            Vector3::zAxis(),
-            Vector3::zAxis(),
-            Vector3::zAxis()
-        }}), TestSuite::Compare::Container<Containers::ArrayView<const Vector3>>);
-    CORRADE_COMPARE(Math::isNan(generated[3]), BoolVector3{0x7});
+    Containers::Array<Vector3> generated = generateSmoothNormals(indices, positions);
+    CORRADE_COMPARE(generated[0], Vector3::zAxis());
+    CORRADE_VERIFY(Math::isNan(generated[1]).all());
+    CORRADE_VERIFY(Math::isNan(generated[2]).all());
+    CORRADE_VERIFY(Math::isNan(generated[3]).all());
 }
 
 void GenerateNormalsTest::smoothWrongCount() {
@@ -381,8 +389,18 @@ void GenerateNormalsTest::smoothWrongCount() {
 
     const UnsignedByte indices[7]{};
     const Vector3 positions[1];
-    generateSmoothNormals(Containers::stridedArrayView(indices), positions);
+    generateSmoothNormals(indices, positions);
     CORRADE_COMPARE(out.str(), "MeshTools::generateSmoothNormalsInto(): index count not divisible by 3\n");
+}
+
+void GenerateNormalsTest::smoothOutOfBounds() {
+    std::stringstream out;
+    Error redirectError{&out};
+
+    const Vector3 positions[2];
+    const UnsignedInt indices[] { 0, 1, 2 };
+    generateSmoothNormals(indices, positions);
+    CORRADE_COMPARE(out.str(), "MeshTools::generateSmoothNormalsInto(): index 2 out of bounds for 2 elements\n");
 }
 
 void GenerateNormalsTest::smoothIntoWrongSize() {
@@ -392,7 +410,7 @@ void GenerateNormalsTest::smoothIntoWrongSize() {
     const UnsignedByte indices[6]{};
     const Vector3 positions[3];
     Vector3 normals[4];
-    generateSmoothNormalsInto(Containers::stridedArrayView(indices), positions, normals);
+    generateSmoothNormalsInto(indices, positions, normals);
     CORRADE_COMPARE(out.str(), "MeshTools::generateSmoothNormalsInto(): bad output size, expected 3 but got 4\n");
 }
 
@@ -406,18 +424,55 @@ void GenerateNormalsTest::benchmarkFlat() {
         generateFlatNormalsInto(positions, normals);
     }
 
-    CORRADE_COMPARE(Math::min<Vector3>(normals), (Vector3{-1.0f, -1.0f, -1.0f}));
+    CORRADE_COMPARE(Math::min(normals), (Vector3{-1.0f, -1.0f, -1.0f}));
 }
 
 void GenerateNormalsTest::benchmarkSmooth() {
     Containers::Array<Vector3> normals{Containers::NoInit, Containers::arraySize(BeveledCubePositions)};
     CORRADE_BENCHMARK(10) {
-        generateSmoothNormalsInto(
-            Containers::stridedArrayView(BeveledCubeIndices),
-            BeveledCubePositions, normals);
+        generateSmoothNormalsInto(BeveledCubeIndices, BeveledCubePositions, normals);
     }
 
-    CORRADE_COMPARE(Math::min<Vector3>(normals), (Vector3{-0.996072f, -0.997808f, -0.996072f}));
+    CORRADE_COMPARE(Math::min(normals), (Vector3{-0.996072f, -0.997808f, -0.996072f}));
+}
+
+template<class T> void GenerateNormalsTest::smoothErased() {
+    setTestCaseTemplateName(Math::TypeTraits<T>::name());
+
+    const T indices[]{0, 1, 2, 3, 4, 5};
+
+    /* Should generate the same output as flat normals */
+    CORRADE_COMPARE_AS(generateSmoothNormals(Containers::arrayCast<2, const char>(Containers::stridedArrayView(indices)), TwoTriangles),
+        Containers::arrayView<Vector3>({
+            Vector3::zAxis(),
+            Vector3::zAxis(),
+            Vector3::zAxis(),
+            -Vector3::zAxis(),
+            -Vector3::zAxis(),
+            -Vector3::zAxis()
+        }), TestSuite::Compare::Container);
+}
+
+void GenerateNormalsTest::smoothErasedNonContiguous() {
+    const char indices[6*4]{};
+    const Vector3 positions[3];
+
+    std::stringstream out;
+    Error redirectError{&out};
+    generateSmoothNormals(Containers::StridedArrayView2D<const char>{indices, {6, 2}, {4, 2}}, positions);
+    CORRADE_COMPARE(out.str(),
+        "MeshTools::generateSmoothNormalsInto(): second index view dimension is not contiguous\n");
+}
+
+void GenerateNormalsTest::smoothErasedWrongIndexSize() {
+    const char indices[6*3]{};
+    const Vector3 positions[3];
+
+    std::stringstream out;
+    Error redirectError{&out};
+    generateSmoothNormals(Containers::StridedArrayView2D<const char>{indices, {6, 3}}.every(2), positions);
+    CORRADE_COMPARE(out.str(),
+        "MeshTools::generateSmoothNormalsInto(): expected index type size 1, 2 or 4 but got 3\n");
 }
 
 }}}}

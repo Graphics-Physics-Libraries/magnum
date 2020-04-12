@@ -57,19 +57,16 @@ template<class T> inline T dot(const Quaternion<T>& a, const Quaternion<T>& b) {
     return dot(a.vector(), b.vector()) + a.scalar()*b.scalar();
 }
 
-namespace Implementation {
-    /* Used in angle() and slerp() (no assertions) */
-    template<class T> inline T angle(const Quaternion<T>& normalizedA, const Quaternion<T>& normalizedB) {
-        return std::acos(dot(normalizedA, normalizedB));
-    }
-}
-
 /** @relatesalso Quaternion
 @brief Angle between normalized quaternions
 
 Expects that both quaternions are normalized. @f[
-     \theta = \arccos \left( \frac{p \cdot q}{|p| |q|} \right) = \arccos(p \cdot q)
+    \theta = \arccos \left( \frac{p \cdot q}{|p| |q|} \right) = \arccos(p \cdot q)
 @f]
+
+To avoid numerical issues when two complex numbers are very close to each
+other, the dot product is clamped to the @f$ [-1, +1] @f$ range before being
+passed to @f$ \arccos @f$.
 @see @ref Quaternion::isNormalized(),
     @ref angle(const Complex<T>&, const Complex<T>&),
     @ref angle(const Vector<size, FloatingPoint>&, const Vector<size, FloatingPoint>&)
@@ -77,7 +74,7 @@ Expects that both quaternions are normalized. @f[
 template<class T> inline Rad<T> angle(const Quaternion<T>& normalizedA, const Quaternion<T>& normalizedB) {
     CORRADE_ASSERT(normalizedA.isNormalized() && normalizedB.isNormalized(),
         "Math::angle(): quaternions" << normalizedA << "and" << normalizedB << "are not normalized", {});
-    return Rad<T>{Implementation::angle(normalizedA, normalizedB)};
+    return Rad<T>{std::acos(clamp(dot(normalizedA, normalizedB), T(-1), T(1)))};
 }
 
 /** @relatesalso Quaternion
@@ -140,17 +137,23 @@ template<class T> inline Quaternion<T> lerpShortestPath(const Quaternion<T>& nor
 @param normalizedB  Second quaternion
 @param t            Interpolation phase (from range @f$ [0; 1] @f$)
 
-Expects that both quaternions are normalized. If the quaternions are the same
-or one is a negation of the other, it just returns the first argument: @f[
+Expects that both quaternions are normalized. If the quaternions are nearly the
+same or one is a negation of the other, it falls back to a linear interpolation
+(shortest-path to avoid a degenerate case of returning a zero quaternion for
+@f$ t = 0.5 @f$), but without post-normalization as the interpolation result
+can still be considered sufficiently normalized: @f[
     \begin{array}{rcl}
         d & = & q_A \cdot q_B \\[5pt]
-        q_{SLERP} & = & q_A, ~ {\color{m-primary} \text{if} ~ d \ge 1}
+        q_{SLERP} & = & (1 - t) \left\{ \begin{array}{lr}
+            \phantom{-}q_A, & d \ge 0 \\
+            -q_A, & d < 0
+        \end{array} \right\} + t q_B, ~ {\color{m-primary} \text{if} ~ |d| \ge 1 - \frac{\epsilon}{2}}
     \end{array}
 @f]
 
 @m_class{m-noindent}
 
-otherwise, the interpolation is performed as: @f[
+Otherwise, the interpolation is performed as: @f[
     \begin{array}{rcl}
         \theta & = & \arccos \left( \frac{q_A \cdot q_B}{|q_A| |q_B|} \right) = \arccos(q_A \cdot q_B) = \arccos(d) \\[5pt]
         q_{SLERP} & = & \cfrac{\sin((1 - t) \theta) q_A + \sin(t \theta) q_B}{\sin(\theta)}
@@ -169,9 +172,31 @@ template<class T> inline Quaternion<T> slerp(const Quaternion<T>& normalizedA, c
         "Math::slerp(): quaternions" << normalizedA << "and" << normalizedB << "are not normalized", {});
     const T cosHalfAngle = dot(normalizedA, normalizedB);
 
-    /* Avoid division by zero */
-    if(std::abs(cosHalfAngle) >= T(1) - TypeTraits<T>::epsilon())
-        return normalizedA;
+    /* Avoid division by zero if the quats are very close and instead fall back
+       to a linear interpolation. This is intentionally not doing any
+       normalization as that's not needed. For a maximum angle α satisfying the
+       condition below, the two quaternions form two sides of an isosceles
+       triangle and its altitude x is length of the "shortest" possible
+       interpolated quaternion:
+
+               +
+              /|\           cos(α)  > 1 - ε/2
+             /α|α\               α  < arccos(1 - ε/2)
+            /-_|_-\
+         1 /   |   \ 1          x/1 < cos(α)
+          /    |x   \           x/1 < cos(arccos(1 - ε/2))
+         /     |     \            x < 1 - ε/2
+        +------+------+
+
+       Magnum's isNormalized() check treats all lengths in (1 - ε, 1 + ε) as
+       normalized, thus for an safety headroom this stops only at 1 - ε/2.
+       Additionally this needs to account for the case of the quaternions being
+       mutual negatives, in which case a simple lerp() would return a zero
+       quaternion for t = 0.5. */
+    if(std::abs(cosHalfAngle) > T(1) - T(0.5)*TypeTraits<T>::epsilon()) {
+        const Quaternion<T> shortestNormalizedA = cosHalfAngle < 0 ? -normalizedA : normalizedA;
+        return (T(1) - t)*shortestNormalizedA + t*normalizedB;
+    }
 
     const T a = std::acos(cosHalfAngle);
     return (std::sin((T(1) - t)*a)*normalizedA + std::sin(t*a)*normalizedB)/std::sin(a);
@@ -185,22 +210,25 @@ template<class T> inline Quaternion<T> slerp(const Quaternion<T>& normalizedA, c
 
 Unlike @ref slerp(const Quaternion<T>&, const Quaternion<T>&, T) this function
 interpolates on the shortest path. Expects that both quaternions are
-normalized. If the quaternions are the same or one is a negation of the other,
-it just returns the first argument: @f[
+normalized. If the quaternions are nearly the same or one is a negation of the
+other, it falls back to a linear interpolation (shortest-path to avoid a
+degenerate case of returning a zero quaternion for @f$ t = 0.5 @f$) but without
+post-normalization as the interpolation result can still be considered
+sufficiently normalized: @f[
     \begin{array}{rcl}
-        d & = & q_A \cdot q_B \\
-        q_{SLERP} & = & q_A, ~ {\color{m-primary} \text{if} ~ d \ge 1}
+        d & = & q_A \cdot q_B \\[15pt]
+        q'_A & = & \begin{cases}
+                \phantom{-}q_A, & d \ge 0 \\
+                -q_A, & d < 0
+            \end{cases} \\[15pt]
+        q_{SLERP} & = & (1 - t) q'_A + t q_B, ~ {\color{m-primary} \text{if} ~ |d| \ge 1 - \frac{\epsilon}{2}}
     \end{array}
 @f]
 
 @m_class{m-noindent}
 
-otherwise, the interpolation is performed as: @f[
+Otherwise, the interpolation is performed as: @f[
     \begin{array}{rcl}
-        q'_A & = & \begin{cases}
-                \phantom{-}q_A, & d \ge 0 \\
-                -q_A, & d < 0
-            \end{cases} \\[15pt]
         \theta & = & \arccos \left( \frac{|q'_A \cdot q_B|}{|q'_A| |q_B|} \right) = \arccos(|q'_A \cdot q_B|) = \arccos(|d|) \\[5pt]
         q_{SLERP} & = & \cfrac{\sin((1 - t) \theta) q'_A + \sin(t \theta) q_B}{\sin(\theta)}
     \end{array}
@@ -215,11 +243,14 @@ template<class T> inline Quaternion<T> slerpShortestPath(const Quaternion<T>& no
         "Math::slerpShortestPath(): quaternions" << normalizedA << "and" << normalizedB << "are not normalized", {});
     const T cosHalfAngle = dot(normalizedA, normalizedB);
 
-    /* Avoid division by zero */
-    if(std::abs(cosHalfAngle) >= T(1) - TypeTraits<T>::epsilon())
-        return normalizedA;
-
     const Quaternion<T> shortestNormalizedA = cosHalfAngle < 0 ? -normalizedA : normalizedA;
+
+    /* Avoid division by zero if the quats are very close and instead fall back
+       to a linear interpolation. This is intentionally not doing any
+       normalization, see slerp() above for more information. */
+    if(std::abs(cosHalfAngle) >= T(1) - TypeTraits<T>::epsilon()) {
+        return (T(1) - t)*shortestNormalizedA + t*normalizedB;
+    }
 
     const T a = std::acos(std::abs(cosHalfAngle));
     return (std::sin((T(1) - t)*a)*shortestNormalizedA + std::sin(t*a)*normalizedB)/std::sin(a);
@@ -398,6 +429,19 @@ template<class T> class Quaternion {
          *      @ref Matrix4::from(const Matrix3x3<T>&, const Vector3<T>&)
          */
         Matrix3x3<T> toMatrix() const;
+
+        /**
+         * @brief Convert to an euler vector
+         * @m_since_latest
+         *
+         * Expects that the quaternion is normalized. Returns the angles in an
+         * XYZ order, you can combine them back to a quaternion like this:
+         *
+         * @snippet MagnumMath.cpp Quaternion-fromEuler
+         *
+         * @see @ref rotation(), @ref DualQuaternion::rotation()
+         */
+        Vector3<Rad<T>> toEuler() const;
 
         /**
          * @brief Negated quaternion
@@ -731,6 +775,37 @@ template<class T> Matrix3x3<T> Quaternion<T>::toMatrix() const {
             2*_vector.y()*_vector.z() - 2*_vector.x()*_scalar,
                 T(1) - 2*pow2(_vector.x()) - 2*pow2(_vector.y()))
     };
+}
+
+/* Algorithm from:
+   https://github.com/mrdoob/three.js/blob/6892dd0aba1411d35c5e2b44dc6ff280b24d6aa2/src/math/Euler.js#L197 */
+template<class T> Vector3<Rad<T>> Quaternion<T>::toEuler() const {
+    CORRADE_ASSERT(isNormalized(),
+        "Math::Quaternion::toEuler():" << *this << "is not normalized", {});
+
+    Vector3<Rad<T>> euler{NoInit};
+
+    Matrix3x3<T> rotMatrix = toMatrix();
+
+    T m11 = rotMatrix[0][0];
+    T m12 = rotMatrix[0][1];
+    T m13 = rotMatrix[0][2];
+    T m21 = rotMatrix[1][0];
+    T m22 = rotMatrix[1][1];
+    T m23 = rotMatrix[1][2];
+    T m33 = rotMatrix[2][2];
+
+    euler.y() = Rad<T>(std::asin(-Math::min(Math::max(m13, T(-1.0)), T(1.0))));
+
+    if(!TypeTraits<T>::equalsZero(m13 - T(1.0), T(1.0))) {
+        euler.x() = Rad<T>(std::atan2(m23, m33));
+        euler.z() = Rad<T>(std::atan2(m12, m11));
+    } else {
+        euler.x() = Rad<T>(0.0);
+        euler.z() = Rad<T>(std::atan2(-m21, m22));
+    }
+
+    return euler;
 }
 
 template<class T> inline Quaternion<T> Quaternion<T>::operator*(const Quaternion<T>& other) const {

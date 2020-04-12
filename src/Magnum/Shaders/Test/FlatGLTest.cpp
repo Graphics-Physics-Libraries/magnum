@@ -35,6 +35,8 @@
 #include "Magnum/ImageView.h"
 #include "Magnum/PixelFormat.h"
 #include "Magnum/DebugTools/CompareImage.h"
+#include "Magnum/GL/Context.h"
+#include "Magnum/GL/Extensions.h"
 #include "Magnum/GL/Mesh.h"
 #include "Magnum/GL/Framebuffer.h"
 #include "Magnum/GL/Renderer.h"
@@ -43,14 +45,16 @@
 #include "Magnum/GL/Texture.h"
 #include "Magnum/GL/TextureFormat.h"
 #include "Magnum/GL/OpenGLTester.h"
+#include "Magnum/Math/Color.h"
+#include "Magnum/Math/Matrix3.h"
+#include "Magnum/Math/Matrix4.h"
 #include "Magnum/MeshTools/Compile.h"
 #include "Magnum/Primitives/Circle.h"
 #include "Magnum/Primitives/UVSphere.h"
 #include "Magnum/Shaders/Flat.h"
 #include "Magnum/Trade/AbstractImporter.h"
 #include "Magnum/Trade/ImageData.h"
-#include "Magnum/Trade/MeshData2D.h"
-#include "Magnum/Trade/MeshData3D.h"
+#include "Magnum/Trade/MeshData.h"
 
 #include "configure.h"
 
@@ -60,10 +64,14 @@ struct FlatGLTest: GL::OpenGLTester {
     explicit FlatGLTest();
 
     template<UnsignedInt dimensions> void construct();
+
     template<UnsignedInt dimensions> void constructMove();
+
+    template<UnsignedInt dimensions> void constructTextureTransformationNotTextured();
 
     template<UnsignedInt dimensions> void bindTextureNotEnabled();
     template<UnsignedInt dimensions> void setAlphaMaskNotEnabled();
+    template<UnsignedInt dimensions> void setTextureMatrixNotEnabled();
     #ifndef MAGNUM_TARGET_GLES2
     template<UnsignedInt dimensions> void setObjectIdNotEnabled();
     #endif
@@ -97,8 +105,12 @@ struct FlatGLTest: GL::OpenGLTester {
     void renderObjectId3D();
     #endif
 
+    void renderInstanced2D();
+    void renderInstanced3D();
+
     private:
         PluginManager::Manager<Trade::AbstractImporter> _manager{"nonexistent"};
+        std::string _testDir;
 
         GL::Renderbuffer _color{NoCreate};
         #ifndef MAGNUM_TARGET_GLES2
@@ -113,11 +125,12 @@ struct FlatGLTest: GL::OpenGLTester {
     -   Mesa Intel
     -   Mesa AMD
     -   SwiftShader ES2/ES3
-    -   ARM Mali (Huawei P10) ES2/ES3
-    -   WebGL 1 / 2 (on Mesa Intel)
-    -   NVidia Windows
-    -   Intel Windows
-    -   AMD on macOS
+    -   ARM Mali (Huawei P10) ES2/ES3 (except instancing)
+    -   WebGL 1 / 2 (on Mesa Intel) (except instancing)
+    -   NVidia Windows (except instancing)
+    -   Intel Windows (except instancing)
+    -   AMD on macOS (except instancing)
+    -   iPhone 6 w/ iOS 12.4 (except instancing)
 */
 
 using namespace Math::Literals;
@@ -128,14 +141,31 @@ constexpr struct {
 } ConstructData[]{
     {"", {}},
     {"textured", Flat2D::Flag::Textured},
+    {"textured + texture transformation", Flat2D::Flag::Textured|Flat2D::Flag::TextureTransformation},
     {"alpha mask", Flat2D::Flag::AlphaMask},
     {"alpha mask + textured", Flat2D::Flag::AlphaMask|Flat2D::Flag::Textured},
     {"vertex colors", Flat2D::Flag::VertexColor},
     {"vertex colors + textured", Flat2D::Flag::VertexColor|Flat2D::Flag::Textured},
     #ifndef MAGNUM_TARGET_GLES2
     {"object ID", Flat2D::Flag::ObjectId},
-    {"object ID + alpha mask + textured", Flat2D::Flag::ObjectId|Flat2D::Flag::AlphaMask|Flat2D::Flag::Textured}
+    {"instanced object ID", Flat2D::Flag::InstancedObjectId},
+    {"object ID + alpha mask + textured", Flat2D::Flag::ObjectId|Flat2D::Flag::AlphaMask|Flat2D::Flag::Textured},
     #endif
+    {"instanced transformation", Flat2D::Flag::InstancedTransformation},
+    {"instanced texture offset", Flat2D::Flag::Textured|Flat2D::Flag::InstancedTextureOffset}
+};
+
+const struct {
+    const char* name;
+    Flat2D::Flags flags;
+    Matrix3 textureTransformation;
+    bool flip;
+} RenderTexturedData[]{
+    {"", Flat2D::Flag::Textured, {}, false},
+    {"texture transformation",
+        Flat2D::Flag::Textured|Flat2D::Flag::TextureTransformation,
+        Matrix3::translation(Vector2{1.0f})*Matrix3::scaling(Vector2{-1.0f}),
+        true},
 };
 
 const struct {
@@ -160,6 +190,23 @@ const struct {
         Flat2D::Flag::Textured|Flat2D::Flag::AlphaMask, 1.0f}
 };
 
+#ifndef MAGNUM_TARGET_GLES2
+constexpr struct {
+    const char* name;
+    Flat2D::Flags flags;
+    UnsignedInt uniformId;
+    UnsignedInt instanceCount;
+    UnsignedInt expected;
+} RenderObjectIdData[] {
+    {"", /* Verify that it can hold 16 bits at least */
+        Flat2D::Flag::ObjectId, 48526, 0, 48526},
+    {"instanced, first instance",
+        Flat2D::Flag::InstancedObjectId, 13524, 1, 24526},
+    {"instanced, second instance",
+        Flat2D::Flag::InstancedObjectId, 13524, 2, 62347}
+};
+#endif
+
 FlatGLTest::FlatGLTest() {
     addInstancedTests<FlatGLTest>({
         &FlatGLTest::construct<2>,
@@ -170,10 +217,15 @@ FlatGLTest::FlatGLTest() {
         &FlatGLTest::constructMove<2>,
         &FlatGLTest::constructMove<3>,
 
+        &FlatGLTest::constructTextureTransformationNotTextured<2>,
+        &FlatGLTest::constructTextureTransformationNotTextured<3>,
+
         &FlatGLTest::bindTextureNotEnabled<2>,
         &FlatGLTest::bindTextureNotEnabled<3>,
         &FlatGLTest::setAlphaMaskNotEnabled<2>,
         &FlatGLTest::setAlphaMaskNotEnabled<3>,
+        &FlatGLTest::setTextureMatrixNotEnabled<2>,
+        &FlatGLTest::setTextureMatrixNotEnabled<3>,
         #ifndef MAGNUM_TARGET_GLES2
         &FlatGLTest::setObjectIdNotEnabled<2>,
         &FlatGLTest::setObjectIdNotEnabled<3>
@@ -185,10 +237,17 @@ FlatGLTest::FlatGLTest() {
               &FlatGLTest::renderColored2D,
               &FlatGLTest::renderColored3D,
               &FlatGLTest::renderSinglePixelTextured2D,
-              &FlatGLTest::renderSinglePixelTextured3D,
-              &FlatGLTest::renderTextured2D,
-              &FlatGLTest::renderTextured3D,
-              &FlatGLTest::renderVertexColor2D<Color3>,
+              &FlatGLTest::renderSinglePixelTextured3D},
+        &FlatGLTest::renderSetup,
+        &FlatGLTest::renderTeardown);
+
+    addInstancedTests({&FlatGLTest::renderTextured2D,
+                       &FlatGLTest::renderTextured3D},
+        Containers::arraySize(RenderTexturedData),
+        &FlatGLTest::renderSetup,
+        &FlatGLTest::renderTeardown);
+
+    addTests({&FlatGLTest::renderVertexColor2D<Color3>,
               &FlatGLTest::renderVertexColor2D<Color4>,
               &FlatGLTest::renderVertexColor3D<Color3>,
               &FlatGLTest::renderVertexColor3D<Color4>},
@@ -202,11 +261,17 @@ FlatGLTest::FlatGLTest() {
         &FlatGLTest::renderAlphaTeardown);
 
     #ifndef MAGNUM_TARGET_GLES2
-    addTests({&FlatGLTest::renderObjectId2D,
-              &FlatGLTest::renderObjectId3D},
+    addInstancedTests({&FlatGLTest::renderObjectId2D,
+                       &FlatGLTest::renderObjectId3D},
+        Containers::arraySize(RenderObjectIdData),
         &FlatGLTest::renderObjectIdSetup,
         &FlatGLTest::renderObjectIdTeardown);
     #endif
+
+    addTests({&FlatGLTest::renderInstanced2D,
+              &FlatGLTest::renderInstanced3D},
+        &FlatGLTest::renderSetup,
+        &FlatGLTest::renderTeardown);
 
     /* Load the plugins directly from the build tree. Otherwise they're either
        static and already loaded or not present in the build tree */
@@ -216,6 +281,20 @@ FlatGLTest::FlatGLTest() {
     #ifdef TGAIMPORTER_PLUGIN_FILENAME
     CORRADE_INTERNAL_ASSERT(_manager.load(TGAIMPORTER_PLUGIN_FILENAME) & PluginManager::LoadState::Loaded);
     #endif
+
+    #ifdef CORRADE_TARGET_APPLE
+    if(Utility::Directory::isSandboxed()
+        #if defined(CORRADE_TARGET_IOS) && defined(CORRADE_TESTSUITE_TARGET_XCTEST)
+        /** @todo Fix this once I persuade CMake to run XCTest tests properly */
+        && std::getenv("SIMULATOR_UDID")
+        #endif
+    ) {
+        _testDir = Utility::Directory::path(Utility::Directory::executableLocation());
+    } else
+    #endif
+    {
+        _testDir = SHADERS_TEST_DIR;
+    }
 }
 
 template<UnsignedInt dimensions> void FlatGLTest::construct() {
@@ -233,6 +312,8 @@ template<UnsignedInt dimensions> void FlatGLTest::construct() {
         #endif
         CORRADE_VERIFY(shader.validate().first);
     }
+
+    MAGNUM_VERIFY_NO_GL_ERROR();
 }
 
 template<UnsignedInt dimensions> void FlatGLTest::constructMove() {
@@ -254,6 +335,16 @@ template<UnsignedInt dimensions> void FlatGLTest::constructMove() {
     CORRADE_COMPARE(c.id(), id);
     CORRADE_COMPARE(c.flags(), Flat<dimensions>::Flag::Textured);
     CORRADE_VERIFY(!b.id());
+}
+
+template<UnsignedInt dimensions> void FlatGLTest::constructTextureTransformationNotTextured() {
+    setTestCaseTemplateName(std::to_string(dimensions));
+
+    std::ostringstream out;
+    Error redirectError{&out};
+    Flat<dimensions>{Flat<dimensions>::Flag::TextureTransformation};
+    CORRADE_COMPARE(out.str(),
+        "Shaders::Flat: texture transformation enabled but the shader is not textured\n");
 }
 
 template<UnsignedInt dimensions> void FlatGLTest::bindTextureNotEnabled() {
@@ -280,6 +371,19 @@ template<UnsignedInt dimensions> void FlatGLTest::setAlphaMaskNotEnabled() {
 
     CORRADE_COMPARE(out.str(),
         "Shaders::Flat::setAlphaMask(): the shader was not created with alpha mask enabled\n");
+}
+
+template<UnsignedInt dimensions> void FlatGLTest::setTextureMatrixNotEnabled() {
+    setTestCaseTemplateName(std::to_string(dimensions));
+
+    std::ostringstream out;
+    Error redirectError{&out};
+
+    Flat<dimensions> shader;
+    shader.setTextureMatrix({});
+
+    CORRADE_COMPARE(out.str(),
+        "Shaders::Flat::setTextureMatrix(): the shader was not created with texture transformation enabled\n");
 }
 
 #ifndef MAGNUM_TARGET_GLES2
@@ -327,8 +431,8 @@ void FlatGLTest::renderTeardown() {
 void FlatGLTest::renderDefaults2D() {
     GL::Mesh circle = MeshTools::compile(Primitives::circle2DSolid(32));
 
-    Flat2D shader;
-    circle.draw(shader);
+    Flat2D{}
+        .draw(circle);
 
     MAGNUM_VERIFY_NO_GL_ERROR();
 
@@ -339,7 +443,7 @@ void FlatGLTest::renderDefaults2D() {
     CORRADE_COMPARE_WITH(
         /* Dropping the alpha channel, as it's always 1.0 */
         Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
-        Utility::Directory::join(SHADERS_TEST_DIR, "FlatTestFiles/defaults.tga"),
+        Utility::Directory::join(_testDir, "FlatTestFiles/defaults.tga"),
         /* SwiftShader has 8 different pixels on the edges */
         (DebugTools::CompareImageToFile{_manager, 238.0f, 0.2975f}));
 }
@@ -347,8 +451,8 @@ void FlatGLTest::renderDefaults2D() {
 void FlatGLTest::renderDefaults3D() {
     GL::Mesh sphere = MeshTools::compile(Primitives::uvSphereSolid(16, 32));
 
-    Flat3D shader;
-    sphere.draw(shader);
+    Flat3D{}
+        .draw(sphere);
 
     MAGNUM_VERIFY_NO_GL_ERROR();
 
@@ -359,7 +463,7 @@ void FlatGLTest::renderDefaults3D() {
     CORRADE_COMPARE_WITH(
         /* Dropping the alpha channel, as it's always 1.0 */
         Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
-        Utility::Directory::join(SHADERS_TEST_DIR, "FlatTestFiles/defaults.tga"),
+        Utility::Directory::join(_testDir, "FlatTestFiles/defaults.tga"),
         /* SwiftShader has 8 different pixels on the edges */
         (DebugTools::CompareImageToFile{_manager, 238.0f, 0.2975f}));
 }
@@ -367,11 +471,10 @@ void FlatGLTest::renderDefaults3D() {
 void FlatGLTest::renderColored2D() {
     GL::Mesh circle = MeshTools::compile(Primitives::circle2DSolid(32));
 
-    Flat2D shader;
-    shader.setColor(0x9999ff_rgbf)
-        .setTransformationProjectionMatrix(Matrix3::projection({2.1f, 2.1f}));
-
-    circle.draw(shader);
+    Flat2D{}
+        .setColor(0x9999ff_rgbf)
+        .setTransformationProjectionMatrix(Matrix3::projection({2.1f, 2.1f}))
+        .draw(circle);
 
     MAGNUM_VERIFY_NO_GL_ERROR();
 
@@ -388,22 +491,21 @@ void FlatGLTest::renderColored2D() {
     CORRADE_COMPARE_WITH(
         /* Dropping the alpha channel, as it's always 1.0 */
         Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
-        Utility::Directory::join(SHADERS_TEST_DIR, "FlatTestFiles/colored2D.tga"),
+        Utility::Directory::join(_testDir, "FlatTestFiles/colored2D.tga"),
         (DebugTools::CompareImageToFile{_manager, maxThreshold, meanThreshold}));
 }
 
 void FlatGLTest::renderColored3D() {
     GL::Mesh sphere = MeshTools::compile(Primitives::uvSphereSolid(16, 32));
 
-    Flat3D shader;
-    shader.setColor(0x9999ff_rgbf)
+    Flat3D{}
+        .setColor(0x9999ff_rgbf)
         .setTransformationProjectionMatrix(
             Matrix4::perspectiveProjection(60.0_degf, 1.0f, 0.1f, 10.0f)*
             Matrix4::translation(Vector3::zAxis(-2.15f))*
             Matrix4::rotationY(-15.0_degf)*
-            Matrix4::rotationX(15.0_degf));
-
-    sphere.draw(shader);
+            Matrix4::rotationX(15.0_degf))
+        .draw(sphere);
 
     MAGNUM_VERIFY_NO_GL_ERROR();
 
@@ -421,7 +523,7 @@ void FlatGLTest::renderColored3D() {
     CORRADE_COMPARE_WITH(
         /* Dropping the alpha channel, as it's always 1.0 */
         Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
-        Utility::Directory::join(SHADERS_TEST_DIR, "FlatTestFiles/colored3D.tga"),
+        Utility::Directory::join(_testDir, "FlatTestFiles/colored3D.tga"),
         (DebugTools::CompareImageToFile{_manager, maxThreshold, meanThreshold}));
 }
 
@@ -442,7 +544,7 @@ constexpr GL::TextureFormat TextureFormatRGBA =
 
 void FlatGLTest::renderSinglePixelTextured2D() {
     GL::Mesh circle = MeshTools::compile(Primitives::circle2DSolid(32,
-        Primitives::CircleTextureCoords::Generate));
+        Primitives::Circle2DFlag::TextureCoordinates));
 
     const Color4ub diffuseData[]{ 0x9999ff_rgb };
     ImageView2D diffuseImage{PixelFormat::RGBA8Unorm, Vector2i{1}, diffuseData};
@@ -453,10 +555,10 @@ void FlatGLTest::renderSinglePixelTextured2D() {
         .setStorage(1, TextureFormatRGBA, Vector2i{1})
         .setSubImage(0, {}, diffuseImage);
 
-    Flat2D shader{Flat3D::Flag::Textured};
-    shader.setTransformationProjectionMatrix(Matrix3::projection({2.1f, 2.1f}))
-        .bindTexture(texture);
-    circle.draw(shader);
+    Flat2D{Flat3D::Flag::Textured}
+        .setTransformationProjectionMatrix(Matrix3::projection({2.1f, 2.1f}))
+        .bindTexture(texture)
+        .draw(circle);
 
     MAGNUM_VERIFY_NO_GL_ERROR();
 
@@ -474,13 +576,13 @@ void FlatGLTest::renderSinglePixelTextured2D() {
     CORRADE_COMPARE_WITH(
         /* Dropping the alpha channel, as it's always 1.0 */
         Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
-        Utility::Directory::join(SHADERS_TEST_DIR, "FlatTestFiles/colored2D.tga"),
+        Utility::Directory::join(_testDir, "FlatTestFiles/colored2D.tga"),
         (DebugTools::CompareImageToFile{_manager, maxThreshold, meanThreshold}));
 }
 
 void FlatGLTest::renderSinglePixelTextured3D() {
     GL::Mesh sphere = MeshTools::compile(Primitives::uvSphereSolid(16, 32,
-        Primitives::UVSphereTextureCoords::Generate));
+        Primitives::UVSphereFlag::TextureCoordinates));
 
     const Color4ub diffuseData[]{ 0x9999ff_rgb };
     ImageView2D diffuseImage{PixelFormat::RGBA8Unorm, Vector2i{1}, diffuseData};
@@ -491,14 +593,14 @@ void FlatGLTest::renderSinglePixelTextured3D() {
         .setStorage(1, TextureFormatRGBA, Vector2i{1})
         .setSubImage(0, {}, diffuseImage);
 
-    Flat3D shader{Flat3D::Flag::Textured};
-    shader.setTransformationProjectionMatrix(
+    Flat3D{Flat3D::Flag::Textured}
+        .setTransformationProjectionMatrix(
             Matrix4::perspectiveProjection(60.0_degf, 1.0f, 0.1f, 10.0f)*
             Matrix4::translation(Vector3::zAxis(-2.15f))*
             Matrix4::rotationY(-15.0_degf)*
             Matrix4::rotationX(15.0_degf))
-        .bindTexture(texture);
-    sphere.draw(shader);
+        .bindTexture(texture)
+        .draw(sphere);
 
     MAGNUM_VERIFY_NO_GL_ERROR();
 
@@ -516,87 +618,113 @@ void FlatGLTest::renderSinglePixelTextured3D() {
     CORRADE_COMPARE_WITH(
         /* Dropping the alpha channel, as it's always 1.0 */
         Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
-        Utility::Directory::join(SHADERS_TEST_DIR, "FlatTestFiles/colored3D.tga"),
+        Utility::Directory::join(_testDir, "FlatTestFiles/colored3D.tga"),
         (DebugTools::CompareImageToFile{_manager, maxThreshold, meanThreshold}));
 }
 
 void FlatGLTest::renderTextured2D() {
+    auto&& data = RenderTexturedData[testCaseInstanceId()];
+    setTestCaseDescription(data.name);
+
     if(!(_manager.loadState("AnyImageImporter") & PluginManager::LoadState::Loaded) ||
        !(_manager.loadState("TgaImporter") & PluginManager::LoadState::Loaded))
         CORRADE_SKIP("AnyImageImporter / TgaImageImporter plugins not found.");
 
     GL::Mesh circle = MeshTools::compile(Primitives::circle2DSolid(32,
-        Primitives::CircleTextureCoords::Generate));
+        Primitives::Circle2DFlag::TextureCoordinates));
 
     Containers::Pointer<Trade::AbstractImporter> importer = _manager.loadAndInstantiate("AnyImageImporter");
     CORRADE_VERIFY(importer);
 
     GL::Texture2D texture;
     Containers::Optional<Trade::ImageData2D> image;
-    CORRADE_VERIFY(importer->openFile(Utility::Directory::join(SHADERS_TEST_DIR, "TestFiles/diffuse-texture.tga")) && (image = importer->image2D(0)));
+    CORRADE_VERIFY(importer->openFile(Utility::Directory::join(_testDir, "TestFiles/diffuse-texture.tga")) && (image = importer->image2D(0)));
     texture.setMinificationFilter(GL::SamplerFilter::Linear)
         .setMagnificationFilter(GL::SamplerFilter::Linear)
         .setWrapping(GL::SamplerWrapping::ClampToEdge)
         .setStorage(1, TextureFormatRGB, image->size())
         .setSubImage(0, {}, *image);
 
-    Flat2D shader{Flat2D::Flag::Textured};
-    shader.setTransformationProjectionMatrix(Matrix3::projection({2.1f, 2.1f}))
+    Flat2D shader{data.flags};
+    shader
+        .setTransformationProjectionMatrix(Matrix3::projection({2.1f, 2.1f}))
         /* Colorized. Case without a color (where it should be white) is tested
            in renderSinglePixelTextured() */
         .setColor(0x9999ff_rgbf)
         .bindTexture(texture);
-    circle.draw(shader);
+
+    if(data.textureTransformation != Matrix3{})
+        shader.setTextureMatrix(data.textureTransformation);
+
+    shader.draw(circle);
 
     MAGNUM_VERIFY_NO_GL_ERROR();
 
+    Image2D rendered = _framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm});
+    /* Dropping the alpha channel, as it's always 1.0 */
+    Containers::StridedArrayView2D<Color3ub> pixels =
+        Containers::arrayCast<Color3ub>(rendered.pixels<Color4ub>());
+    if(data.flip) pixels = pixels.flipped<0>().flipped<1>();
+
     #if !(defined(MAGNUM_TARGET_GLES2) && defined(MAGNUM_TARGET_WEBGL))
-    /* SwiftShader has minor rounding errors */
-    const Float maxThreshold = 1.334f, meanThreshold = 0.012f;
+    /* SwiftShader has minor rounding errors, Apple A8 slightly more */
+    const Float maxThreshold = 2.334f, meanThreshold = 0.023f;
     #else
     /* WebGL 1 doesn't have 8bit renderbuffer storage, so it's way worse */
     const Float maxThreshold = 15.667f, meanThreshold = 3.254f;
     #endif
-    CORRADE_COMPARE_WITH(
-        /* Dropping the alpha channel, as it's always 1.0 */
-        Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
-        Utility::Directory::join(SHADERS_TEST_DIR, "FlatTestFiles/textured2D.tga"),
+    CORRADE_COMPARE_WITH(pixels,
+        Utility::Directory::join(_testDir, "FlatTestFiles/textured2D.tga"),
         (DebugTools::CompareImageToFile{_manager, maxThreshold, meanThreshold}));
 }
 
 void FlatGLTest::renderTextured3D() {
+    auto&& data = RenderTexturedData[testCaseInstanceId()];
+    setTestCaseDescription(data.name);
+
     if(!(_manager.loadState("AnyImageImporter") & PluginManager::LoadState::Loaded) ||
        !(_manager.loadState("TgaImporter") & PluginManager::LoadState::Loaded))
         CORRADE_SKIP("AnyImageImporter / TgaImageImporter plugins not found.");
 
     GL::Mesh sphere = MeshTools::compile(Primitives::uvSphereSolid(16, 32,
-        Primitives::UVSphereTextureCoords::Generate));
+        Primitives::UVSphereFlag::TextureCoordinates));
 
     Containers::Pointer<Trade::AbstractImporter> importer = _manager.loadAndInstantiate("AnyImageImporter");
     CORRADE_VERIFY(importer);
 
     GL::Texture2D texture;
     Containers::Optional<Trade::ImageData2D> image;
-    CORRADE_VERIFY(importer->openFile(Utility::Directory::join(SHADERS_TEST_DIR, "TestFiles/diffuse-texture.tga")) && (image = importer->image2D(0)));
+    CORRADE_VERIFY(importer->openFile(Utility::Directory::join(_testDir, "TestFiles/diffuse-texture.tga")) && (image = importer->image2D(0)));
     texture.setMinificationFilter(GL::SamplerFilter::Linear)
         .setMagnificationFilter(GL::SamplerFilter::Linear)
         .setWrapping(GL::SamplerWrapping::ClampToEdge)
         .setStorage(1, TextureFormatRGB, image->size())
         .setSubImage(0, {}, *image);
 
-    Flat3D shader{Flat3D::Flag::Textured};
-    shader.setTransformationProjectionMatrix(
+    Flat3D shader{data.flags};
+    shader
+        .setTransformationProjectionMatrix(
             Matrix4::perspectiveProjection(60.0_degf, 1.0f, 0.1f, 10.0f)*
             Matrix4::translation(Vector3::zAxis(-2.15f))*
-            Matrix4::rotationY(-15.0_degf)*
-            Matrix4::rotationX(15.0_degf))
+            Matrix4::rotationY(data.flip ? 15.0_degf : -15.0_degf)*
+            Matrix4::rotationX(data.flip ? -15.0_degf : 15.0_degf))
         /* Colorized. Case without a color (where it should be white) is tested
            in renderSinglePixelTextured() */
         .setColor(0x9999ff_rgbf)
         .bindTexture(texture);
-    sphere.draw(shader);
+
+    if(data.textureTransformation != Matrix3{})
+        shader.setTextureMatrix(data.textureTransformation);
+
+    shader.draw(sphere);
 
     MAGNUM_VERIFY_NO_GL_ERROR();
+
+    Image2D rendered = _framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm});
+    /* Dropping the alpha channel, as it's always 1.0 */
+    Containers::StridedArrayView2D<Color3ub> pixels =
+        Containers::arrayCast<Color3ub>(rendered.pixels<Color4ub>());
+    if(data.flip) pixels = pixels.flipped<0>().flipped<1>();
 
     #if !(defined(MAGNUM_TARGET_GLES2) && defined(MAGNUM_TARGET_WEBGL))
     /* SwiftShader has 5 different pixels on the edges */
@@ -605,10 +733,8 @@ void FlatGLTest::renderTextured3D() {
     /* WebGL 1 doesn't have 8bit renderbuffer storage, so it's way worse */
     const Float maxThreshold = 139.0f, meanThreshold = 2.896f;
     #endif
-    CORRADE_COMPARE_WITH(
-        /* Dropping the alpha channel, as it's always 1.0 */
-        Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
-        Utility::Directory::join(SHADERS_TEST_DIR, "FlatTestFiles/textured3D.tga"),
+    CORRADE_COMPARE_WITH(pixels,
+        Utility::Directory::join(_testDir, "FlatTestFiles/textured3D.tga"),
         (DebugTools::CompareImageToFile{_manager, maxThreshold, meanThreshold}));
 }
 
@@ -619,11 +745,11 @@ template<class T> void FlatGLTest::renderVertexColor2D() {
        !(_manager.loadState("TgaImporter") & PluginManager::LoadState::Loaded))
         CORRADE_SKIP("AnyImageImporter / TgaImageImporter plugins not found.");
 
-    Trade::MeshData2D circleData = Primitives::circle2DSolid(32,
-        Primitives::CircleTextureCoords::Generate);
+    Trade::MeshData circleData = Primitives::circle2DSolid(32,
+        Primitives::Circle2DFlag::TextureCoordinates);
 
     /* Highlight a quarter */
-    Containers::Array<T> colorData{Containers::DirectInit, circleData.positions(0).size(), 0x999999_rgbf};
+    Containers::Array<T> colorData{Containers::DirectInit, circleData.vertexCount(), 0x999999_rgbf};
     for(std::size_t i = 8; i != 16; ++i)
         colorData[i + 1] = 0xffff99_rgbf*1.5f;
 
@@ -637,32 +763,32 @@ template<class T> void FlatGLTest::renderVertexColor2D() {
 
     GL::Texture2D texture;
     Containers::Optional<Trade::ImageData2D> image;
-    CORRADE_VERIFY(importer->openFile(Utility::Directory::join(SHADERS_TEST_DIR, "TestFiles/diffuse-texture.tga")) && (image = importer->image2D(0)));
+    CORRADE_VERIFY(importer->openFile(Utility::Directory::join(_testDir, "TestFiles/diffuse-texture.tga")) && (image = importer->image2D(0)));
     texture.setMinificationFilter(GL::SamplerFilter::Linear)
         .setMagnificationFilter(GL::SamplerFilter::Linear)
         .setWrapping(GL::SamplerWrapping::ClampToEdge)
         .setStorage(1, TextureFormatRGB, image->size())
         .setSubImage(0, {}, *image);
 
-    Flat2D shader{Flat2D::Flag::Textured|Flat2D::Flag::VertexColor};
-    shader.setTransformationProjectionMatrix(Matrix3::projection({2.1f, 2.1f}))
+    Flat2D{Flat2D::Flag::Textured|Flat2D::Flag::VertexColor}
+        .setTransformationProjectionMatrix(Matrix3::projection({2.1f, 2.1f}))
         .setColor(0x9999ff_rgbf)
-        .bindTexture(texture);
-    circle.draw(shader);
+        .bindTexture(texture)
+        .draw(circle);
 
     MAGNUM_VERIFY_NO_GL_ERROR();
 
     #if !(defined(MAGNUM_TARGET_GLES2) && defined(MAGNUM_TARGET_WEBGL))
-    /* SwiftShader has minor rounding errors. ARM Mali slightly more */
-    const Float maxThreshold = 1.334f, meanThreshold = 0.015f;
+    /* SwiftShader has minor rounding errors. ARM Mali / Apple A8 a bit more */
+    const Float maxThreshold = 3.334f, meanThreshold = 0.064f;
     #else
     /* WebGL 1 doesn't have 8bit renderbuffer storage, so it's worse */
-    const Float maxThreshold = 1.334f, meanThreshold = 0.013f;
+    const Float maxThreshold = 15.334f, meanThreshold = 4.355f;
     #endif
     CORRADE_COMPARE_WITH(
         /* Dropping the alpha channel, as it's always 1.0 */
         Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
-        Utility::Directory::join(SHADERS_TEST_DIR, "FlatTestFiles/vertexColor2D.tga"),
+        Utility::Directory::join(_testDir, "FlatTestFiles/vertexColor2D.tga"),
         (DebugTools::CompareImageToFile{_manager, maxThreshold, meanThreshold}));
 }
 
@@ -673,11 +799,11 @@ template<class T> void FlatGLTest::renderVertexColor3D() {
        !(_manager.loadState("TgaImporter") & PluginManager::LoadState::Loaded))
         CORRADE_SKIP("AnyImageImporter / TgaImageImporter plugins not found.");
 
-    Trade::MeshData3D sphereData = Primitives::uvSphereSolid(16, 32,
-        Primitives::UVSphereTextureCoords::Generate);
+    Trade::MeshData sphereData = Primitives::uvSphereSolid(16, 32,
+        Primitives::UVSphereFlag::TextureCoordinates);
 
     /* Highlight the middle rings */
-    Containers::Array<T> colorData{Containers::DirectInit, sphereData.positions(0).size(), 0x999999_rgbf};
+    Containers::Array<T> colorData{Containers::DirectInit, sphereData.vertexCount(), 0x999999_rgbf};
     for(std::size_t i = 6*33; i != 9*33; ++i)
         colorData[i + 1] = 0xffff99_rgbf*1.5f;
 
@@ -691,36 +817,36 @@ template<class T> void FlatGLTest::renderVertexColor3D() {
 
     GL::Texture2D texture;
     Containers::Optional<Trade::ImageData2D> image;
-    CORRADE_VERIFY(importer->openFile(Utility::Directory::join(SHADERS_TEST_DIR, "TestFiles/diffuse-texture.tga")) && (image = importer->image2D(0)));
+    CORRADE_VERIFY(importer->openFile(Utility::Directory::join(_testDir, "TestFiles/diffuse-texture.tga")) && (image = importer->image2D(0)));
     texture.setMinificationFilter(GL::SamplerFilter::Linear)
         .setMagnificationFilter(GL::SamplerFilter::Linear)
         .setWrapping(GL::SamplerWrapping::ClampToEdge)
         .setStorage(1, TextureFormatRGB, image->size())
         .setSubImage(0, {}, *image);
 
-    Flat3D shader{Flat3D::Flag::Textured|Flat3D::Flag::VertexColor};
-    shader.setTransformationProjectionMatrix(
+    Flat3D{Flat3D::Flag::Textured|Flat3D::Flag::VertexColor}
+        .setTransformationProjectionMatrix(
             Matrix4::perspectiveProjection(60.0_degf, 1.0f, 0.1f, 10.0f)*
             Matrix4::translation(Vector3::zAxis(-2.15f))*
             Matrix4::rotationY(-15.0_degf)*
             Matrix4::rotationX(15.0_degf))
         .setColor(0x9999ff_rgbf)
-        .bindTexture(texture);
-    sphere.draw(shader);
+        .bindTexture(texture)
+        .draw(sphere);
 
     MAGNUM_VERIFY_NO_GL_ERROR();
 
     #if !(defined(MAGNUM_TARGET_GLES2) && defined(MAGNUM_TARGET_WEBGL))
-    /* SwiftShader has some minor differences on the edges */
-    const Float maxThreshold = 76.67f, meanThreshold = 0.072f;
+    /* SwiftShader has some minor differences on the edges, Apple A8 more */
+    const Float maxThreshold = 76.67f, meanThreshold = 0.138f;
     #else
     /* WebGL 1 doesn't have 8bit renderbuffer storage, so it's worse */
-    const Float maxThreshold = 76.67f, meanThreshold = 0.072f;
+    const Float maxThreshold = 76.67f, meanThreshold = 3.908f;
     #endif
     CORRADE_COMPARE_WITH(
         /* Dropping the alpha channel, as it's always 1.0 */
         Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
-        Utility::Directory::join(SHADERS_TEST_DIR, "FlatTestFiles/vertexColor3D.tga"),
+        Utility::Directory::join(_testDir, "FlatTestFiles/vertexColor3D.tga"),
         (DebugTools::CompareImageToFile{_manager, maxThreshold, meanThreshold}));
 }
 
@@ -751,7 +877,7 @@ void FlatGLTest::renderAlpha2D() {
     CORRADE_VERIFY(importer);
 
     GL::Texture2D texture;
-    CORRADE_VERIFY(importer->openFile(Utility::Directory::join({SHADERS_TEST_DIR, "TestFiles", "diffuse-alpha-texture.tga"})) && (image = importer->image2D(0)));
+    CORRADE_VERIFY(importer->openFile(Utility::Directory::join({_testDir, "TestFiles", "diffuse-alpha-texture.tga"})) && (image = importer->image2D(0)));
     texture.setMinificationFilter(GL::SamplerFilter::Linear)
         .setMagnificationFilter(GL::SamplerFilter::Linear)
         .setWrapping(GL::SamplerWrapping::ClampToEdge)
@@ -761,7 +887,7 @@ void FlatGLTest::renderAlpha2D() {
     MAGNUM_VERIFY_NO_GL_ERROR();
 
     GL::Mesh circle = MeshTools::compile(Primitives::circle2DSolid(32,
-        Primitives::CircleTextureCoords::Generate));
+        Primitives::Circle2DFlag::TextureCoordinates));
 
     Flat2D shader{data.flags};
     shader.setTransformationProjectionMatrix(Matrix3::projection({2.1f, 2.1f}))
@@ -771,7 +897,7 @@ void FlatGLTest::renderAlpha2D() {
     if(data.flags & Flat3D::Flag::AlphaMask)
         shader.setAlphaMask(data.threshold);
 
-    circle.draw(shader);
+    shader.draw(circle);
 
     MAGNUM_VERIFY_NO_GL_ERROR();
 
@@ -785,7 +911,7 @@ void FlatGLTest::renderAlpha2D() {
     CORRADE_COMPARE_WITH(
         /* Dropping the alpha channel, as it's always 1.0 */
         Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
-        Utility::Directory::join(SHADERS_TEST_DIR, data.expected2D),
+        Utility::Directory::join(_testDir, data.expected2D),
         (DebugTools::CompareImageToFile{_manager, maxThreshold, meanThreshold}));
 }
 
@@ -802,7 +928,7 @@ void FlatGLTest::renderAlpha3D() {
     CORRADE_VERIFY(importer);
 
     GL::Texture2D texture;
-    CORRADE_VERIFY(importer->openFile(Utility::Directory::join({SHADERS_TEST_DIR, "TestFiles", "diffuse-alpha-texture.tga"})) && (image = importer->image2D(0)));
+    CORRADE_VERIFY(importer->openFile(Utility::Directory::join({_testDir, "TestFiles", "diffuse-alpha-texture.tga"})) && (image = importer->image2D(0)));
     texture.setMinificationFilter(GL::SamplerFilter::Linear)
         .setMagnificationFilter(GL::SamplerFilter::Linear)
         .setWrapping(GL::SamplerWrapping::ClampToEdge)
@@ -812,7 +938,7 @@ void FlatGLTest::renderAlpha3D() {
     MAGNUM_VERIFY_NO_GL_ERROR();
 
     GL::Mesh sphere = MeshTools::compile(Primitives::uvSphereSolid(16, 32,
-        Primitives::UVSphereTextureCoords::Generate));
+        Primitives::UVSphereFlag::TextureCoordinates));
 
     Flat3D shader{data.flags};
     shader.setTransformationProjectionMatrix(
@@ -828,9 +954,9 @@ void FlatGLTest::renderAlpha3D() {
 
     /* For proper Z order draw back faces first and then front faces */
     GL::Renderer::setFaceCullingMode(GL::Renderer::PolygonFacing::Front);
-    sphere.draw(shader);
+    shader.draw(sphere);
     GL::Renderer::setFaceCullingMode(GL::Renderer::PolygonFacing::Back);
-    sphere.draw(shader);
+    shader.draw(sphere);
 
     MAGNUM_VERIFY_NO_GL_ERROR();
 
@@ -845,7 +971,7 @@ void FlatGLTest::renderAlpha3D() {
     CORRADE_COMPARE_WITH(
         /* Dropping the alpha channel, as it's always 1.0 */
         Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
-        Utility::Directory::join({SHADERS_TEST_DIR, data.expected3D}),
+        Utility::Directory::join({_testDir, data.expected3D}),
         (DebugTools::CompareImageToFile{_manager, maxThreshold, meanThreshold}));
 }
 
@@ -880,16 +1006,24 @@ void FlatGLTest::renderObjectIdTeardown() {
 }
 
 void FlatGLTest::renderObjectId2D() {
+    auto&& data = RenderObjectIdData[testCaseInstanceId()];
+    setTestCaseDescription(data.name);
+
     CORRADE_COMPARE(_framebuffer.checkStatus(GL::FramebufferTarget::Draw), GL::Framebuffer::Status::Complete);
 
     GL::Mesh circle = MeshTools::compile(Primitives::circle2DSolid(32));
 
-    Flat2D shader{Flat3D::Flag::ObjectId};
-    shader.setColor(0x9999ff_rgbf)
-        .setTransformationProjectionMatrix(Matrix3::projection({2.1f, 2.1f}))
-        .setObjectId(47523);
+    if(data.instanceCount) circle
+        .setInstanceCount(data.instanceCount)
+        .addVertexBufferInstanced(
+            GL::Buffer{Containers::arrayView({11002u, 48823u})},
+            1, 0, Flat2D::ObjectId{});
 
-    circle.draw(shader);
+    Flat2D{data.flags}
+        .setColor(0x9999ff_rgbf)
+        .setTransformationProjectionMatrix(Matrix3::projection({2.1f, 2.1f}))
+        .setObjectId(data.uniformId)
+        .draw(circle);
 
     MAGNUM_VERIFY_NO_GL_ERROR();
 
@@ -907,7 +1041,7 @@ void FlatGLTest::renderObjectId2D() {
     CORRADE_COMPARE_WITH(
         /* Dropping the alpha channel, as it's always 1.0 */
         Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
-        Utility::Directory::join(SHADERS_TEST_DIR, "FlatTestFiles/colored2D.tga"),
+        Utility::Directory::join(_testDir, "FlatTestFiles/colored2D.tga"),
         (DebugTools::CompareImageToFile{_manager, maxThreshold, meanThreshold}));
 
     /* Object ID -- no need to verify the whole image, just check that pixels
@@ -920,25 +1054,33 @@ void FlatGLTest::renderObjectId2D() {
     MAGNUM_VERIFY_NO_GL_ERROR();
     /* Outside of the object, cleared to 27 */
     CORRADE_COMPARE(image.pixels<UnsignedInt>()[10][10], 27);
-    /* Inside of the object. Verify that it can hold 16 bits at least. */
-    CORRADE_COMPARE(image.pixels<UnsignedInt>()[40][46], 47523);
+    /* Inside of the object */
+    CORRADE_COMPARE(image.pixels<UnsignedInt>()[40][46], data.expected);
 }
 
 void FlatGLTest::renderObjectId3D() {
+    auto&& data = RenderObjectIdData[testCaseInstanceId()];
+    setTestCaseDescription(data.name);
+
     CORRADE_COMPARE(_framebuffer.checkStatus(GL::FramebufferTarget::Draw), GL::Framebuffer::Status::Complete);
 
     GL::Mesh sphere = MeshTools::compile(Primitives::uvSphereSolid(16, 32));
 
-    Flat3D shader{Flat3D::Flag::ObjectId};
-    shader.setColor(0x9999ff_rgbf)
+    if(data.instanceCount) sphere
+        .setInstanceCount(data.instanceCount)
+        .addVertexBufferInstanced(
+            GL::Buffer{Containers::arrayView({11002u, 48823u})},
+            1, 0, Flat2D::ObjectId{});
+
+    Flat3D{data.flags}
+        .setColor(0x9999ff_rgbf)
         .setTransformationProjectionMatrix(
             Matrix4::perspectiveProjection(60.0_degf, 1.0f, 0.1f, 10.0f)*
             Matrix4::translation(Vector3::zAxis(-2.15f))*
             Matrix4::rotationY(-15.0_degf)*
             Matrix4::rotationX(15.0_degf))
-        .setObjectId(48526);
-
-    sphere.draw(shader);
+        .setObjectId(data.uniformId)
+        .draw(sphere);
 
     MAGNUM_VERIFY_NO_GL_ERROR();
 
@@ -959,7 +1101,7 @@ void FlatGLTest::renderObjectId3D() {
     CORRADE_COMPARE_WITH(
         /* Dropping the alpha channel, as it's always 1.0 */
         Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
-        Utility::Directory::join(SHADERS_TEST_DIR, "FlatTestFiles/colored3D.tga"),
+        Utility::Directory::join(_testDir, "FlatTestFiles/colored3D.tga"),
         (DebugTools::CompareImageToFile{_manager, maxThreshold, meanThreshold}));
 
     /* Object ID -- no need to verify the whole image, just check that pixels
@@ -972,10 +1114,179 @@ void FlatGLTest::renderObjectId3D() {
     MAGNUM_VERIFY_NO_GL_ERROR();
     /* Outside of the object, cleared to 27 */
     CORRADE_COMPARE(image.pixels<UnsignedInt>()[10][10], 27);
-    /* Inside of the object. Verify that it can hold 16 bits at least. */
-    CORRADE_COMPARE(image.pixels<UnsignedInt>()[40][46], 48526);
+    /* Inside of the object */
+    CORRADE_COMPARE(image.pixels<UnsignedInt>()[40][46], data.expected);
 }
 #endif
+
+void FlatGLTest::renderInstanced2D() {
+    #ifndef MAGNUM_TARGET_GLES
+    if(!GL::Context::current().isExtensionSupported<GL::Extensions::ARB::instanced_arrays>())
+        CORRADE_SKIP(GL::Extensions::ARB::instanced_arrays::string() + std::string(" is not supported"));
+    #elif defined(MAGNUM_TARGET_GLES2)
+    #ifndef MAGNUM_TARGET_WEBGL
+    if(!GL::Context::current().isExtensionSupported<GL::Extensions::ANGLE::instanced_arrays>() &&
+       !GL::Context::current().isExtensionSupported<GL::Extensions::EXT::instanced_arrays>() &&
+       !GL::Context::current().isExtensionSupported<GL::Extensions::NV::instanced_arrays>())
+        CORRADE_SKIP("GL_{ANGLE,EXT,NV}_instanced_arrays is not supported");
+    #else
+    if(!GL::Context::current().isExtensionSupported<GL::Extensions::ANGLE::instanced_arrays>())
+        CORRADE_SKIP(GL::Extensions::ANGLE::instanced_arrays::string() + std::string(" is not supported"));
+    #endif
+    #endif
+
+    if(!(_manager.loadState("AnyImageImporter") & PluginManager::LoadState::Loaded) ||
+       !(_manager.loadState("TgaImporter") & PluginManager::LoadState::Loaded))
+        CORRADE_SKIP("AnyImageImporter / TgaImageImporter plugins not found.");
+
+    GL::Mesh circle = MeshTools::compile(Primitives::circle2DSolid(32,
+        Primitives::Circle2DFlag::TextureCoordinates));
+
+    /* Three circles, each in a different location */
+    struct {
+        Matrix3 transformation;
+        Color3 color;
+        Vector2 textureOffset;
+    } instanceData[] {
+        {Matrix3::translation({-1.25f, -1.25f}), 0xff3333_rgbf,
+            {0.0f, 0.0f}},
+        {Matrix3::translation({ 1.25f, -1.25f}), 0x33ff33_rgbf,
+            {1.0f, 0.0f}},
+        {Matrix3::translation({ 0.00f,  1.25f}), 0x9999ff_rgbf,
+            {0.5f, 1.0f}}
+    };
+
+    circle
+        .addVertexBufferInstanced(GL::Buffer{instanceData}, 1, 0,
+            Flat2D::TransformationMatrix{},
+            Flat2D::Color3{},
+            Flat2D::TextureOffset{})
+        .setInstanceCount(3);
+
+    Containers::Pointer<Trade::AbstractImporter> importer = _manager.loadAndInstantiate("AnyImageImporter");
+    CORRADE_VERIFY(importer);
+
+    GL::Texture2D texture;
+    Containers::Optional<Trade::ImageData2D> image;
+    CORRADE_VERIFY(importer->openFile(Utility::Directory::join(_testDir, "TestFiles/diffuse-texture.tga")) && (image = importer->image2D(0)));
+    texture.setMinificationFilter(GL::SamplerFilter::Linear)
+        .setMagnificationFilter(GL::SamplerFilter::Linear)
+        .setWrapping(GL::SamplerWrapping::ClampToEdge)
+        .setStorage(1, TextureFormatRGB, image->size())
+        .setSubImage(0, {}, *image);
+
+    Flat2D{Flat2D::Flag::Textured|
+           Flat2D::Flag::VertexColor|
+           Flat2D::Flag::InstancedTransformation|
+           Flat2D::Flag::InstancedTextureOffset}
+        .setColor(0xffff99_rgbf)
+        .setTransformationProjectionMatrix(
+            Matrix3::projection({2.1f, 2.1f})*
+            Matrix3::scaling(Vector2{0.4f}))
+        .setTextureMatrix(Matrix3::scaling(Vector2{0.5f}))
+        .bindTexture(texture)
+        .draw(circle);
+
+    MAGNUM_VERIFY_NO_GL_ERROR();
+
+    #if !(defined(MAGNUM_TARGET_GLES2) && defined(MAGNUM_TARGET_WEBGL))
+    /* Minor differences on AMD, SwiftShader a bit more */
+    const Float maxThreshold = 3.0f, meanThreshold = 0.018f;
+    #else
+    /* WebGL 1 doesn't have 8bit renderbuffer storage */
+    const Float maxThreshold = 3.0f, meanThreshold = 0.018f;
+    #endif
+    CORRADE_COMPARE_WITH(
+        /* Dropping the alpha channel, as it's always 1.0 */
+        Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
+        Utility::Directory::join(_testDir, "FlatTestFiles/instanced2D.tga"),
+        (DebugTools::CompareImageToFile{_manager, maxThreshold, meanThreshold}));
+}
+
+void FlatGLTest::renderInstanced3D() {
+    #ifndef MAGNUM_TARGET_GLES
+    if(!GL::Context::current().isExtensionSupported<GL::Extensions::ARB::instanced_arrays>())
+        CORRADE_SKIP(GL::Extensions::ARB::instanced_arrays::string() + std::string(" is not supported"));
+    #elif defined(MAGNUM_TARGET_GLES2)
+    #ifndef MAGNUM_TARGET_WEBGL
+    if(!GL::Context::current().isExtensionSupported<GL::Extensions::ANGLE::instanced_arrays>() &&
+       !GL::Context::current().isExtensionSupported<GL::Extensions::EXT::instanced_arrays>() &&
+       !GL::Context::current().isExtensionSupported<GL::Extensions::NV::instanced_arrays>())
+        CORRADE_SKIP("GL_{ANGLE,EXT,NV}_instanced_arrays is not supported");
+    #else
+    if(!GL::Context::current().isExtensionSupported<GL::Extensions::ANGLE::instanced_arrays>())
+        CORRADE_SKIP(GL::Extensions::ANGLE::instanced_arrays::string() + std::string(" is not supported"));
+    #endif
+    #endif
+
+    if(!(_manager.loadState("AnyImageImporter") & PluginManager::LoadState::Loaded) ||
+       !(_manager.loadState("TgaImporter") & PluginManager::LoadState::Loaded))
+        CORRADE_SKIP("AnyImageImporter / TgaImageImporter plugins not found.");
+
+    GL::Mesh sphere = MeshTools::compile(Primitives::uvSphereSolid(16, 32,
+        Primitives::UVSphereFlag::TextureCoordinates));
+
+    /* Three spheres, each in a different location */
+    struct {
+        Matrix4 transformation;
+        Color3 color;
+        Vector2 textureOffset;
+    } instanceData[] {
+        {Matrix4::translation({-1.25f, -1.25f, 0.0f}), 0xff3333_rgbf,
+            {0.0f, 0.0f}},
+        {Matrix4::translation({ 1.25f, -1.25f, 0.0f}), 0x33ff33_rgbf,
+            {1.0f, 0.0f}},
+        {Matrix4::translation({  0.0f,  1.0f, 1.0f}), 0x9999ff_rgbf,
+            {0.5f, 1.0f}}
+    };
+
+    sphere
+        .addVertexBufferInstanced(GL::Buffer{instanceData}, 1, 0,
+            Flat3D::TransformationMatrix{},
+            Flat3D::Color3{},
+            Flat3D::TextureOffset{})
+        .setInstanceCount(3);
+
+    Containers::Pointer<Trade::AbstractImporter> importer = _manager.loadAndInstantiate("AnyImageImporter");
+    CORRADE_VERIFY(importer);
+
+    GL::Texture2D texture;
+    Containers::Optional<Trade::ImageData2D> image;
+    CORRADE_VERIFY(importer->openFile(Utility::Directory::join(_testDir, "TestFiles/diffuse-texture.tga")) && (image = importer->image2D(0)));
+    texture.setMinificationFilter(GL::SamplerFilter::Linear)
+        .setMagnificationFilter(GL::SamplerFilter::Linear)
+        .setWrapping(GL::SamplerWrapping::ClampToEdge)
+        .setStorage(1, TextureFormatRGB, image->size())
+        .setSubImage(0, {}, *image);
+
+    Flat3D{Flat3D::Flag::Textured|
+           Flat3D::Flag::VertexColor|
+           Flat3D::Flag::InstancedTransformation|
+           Flat3D::Flag::InstancedTextureOffset}
+        .setColor(0xffff99_rgbf)
+        .setTransformationProjectionMatrix(
+            Matrix4::perspectiveProjection(60.0_degf, 1.0f, 0.1f, 10.0f)*
+            Matrix4::translation(Vector3::zAxis(-2.15f))*
+            Matrix4::scaling(Vector3{0.4f}))
+        .setTextureMatrix(Matrix3::scaling(Vector2{0.5f}))
+        .bindTexture(texture)
+        .draw(sphere);
+
+    MAGNUM_VERIFY_NO_GL_ERROR();
+
+    #if !(defined(MAGNUM_TARGET_GLES2) && defined(MAGNUM_TARGET_WEBGL))
+    /* Minor differences on AMD, SwiftShader a bit more */
+    const Float maxThreshold = 67.67f, meanThreshold = 0.062f;
+    #else
+    /* WebGL 1 doesn't have 8bit renderbuffer storage */
+    const Float maxThreshold = 67.67f, meanThreshold = 0.062f;
+    #endif
+    CORRADE_COMPARE_WITH(
+        /* Dropping the alpha channel, as it's always 1.0 */
+        Containers::arrayCast<Color3ub>(_framebuffer.read(_framebuffer.viewport(), {PixelFormat::RGBA8Unorm}).pixels<Color4ub>()),
+        Utility::Directory::join(_testDir, "FlatTestFiles/instanced3D.tga"),
+        (DebugTools::CompareImageToFile{_manager, maxThreshold, meanThreshold}));
+}
 
 }}}}
 

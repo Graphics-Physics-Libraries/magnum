@@ -26,7 +26,7 @@
 */
 
 /** @file
- * @brief Class @ref Magnum::GL::Attribute
+ * @brief Class @ref Magnum::GL::Attribute, @ref Magnum::GL::DynamicAttribute, function @ref Magnum::GL::hasVertexFormat()
  */
 
 #include <Corrade/Containers/EnumSet.h>
@@ -35,6 +35,10 @@
 #include "Magnum/GL/OpenGL.h"
 #include "Magnum/GL/visibility.h"
 #include "Magnum/Math/TypeTraits.h"
+
+#ifdef MAGNUM_BUILD_DEPRECATED
+#include <Corrade/Utility/Macros.h>
+#endif
 
 namespace Magnum { namespace GL {
 
@@ -76,18 +80,28 @@ template<UnsignedInt location, class T> class Attribute {
     public:
         enum: UnsignedInt {
             /**
-             * Location to which the attribute is bound
+             * Location to which the attribute is bound.
              *
              * @see @ref AbstractShaderProgram::maxVertexAttributes()
              */
             Location = location,
 
             /**
-             * Count of vectors in this type
+             * Count of vectors in this type.
+             * @m_since_latest
              *
+             * Is @cpp 1 @ce for non-matrix attributes.
              * @see @ref vectorSize()
              */
-            VectorCount = Implementation::Attribute<T>::VectorCount
+            Vectors = Implementation::Attribute<T>::Vectors,
+
+            #ifdef MAGNUM_BUILD_DEPRECATED
+            /**
+             * Count of vectors in this type,
+             * @m_deprecated_since_latest Use @ref Vectors instead.
+             */
+            VectorCount CORRADE_DEPRECATED_ENUM("use Vectors instead") = Vectors
+            #endif
         };
 
         /**
@@ -181,6 +195,7 @@ template<UnsignedInt location, class T> class Attribute {
             #ifndef MAGNUM_TARGET_WEBGL
             /**
              * Half float. Only for float attribute types.
+             * @m_since_latest
              * @requires_gl30 Extension @gl_extension{ARB,half_float_vertex}
              * @requires_gles30 Extension @gl_extension{OES,vertex_half_float}
              *      in OpenGL ES 2.0
@@ -188,9 +203,17 @@ template<UnsignedInt location, class T> class Attribute {
              *      in WebGL 1.0.
              */
             #ifndef MAGNUM_TARGET_GLES2
-            HalfFloat = GL_HALF_FLOAT,
+            Half = GL_HALF_FLOAT,
             #else
-            HalfFloat = GL_HALF_FLOAT_OES,
+            Half = GL_HALF_FLOAT_OES,
+            #endif
+
+            #ifdef MAGNUM_BUILD_DEPRECATED
+            /**
+             * Half float.
+             * @m_deprecated_since_latest Use @ref DataType::Half instead.
+             */
+            HalfFloat CORRADE_DEPRECATED_ENUM("use Half instead") = Half,
             #endif
             #endif
 
@@ -273,16 +296,6 @@ template<UnsignedInt location, class T> class Attribute {
 
         /**
          * @brief Constructor
-         * @param components    Component count
-         * @param dataType      Type of passed data. Default is the same as
-         *      type used in shader (e.g. @ref DataType::Int for
-         *      @ref Magnum::Vector4i "Vector4i").
-         * @param dataOptions   Data options. Default is no options.
-         */
-        constexpr Attribute(Components components, DataType dataType = Implementation::Attribute<T>::DefaultDataType, DataOptions dataOptions = DataOptions()): _components(components), _dataType(dataType), _dataOptions(dataOptions) {}
-
-        /**
-         * @brief Constructor
          * @param dataType      Type of passed data. Default is the same as
          *      type used in shader (e.g. @ref DataType::Int for
          *      @ref Magnum::Vector4i "Vector4i").
@@ -291,7 +304,48 @@ template<UnsignedInt location, class T> class Attribute {
          * Component count is set to the same value as in type used in shader
          * (e.g. @ref Components::Three for @ref Magnum::Vector3 "Vector3").
          */
-        constexpr Attribute(DataType dataType = Implementation::Attribute<T>::DefaultDataType, DataOptions dataOptions = DataOptions()): _components(Implementation::Attribute<T>::DefaultComponents), _dataType(dataType), _dataOptions(dataOptions) {}
+        constexpr Attribute(DataType dataType = Implementation::Attribute<T>::DefaultDataType, DataOptions dataOptions = DataOptions()): Attribute{Implementation::Attribute<T>::DefaultComponents, dataType, dataOptions} {}
+
+        /**
+         * @brief Constructor
+         * @param components    Component count
+         * @param dataType      Type of passed data. Default is the same as
+         *      type used in shader (e.g. @ref DataType::Int for
+         *      @ref Magnum::Vector4i "Vector4i").
+         * @param dataOptions   Data options. Default is no options.
+         *
+         * Vector stride is set to the size of the vector type (e.g. 9 for a
+         * @ref Magnum::Matrix3 "Matrix3").
+         */
+        constexpr Attribute(Components components, DataType dataType = Implementation::Attribute<T>::DefaultDataType, DataOptions dataOptions = DataOptions()): Attribute{components, Implementation::Attribute<T>::size(GLint(components), dataType), dataType, dataOptions} {}
+
+        /**
+         * @brief Construct with a custom vector stride
+         * @param vectorStride  Stride between consecutive matrix column
+         *      vectors
+         * @param dataType      Type of passed data. Default is the same as
+         *      type used in shader (e.g. @ref DataType::Int for
+         *      @ref Magnum::Vector4i "Vector4i").
+         * @param dataOptions   Data options. Default is no options.
+         * @m_since_latest
+         *
+         * Component count is set to the same value as in type used in shader
+         * (e.g. @ref Components::Three for @ref Magnum::Vector3 "Vector3").
+         */
+        constexpr Attribute(UnsignedInt vectorStride, DataType dataType = Implementation::Attribute<T>::DefaultDataType, DataOptions dataOptions = DataOptions()): Attribute{Implementation::Attribute<T>::DefaultComponents, vectorStride, dataType, dataOptions} {}
+
+        /**
+         * @brief Construct with a custom vector stride
+         * @param components    Component count
+         * @param vectorStride  Stride between consecutive matrix column
+         *      vectors
+         * @param dataType      Type of passed data. Default is the same as
+         *      type used in shader (e.g. @ref DataType::Int for
+         *      @ref Magnum::Vector4i "Vector4i").
+         * @param dataOptions   Data options. Default is no options.
+         * @m_since_latest
+         */
+        constexpr Attribute(Components components, UnsignedInt vectorStride, DataType dataType = Implementation::Attribute<T>::DefaultDataType, DataOptions dataOptions = DataOptions()): _components{components}, _vectorStride{vectorStride}, _dataType{dataType}, _dataOptions{dataOptions} {}
 
         /** @brief Component count of passed data */
         constexpr Components components() const { return _components; }
@@ -300,29 +354,45 @@ template<UnsignedInt location, class T> class Attribute {
         constexpr DataType dataType() const { return _dataType; }
 
         /**
-         * @brief Size of each vector in passed data
+         * @brief Stride between consecutive vector elements
+         * @m_since_latest
          *
-         * @see @ref VectorCount
+         * Used for describing matrix attributes. Implicitly the same as size
+         * of given vector type (e.g. @cpp 9 @ce for a
+         * @ref Magnum::Matrix3 "Matrix3"), but can be overriden for example to
+         * ensure four-byte column alignment with 1- and 2-byte data types.
+         * @see @ref Vectors
          */
-        UnsignedInt vectorSize() const {
-            return Implementation::Attribute<T>::size(GLint(_components), _dataType);
+        constexpr UnsignedInt vectorStride() const { return _vectorStride; }
+
+        #ifdef MAGNUM_BUILD_DEPRECATED
+        /**
+         * @brief Size of each vector in passed data
+         * @m_deprecated_since_latest Use @ref vectorStride() instead.
+         *
+         * @see @ref Vectors
+         */
+        constexpr CORRADE_DEPRECATED("use vectorStride() instead") UnsignedInt vectorSize() const {
+            return vectorStride();
         }
+        #endif
 
         /** @brief Data options */
         constexpr DataOptions dataOptions() const { return _dataOptions; }
 
     private:
         Components _components;
+        UnsignedInt _vectorStride;
         DataType _dataType;
         DataOptions _dataOptions;
 };
 
 #ifdef DOXYGEN_GENERATING_OUTPUT
 /** @debugoperatorclassenum{Attribute,Attribute::Components} */
-template<class T> Debug& operator<<(Debug& debug, Attribute<T>::Components);
+template<UnsignedInt location, class T> Debug& operator<<(Debug& debug, Attribute<location, T>::Components);
 
 /** @debugoperatorclassenum{Attribute,Attribute::DataType} */
-template<class T> Debug& operator<<(Debug& debug, Attribute<T>::DataType);
+template<UnsignedInt location, class T> Debug& operator<<(Debug& debug, Attribute<location, T>::DataType);
 #endif
 
 /**
@@ -333,7 +403,7 @@ location and base type. Note that unlike the compile-time specification, this
 class doesn't do any sanity verification and leaves most of the responsibility
 on the user.
 */
-class DynamicAttribute {
+class MAGNUM_GL_EXPORT DynamicAttribute {
     public:
         /**
          * @brief Attribute kind
@@ -445,6 +515,7 @@ class DynamicAttribute {
             #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
             /**
              * Half float. Only for float attribute types.
+             * @m_since_latest
              * @requires_gl30 Extension @gl_extension{ARB,half_float_vertex}
              * @requires_gles30 Extension @gl_extension{OES,vertex_half_float}
              *      in OpenGL ES 2.0
@@ -452,9 +523,17 @@ class DynamicAttribute {
              *      in WebGL 1.0.
              */
             #ifndef MAGNUM_TARGET_GLES2
-            HalfFloat = GL_HALF_FLOAT,
+            Half = GL_HALF_FLOAT,
             #else
-            HalfFloat = GL_HALF_FLOAT_OES,
+            Half = GL_HALF_FLOAT_OES,
+            #endif
+
+            #ifdef MAGNUM_BUILD_DEPRECATED
+            /**
+             * Half float.
+             * @m_deprecated_since_latest Use @ref DataType::Half instead.
+             */
+            HalfFloat CORRADE_DEPRECATED_ENUM("use Half instead") = Half,
             #endif
             #endif
 
@@ -512,8 +591,69 @@ class DynamicAttribute {
          * @param location      Attribute location
          * @param components    Component count
          * @param dataType      Type of passed data
+         *
+         * Vector count is set to @cpp 1 @ce, vector stride to size of the data
+         * type times component count.
          */
-        constexpr DynamicAttribute(Kind kind, UnsignedInt location, Components components, DataType dataType): _kind{kind}, _location{location}, _components{components}, _dataType{dataType} {}
+        explicit DynamicAttribute(Kind kind, UnsignedInt location, Components components, DataType dataType): DynamicAttribute{kind, location, components, 1, dataType} {}
+
+        /**
+         * @brief Construct a matrix attribute
+         * @param kind          Attribute kind
+         * @param location      Attribute location
+         * @param components    Component count
+         * @param vectors       Vector count
+         * @param dataType      Type of passed data
+         * @m_since_latest
+         *
+         * Vector stride is set to size of the data type times component count.
+         */
+        explicit DynamicAttribute(Kind kind, UnsignedInt location, Components components, UnsignedInt vectors, DataType dataType);
+
+        /**
+         * @brief Construct a matrix attribute with custom vector stride
+         * @param kind          Attribute kind
+         * @param location      Attribute location
+         * @param components    Component count
+         * @param vectors       Vector count
+         * @param vectorStride  Stride between consecutive matrix column
+         *      vectors
+         * @param dataType      Type of passed data
+         * @m_since_latest
+         */
+        constexpr explicit DynamicAttribute(Kind kind, UnsignedInt location, Components components, UnsignedInt vectors, UnsignedInt vectorStride, DataType dataType): _kind{kind}, _location{location}, _components{components}, _vectors{vectors}, _vectorStride{vectorStride}, _dataType{dataType} {}
+
+        /**
+         * @brief Construct from a compile-time attribute
+         * @m_since{2019,10}
+         */
+        template<UnsignedInt location_, class T> constexpr /*implicit*/ DynamicAttribute(const Attribute<location_, T>& attribute);
+
+        /**
+         * @brief Construct from a generic mesh attribute type
+         * @m_since_latest
+         *
+         * The @p type is expected to be available on given target and be
+         * compatible with @p kind --- i.e., normalized or floating-point for
+         * @ref Kind::GenericNormalized, non-normalized for @ref Kind::Integral
+         * / @ref Kind::Long and integral for @ref Kind::Integral.
+         * @see @ref hasVertexFormat()
+         */
+        explicit DynamicAttribute(Kind kind, UnsignedInt location, VertexFormat format): DynamicAttribute{kind, location, format, 4, 4} {}
+
+        /**
+         * @brief Construct from a compile-time attribute with a generic mesh attribute type override
+         * @m_since_latest
+         *
+         * Extracts kind and location from passed @ref Attribute type and calls
+         * @ref DynamicAttribute(Kind, UnsignedInt, VertexFormat). Expects that
+         * @p type's component count is not larger than the component count
+         * defined in the @p Attribute type. Note that only the
+         * compile-time-defined properties of the @p Attribute type are used,
+         * the instance-specific data type, options and component count is
+         * ignored.
+         */
+        template<UnsignedInt location_, class T> explicit DynamicAttribute(const Attribute<location_, T>&, VertexFormat format);
 
         /** @brief Attribute kind */
         constexpr Kind kind() const { return _kind; }
@@ -524,24 +664,93 @@ class DynamicAttribute {
         /** @brief Component count */
         constexpr Components components() const { return _components; }
 
+        /**
+         * @brief Vector count
+         * @m_since_latest
+         *
+         * Returns @cpp 1 @ce for non-matrix attributes.
+         */
+        constexpr UnsignedInt vectors() const { return _vectors; }
+
+        /**
+         * @brief Vector stride
+         * @m_since_latest
+         */
+        constexpr UnsignedInt vectorStride() const { return _vectorStride; }
+
         /** @brief Type of passed data */
         constexpr DataType dataType() const { return _dataType; }
 
     private:
+        /* Used by the constructor taking Attribute, defined in cpp to avoid
+           a dependency on <Magnum/Mesh.h> for the assertion */
+        explicit DynamicAttribute(Kind kind, UnsignedInt location, VertexFormat format, UnsignedInt maxVectors, GLint maxComponents);
+
         Kind _kind;
         UnsignedInt _location;
         Components _components;
+        UnsignedInt _vectors;
+        UnsignedInt _vectorStride;
         DataType _dataType;
 };
 
+/** @debugoperatorclassenum{DynamicAttribute,DynamicAttribute::Kind} */
+MAGNUM_GL_EXPORT Debug& operator<<(Debug& debug, DynamicAttribute::Kind);
+
+/** @debugoperatorclassenum{DynamicAttribute,DynamicAttribute::Components} */
+MAGNUM_GL_EXPORT Debug& operator<<(Debug& debug, DynamicAttribute::Components);
+
+/** @debugoperatorclassenum{DynamicAttribute,DynamicAttribute::DataType} */
+MAGNUM_GL_EXPORT Debug& operator<<(Debug& debug, DynamicAttribute::DataType);
+
+/**
+@brief Check availability of a generic mesh attribute type
+@m_since_latest
+
+Some OpenGL targets don't support all mesh attribute types (for example OpenGL
+ES doesn't support double-precision types). Returns @cpp false @ce if current
+target can't support such type, @cpp true @ce otherwise. The @p type value is
+expected to be valid.
+
+Note that, unlike with pixel format mapping, there's no way to represent an
+implementation-specific mesh attribute type using a single 32-bit value and
+thus this function returns @cpp false @ce also for all formats for which
+@ref isVertexFormatImplementationSpecific() is @cpp true @ce --- you need to do
+such mapping by hand by creating a corresponding @ref DynamicAttribute.
+
+@note Support of some formats depends on presence of a particular OpenGL
+    extension. Such check is outside of the scope of this function and you are
+    expected to verify extension availability before using such type.
+
+@see @ref DynamicAttribute::DynamicAttribute(Kind, UnsignedInt, VertexFormat)
+*/
+MAGNUM_GL_EXPORT bool hasVertexFormat(Magnum::VertexFormat format);
+
 namespace Implementation {
+
+template<UnsignedInt location, class T> constexpr DynamicAttribute::Kind kindFor(typename std::enable_if<std::is_same<typename Implementation::Attribute<T>::ScalarType, Float>::value, typename GL::Attribute<location, T>::DataOptions>::type options) {
+    return options & GL::Attribute<location, T>::DataOption::Normalized ?
+        DynamicAttribute::Kind::GenericNormalized : DynamicAttribute::Kind::Generic;
+}
+
+#ifndef MAGNUM_TARGET_GLES2
+template<UnsignedInt location, class T> constexpr DynamicAttribute::Kind kindFor(typename std::enable_if<std::is_integral<typename Implementation::Attribute<T>::ScalarType>::value, typename GL::Attribute<location, T>::DataOptions>::type) {
+    return DynamicAttribute::Kind::Integral;
+}
+
+#ifndef MAGNUM_TARGET_GLES
+template<UnsignedInt location, class T> constexpr DynamicAttribute::Kind kindFor(typename std::enable_if<std::is_same<typename Implementation::Attribute<T>::ScalarType, Double>::value, typename GL::Attribute<location, T>::DataOptions>::type) {
+    return DynamicAttribute::Kind::Long;
+}
+#endif
+#endif
 
 /* Base for sized attributes */
 template<std::size_t cols, std::size_t rows> struct SizedAttribute;
 
 /* Vector attribute sizes */
 template<std::size_t cols> struct SizedVectorAttribute {
-    enum: UnsignedInt { VectorCount = UnsignedInt(cols) };
+    enum: UnsignedInt { Vectors = UnsignedInt(cols) };
 };
 template<> struct SizedAttribute<1, 1>: SizedVectorAttribute<1> {
     enum class Components: GLint { One = 1 };
@@ -607,10 +816,15 @@ struct FloatAttribute {
         Short = GL_SHORT,
         UnsignedInt = GL_UNSIGNED_INT,
         Int = GL_INT,
+        #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
         #ifndef MAGNUM_TARGET_GLES2
-        HalfFloat = GL_HALF_FLOAT,
+        Half = GL_HALF_FLOAT,
         #else
-        HalfFloat = GL_HALF_FLOAT_OES,
+        Half = GL_HALF_FLOAT_OES,
+        #endif
+        #ifdef MAGNUM_BUILD_DEPRECATED
+        HalfFloat CORRADE_DEPRECATED_ENUM("use Half instead") = Half,
+        #endif
         #endif
         Float = GL_FLOAT
 
@@ -705,10 +919,15 @@ template<> struct Attribute<Math::Vector<3, Float>>: SizedAttribute<1, 3> {
         Short = GL_SHORT,
         UnsignedInt = GL_UNSIGNED_INT,
         Int = GL_INT,
+        #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
         #ifndef MAGNUM_TARGET_GLES2
-        HalfFloat = GL_HALF_FLOAT,
+        Half = GL_HALF_FLOAT,
         #else
-        HalfFloat = GL_HALF_FLOAT_OES,
+        Half = GL_HALF_FLOAT_OES,
+        #endif
+        #ifdef MAGNUM_BUILD_DEPRECATED
+        HalfFloat CORRADE_DEPRECATED_ENUM("use Half instead") = Half,
+        #endif
         #endif
         Float = GL_FLOAT
 
@@ -751,10 +970,15 @@ template<> struct Attribute<Math::Vector<4, Float>> {
         Short = GL_SHORT,
         UnsignedInt = GL_UNSIGNED_INT,
         Int = GL_INT,
+        #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
         #ifndef MAGNUM_TARGET_GLES2
-        HalfFloat = GL_HALF_FLOAT,
+        Half = GL_HALF_FLOAT,
         #else
-        HalfFloat = GL_HALF_FLOAT_OES,
+        Half = GL_HALF_FLOAT_OES,
+        #endif
+        #ifdef MAGNUM_BUILD_DEPRECATED
+        HalfFloat CORRADE_DEPRECATED_ENUM("use Half instead") = Half,
+        #endif
         #endif
         Float = GL_FLOAT
         #ifndef MAGNUM_TARGET_GLES
@@ -772,7 +996,7 @@ template<> struct Attribute<Math::Vector<4, Float>> {
     typedef FloatAttribute::DataOption DataOption;
     typedef FloatAttribute::DataOptions DataOptions;
 
-    enum: UnsignedInt { VectorCount = 1 };
+    enum: UnsignedInt { Vectors = 1 };
 
     static UnsignedInt MAGNUM_GL_EXPORT size(GLint components, DataType dataType);
 };
@@ -820,6 +1044,10 @@ template<class T> struct Attribute<Math::Matrix3<T>>: Attribute<Math::Matrix<3, 
 template<class T> struct Attribute<Math::Matrix4<T>>: Attribute<Math::Matrix<4, T>> {};
 
 }
+
+template<UnsignedInt location_, class T> constexpr DynamicAttribute::DynamicAttribute(const Attribute<location_, T>& attribute): _kind{Implementation::kindFor<location_, T>(attribute.dataOptions())}, _location{location_}, _components{Components(GLint(attribute.components()))}, _vectors{Attribute<location_, T>::Vectors}, _vectorStride{attribute.vectorStride()}, _dataType{DataType(GLenum(attribute.dataType()))} {}
+
+template<UnsignedInt location_, class T> DynamicAttribute::DynamicAttribute(const Attribute<location_, T>& attribute, const VertexFormat format): DynamicAttribute{Implementation::kindFor<location_, T>(attribute.dataOptions()), location_, format, Attribute<location_, T>::Vectors, GLint(Implementation::Attribute<T>::DefaultComponents)} {}
 
 }}
 

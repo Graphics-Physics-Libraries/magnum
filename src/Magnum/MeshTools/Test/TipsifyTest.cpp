@@ -23,10 +23,14 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+#include <Corrade/Containers/Array.h>
 #include <Corrade/TestSuite/Tester.h>
+#include <Corrade/TestSuite/Compare/Container.h>
 
 #include "Magnum/Magnum.h"
+#include "Magnum/Math/TypeTraits.h"
 #include "Magnum/MeshTools/Tipsify.h"
+#include "Magnum/MeshTools/Implementation/Tipsify.h"
 
 namespace Magnum { namespace MeshTools { namespace Test { namespace {
 
@@ -34,7 +38,8 @@ struct TipsifyTest: TestSuite::Tester {
     explicit TipsifyTest();
 
     void buildAdjacency();
-    void tipsify();
+    template<class T> void tipsify();
+    void oneDegenerateTriangle();
 };
 
 /*
@@ -52,7 +57,7 @@ struct TipsifyTest: TestSuite::Tester {
 
 */
 
-const std::vector<UnsignedInt> Indices{
+constexpr UnsignedInt Indices[]{
     4, 1, 0,
     10, 9, 13,
     6, 3, 2,
@@ -81,31 +86,33 @@ constexpr std::size_t VertexCount = 19;
 
 TipsifyTest::TipsifyTest() {
     addTests({&TipsifyTest::buildAdjacency,
-              &TipsifyTest::tipsify});
+              &TipsifyTest::tipsify<UnsignedByte>,
+              &TipsifyTest::tipsify<UnsignedShort>,
+              &TipsifyTest::tipsify<UnsignedInt>,
+              &TipsifyTest::oneDegenerateTriangle});
 }
 
 void TipsifyTest::buildAdjacency() {
-    std::vector<UnsignedInt> indices = Indices;
-    std::vector<UnsignedInt> liveTriangleCount, neighborOffset, neighbors;
-    Implementation::Tipsify(indices, VertexCount).buildAdjacency(liveTriangleCount, neighborOffset, neighbors);
+    Containers::Array<UnsignedInt> liveTriangleCount, neighborOffset, neighbors;
+    Implementation::buildAdjacency(Containers::stridedArrayView(Indices), VertexCount, liveTriangleCount, neighborOffset, neighbors);
 
-    CORRADE_COMPARE(liveTriangleCount, (std::vector<UnsignedInt>{
+    CORRADE_COMPARE_AS(liveTriangleCount, Containers::arrayView<UnsignedInt>({
         1, 3, 3, 2,
         4, 6, 6, 2,
         2, 6, 6, 4,
         2, 3, 3, 1,
         1, 1, 1
-    }));
+    }), TestSuite::Compare::Container);
 
-    CORRADE_COMPARE(neighborOffset, (std::vector<UnsignedInt>{
+    CORRADE_COMPARE_AS(neighborOffset, Containers::arrayView<UnsignedInt>({
         0, 1, 4, 7,
         9, 13, 19, 25,
         27, 29, 35, 41,
         45, 47, 50, 53,
         54, 55, 56, 57
-    }));
+    }), TestSuite::Compare::Container);
 
-    CORRADE_COMPARE(neighbors, (std::vector<UnsignedInt>{
+    CORRADE_COMPARE_AS(neighbors, Containers::arrayView<UnsignedInt>({
         0,
         0, 7, 11,
         2, 7, 13,
@@ -127,14 +134,18 @@ void TipsifyTest::buildAdjacency() {
         6,
 
         18, 18, 18
-    }));
+    }), TestSuite::Compare::Container);
 }
 
-void TipsifyTest::tipsify() {
-    std::vector<UnsignedInt> indices = Indices;
-    MeshTools::tipsify(indices, VertexCount, 3);
+template<class T> void TipsifyTest::tipsify() {
+    setTestCaseTemplateName(Math::TypeTraits<T>::name());
 
-    CORRADE_COMPARE(indices, (std::vector<UnsignedInt>{
+    T indices[Containers::arraySize(Indices)];
+    for(std::size_t i = 0; i != Containers::arraySize(Indices); ++i)
+        indices[i] = Indices[i];
+    MeshTools::tipsifyInPlace(indices, VertexCount, 3);
+
+    CORRADE_COMPARE_AS(Containers::arrayView(indices), Containers::arrayView<T>({
         4, 1, 0,
         9, 5, 4,
         1, 4, 5,
@@ -154,7 +165,18 @@ void TipsifyTest::tipsify() {
         2, 1, 5,
         14, 15, 11, /* from dead-end vertex stack */
         16, 17, 18 /* arbitrary vertex */
-    }));
+    }), TestSuite::Compare::Container);
+}
+
+void TipsifyTest::oneDegenerateTriangle() {
+    /* There used to be an OOB access (neighbors[++ti]) caught by ASan, this
+       triggers it */
+    UnsignedInt indices[]{0, 0, 0};
+    MeshTools::tipsifyInPlace(indices, 1, 2);
+
+    CORRADE_COMPARE_AS(Containers::arrayView(indices),
+        Containers::arrayView<UnsignedInt>({0, 0, 0}),
+        TestSuite::Compare::Container);
 }
 
 }}}}

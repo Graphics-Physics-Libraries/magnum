@@ -162,6 +162,7 @@ FLEXTGL_EXPORT void(APIENTRY *flextglBeginQueryEXT)(GLenum, GLuint) = nullptr;
 FLEXTGL_EXPORT void(APIENTRY *flextglDeleteQueriesEXT)(GLsizei, const GLuint *) = nullptr;
 FLEXTGL_EXPORT void(APIENTRY *flextglEndQueryEXT)(GLenum) = nullptr;
 FLEXTGL_EXPORT void(APIENTRY *flextglGenQueriesEXT)(GLsizei, GLuint *) = nullptr;
+FLEXTGL_EXPORT void(APIENTRY *flextglGetInteger64vEXT)(GLenum, GLint64 *) = nullptr;
 FLEXTGL_EXPORT void(APIENTRY *flextglGetQueryObjecti64vEXT)(GLuint, GLenum, GLint64 *) = nullptr;
 FLEXTGL_EXPORT void(APIENTRY *flextglGetQueryObjectivEXT)(GLuint, GLenum, GLint *) = nullptr;
 FLEXTGL_EXPORT void(APIENTRY *flextglGetQueryObjectui64vEXT)(GLuint, GLenum, GLuint64 *) = nullptr;
@@ -302,6 +303,9 @@ FLEXTGL_EXPORT void(APIENTRY *flextglMinSampleShadingOES)(GLfloat) = nullptr;
 
 /* GL_OES_texture_storage_multisample_2d_array */
 FLEXTGL_EXPORT void(APIENTRY *flextglTexStorage3DMultisampleOES)(GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLsizei, GLboolean) = nullptr;
+
+/* GL_OVR_multiview */
+FLEXTGL_EXPORT void(APIENTRY *flextglFramebufferTextureMultiviewOVR)(GLenum, GLenum, GLuint, GLint, GLint, GLsizei) = nullptr;
 
 #ifdef __cplusplus
 }

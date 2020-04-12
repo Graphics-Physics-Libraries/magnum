@@ -29,13 +29,17 @@
  * @brief Function @ref Magnum::MeshTools::duplicate(), @ref Magnum::MeshTools::duplicateInto()
  */
 
-#include <vector>
 #include <Corrade/Containers/Array.h>
-#include <Corrade/Containers/ArrayViewStl.h>
 #include <Corrade/Containers/StridedArrayView.h>
-#include <Corrade/Utility/Assert.h>
 
 #include "Magnum/Magnum.h"
+#include "Magnum/MeshTools/visibility.h"
+#include "Magnum/Trade/Trade.h"
+
+#ifdef MAGNUM_BUILD_DEPRECATED
+#include <vector>
+#include <Corrade/Containers/ArrayViewStl.h>
+#endif
 
 namespace Magnum { namespace MeshTools {
 
@@ -46,15 +50,16 @@ template<class IndexType, class T> void duplicateInto(const Containers::StridedA
 
 /**
 @brief Duplicate data using given index array
+@m_since{2019,10}
 
-Converts indexed array to non-indexed, for example data `{a, b, c, d}` with
-index array `{1, 1, 0, 3, 2, 2}` will be converted to `{b, b, a, d, c, c}`.
-The resulting array size is the same as size of @p indices, expects that all
-indices are in range for the @p data array.
+Converts indexed array to non-indexed, for example data @cpp {a, b, c, d} @ce
+with index array @cpp {1, 1, 0, 3, 2, 2} @ce will be converted to
+@cpp {b, b, a, d, c, c} @ce. The resulting array size is the same as size of
+@p indices, expects that all indices are in range for the @p data array.
 
 If you want to fill an existing memory (or, for example a @ref std::vector),
 use @ref duplicateInto().
-@see @ref removeDuplicates(), @ref combineIndexedArrays()
+@see @ref removeDuplicatesInPlace(), @ref combineIndexedAttributes()
 */
 template<class IndexType, class T> Containers::Array<T> duplicate(const Containers::StridedArrayView1D<const IndexType>& indices, const Containers::StridedArrayView1D<const T>& data) {
     Containers::Array<T> out{Containers::NoInit, indices.size()};
@@ -62,35 +67,98 @@ template<class IndexType, class T> Containers::Array<T> duplicate(const Containe
     return out;
 }
 
+#ifdef MAGNUM_BUILD_DEPRECATED
+/**
+@brief Duplicate data using given index array
+@m_deprecated_since_latest Use @ref duplicate(const Containers::StridedArrayView1D<const IndexType>&, const Containers::StridedArrayView1D<const T>&)
+    or @ref duplicateInto() instead.
+*/
+template<class T> CORRADE_DEPRECATED("use duplicate() taking a StridedArrayView instead") std::vector<T> duplicate(const std::vector<UnsignedInt>& indices, const std::vector<T>& data) {
+    std::vector<T> out(indices.size());
+    duplicateInto<UnsignedInt, T>(indices, data, out);
+    return out;
+}
+#endif
+
 /**
 @brief Duplicate data using an index array into given output array
 @param[in]  indices Index array to use
 @param[in]  data    Input data
 @param[out] out     Where to store the output
+@m_since{2019,10}
 
 A variant of @ref duplicate() that fills existing memory instead of allocating
-a new array.
+a new array. Expects that @p out has the same size as @p indices and all
+indices are in range for the @p data array.
 */
-template<class IndexType, class T> void duplicateInto(const Containers::StridedArrayView1D<const IndexType>& indices, const Containers::StridedArrayView1D<const T>& data, const Containers::StridedArrayView1D<T>& out) {
-    CORRADE_ASSERT(out.size() == indices.size(),
-        "MeshTools::duplicateInto(): bad output size, expected" << indices.size() << "but got" << out.size(), );
-    for(std::size_t i = 0; i != indices.size(); ++i) {
-        const std::size_t index = indices[i];
-        CORRADE_ASSERT(index < data.size(), "MeshTools::duplicateInto(): index" << index << "out of bounds for" << data.size() << "elements", );
-        out[i] = data[index];
-    }
-}
+template<class IndexType, class T> void duplicateInto(const Containers::StridedArrayView1D<const IndexType>& indices, const Containers::StridedArrayView1D<const T>& data, const Containers::StridedArrayView1D<T>& out);
 
 /**
-@brief Duplicate data using given index array
+@brief Duplicate type-erased data using an index array into given output array
+@param[in]  indices Index array to use
+@param[in]  data    Input data
+@param[out] out     Where to store the output
+@m_since_latest
 
-Like @ref duplicate(const Containers::StridedArrayView1D<const IndexType>&, const Containers::StridedArrayView1D<const T>&),
-but putting the result into a @ref std::vector.
+Compared to @ref duplicateInto(const Containers::StridedArrayView1D<const IndexType>&, const Containers::StridedArrayView1D<const T>&, const Containers::StridedArrayView1D<T>&)
+accepts a 2D view, where the second dimension spans the actual type. Expects
+that @p out has the same size as @p indices and all indices are in range for
+the @p data array, and that the second dimension of both @p data and @p out
+is contiguous and has the same size.
 */
-template<class T> std::vector<T> duplicate(const std::vector<UnsignedInt>& indices, const std::vector<T>& data) {
-    std::vector<T> out(indices.size());
-    duplicateInto<UnsignedInt, T>(indices, data, out);
-    return out;
+MAGNUM_MESHTOOLS_EXPORT void duplicateInto(const Containers::StridedArrayView1D<const UnsignedInt>& indices, const Containers::StridedArrayView2D<const char>& data, const Containers::StridedArrayView2D<char>& out);
+
+/**
+ * @overload
+ * @m_since_latest
+ */
+MAGNUM_MESHTOOLS_EXPORT void duplicateInto(const Containers::StridedArrayView1D<const UnsignedShort>& indices, const Containers::StridedArrayView2D<const char>& data, const Containers::StridedArrayView2D<char>& out);
+
+/**
+ * @overload
+ * @m_since_latest
+ */
+MAGNUM_MESHTOOLS_EXPORT void duplicateInto(const Containers::StridedArrayView1D<const UnsignedByte>& indices, const Containers::StridedArrayView2D<const char>& data, const Containers::StridedArrayView2D<char>& out);
+
+/**
+@brief Duplicate type-erased data using a type-erased index array into given output array
+@m_since_latest
+
+Expects that the second dimension of @p indices is contiguous and represents
+the actual 1/2/4-byte index type. Based on its size then calls one of the
+@ref duplicateInto(const Containers::StridedArrayView1D<const UnsignedInt>&, const Containers::StridedArrayView2D<const char>&, const Containers::StridedArrayView2D<char>&)
+etc. overloads.
+*/
+MAGNUM_MESHTOOLS_EXPORT void duplicateInto(const Containers::StridedArrayView2D<const char>& indices, const Containers::StridedArrayView2D<const char>& data, const Containers::StridedArrayView2D<char>& out);
+
+/**
+@brief Duplicate indexed mesh data
+@m_since_latest
+
+Returns a copy of @p data that's not indexed and has all attributes interleaved
+and duplicated according to @p data's index buffer. The @p extra attributes, if
+any, are duplicated and interleaved together with existing attributes (or, in
+case the attribute view is empty, only the corresponding space for given
+attribute type is reserved, with memory left uninitialized). The data layouting
+is done by @ref interleavedLayout(), see its documentation for detailed
+behavior description. Note that offset-only @ref Trade::MeshAttributeData
+instances are not supported in the @p extra array.
+
+Expects that @p data is indexed and each attribute in @p extra has either the
+same amount of elements as @p data vertex count (*not* index count) or has
+none.
+@see @ref Trade::MeshData::attributeData()
+*/
+MAGNUM_MESHTOOLS_EXPORT Trade::MeshData duplicate(const Trade::MeshData& data, Containers::ArrayView<const Trade::MeshAttributeData> extra = {});
+
+/**
+ * @overload
+ * @m_since_latest
+ */
+MAGNUM_MESHTOOLS_EXPORT Trade::MeshData duplicate(const Trade::MeshData& data, std::initializer_list<Trade::MeshAttributeData> extra);
+
+template<class IndexType, class T> inline void duplicateInto(const Containers::StridedArrayView1D<const IndexType>& indices, const Containers::StridedArrayView1D<const T>& data, const Containers::StridedArrayView1D<T>& out) {
+    duplicateInto(indices, Containers::arrayCast<2, const char>(data), Containers::arrayCast<2, char>(out));
 }
 
 }}

@@ -32,33 +32,35 @@ endif()
 # CMake before 3.8 has broken $<TARGET_FILE*> expressions for iOS (see
 # https://gitlab.kitware.com/cmake/cmake/merge_requests/404) and since Corrade
 # doesn't support dynamic plugins on iOS, this sorta works around that. Should
-# be revisited when updating Travis to newer Xcode (current has CMake 3.6).
+# be revisited when updating Travis to newer Xcode (xcode7.3 has CMake 3.6).
 if(NOT BUILD_PLUGINS_STATIC)
     set(MAGNUMFONT_PLUGIN_FILENAME $<TARGET_FILE:MagnumFont>)
     set(TGAIMPORTER_PLUGIN_FILENAME $<TARGET_FILE:TgaImporter>)
-
-    # First replace ${} variables, then $<> generator expressions
-    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/configure.h.cmake
-                   ${CMAKE_CURRENT_BINARY_DIR}/configure.h.in)
-    file(GENERATE OUTPUT $<TARGET_FILE_DIR:MagnumFontTest>/configure.h
-        INPUT ${CMAKE_CURRENT_BINARY_DIR}/configure.h.in)
-else()
-    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/configure.h.cmake
-                   ${CMAKE_CURRENT_BINARY_DIR}/configure.h)
 endif()
+
+# First replace ${} variables, then $<> generator expressions
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/configure.h.cmake
+               ${CMAKE_CURRENT_BINARY_DIR}/configure.h.in)
+file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/configure.h
+    INPUT ${CMAKE_CURRENT_BINARY_DIR}/configure.h.in)
 
 corrade_add_test(MagnumFontTest MagnumFontTest.cpp
     LIBRARIES MagnumText MagnumTrade
     FILES
         font.conf
         font.tga)
-if(NOT BUILD_PLUGINS_STATIC)
-    target_include_directories(MagnumFontTest PRIVATE $<TARGET_FILE_DIR:MagnumFontTest>)
-else()
-    target_include_directories(MagnumFontTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(MagnumFontTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>)
+if(BUILD_PLUGINS_STATIC)
     target_link_libraries(MagnumFontTest PRIVATE MagnumFont TgaImporter)
 endif()
 set_target_properties(MagnumFontTest PROPERTIES FOLDER "MagnumPlugins/MagnumFont/Test")
+if(CORRADE_BUILD_STATIC AND NOT BUILD_PLUGINS_STATIC)
+    # CMake < 3.4 does this implicitly, but 3.4+ not anymore (see CMP0065).
+    # That's generally okay, *except if* the build is static, the executable
+    # uses a plugin manager and needs to share globals with the plugins (such
+    # as output redirection and so on).
+    set_target_properties(MagnumFontTest PROPERTIES ENABLE_EXPORTS ON)
+endif()
 
 if(BUILD_GL_TESTS)
     corrade_add_test(MagnumFontGLTest MagnumFontGLTest.cpp
@@ -66,11 +68,20 @@ if(BUILD_GL_TESTS)
         FILES
             font.conf
             font.tga)
-    if(NOT BUILD_PLUGINS_STATIC)
-        target_include_directories(MagnumFontGLTest PRIVATE $<TARGET_FILE_DIR:MagnumFontTest>)
-    else()
-        target_include_directories(MagnumFontGLTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    target_include_directories(MagnumFontGLTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>)
+    if(BUILD_PLUGINS_STATIC)
         target_link_libraries(MagnumFontGLTest PRIVATE MagnumFont TgaImporter)
+    else()
+        # So the plugins get properly built when building the test
+        add_dependencies(MagnumFontGLTest MagnumFont TgaImporter)
     endif()
     set_target_properties(MagnumFontGLTest PROPERTIES FOLDER "MagnumPlugins/MagnumFont/Test")
+    if((CORRADE_BUILD_STATIC OR MAGNUM_BUILD_STATIC) AND NOT BUILD_PLUGINS_STATIC)
+        # CMake < 3.4 does this implicitly, but 3.4+ not anymore (see CMP0065).
+        # That's generally okay, *except if* the build is static, the
+        # executable uses a plugin manager and needs to share globals with the
+        # plugins (such as output redirection, GL::Context::current() and so
+        # on).
+        set_target_properties(MagnumFontGLTest PROPERTIES ENABLE_EXPORTS ON)
+    endif()
 endif()

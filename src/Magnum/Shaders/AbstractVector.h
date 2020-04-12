@@ -83,24 +83,24 @@ template<UnsignedInt dimensions> class AbstractVector: public GL::AbstractShader
         /**
          * @brief Bind vector texture
          * @return Reference to self (for method chaining)
+         *
+         * @see @ref DistanceFieldVector::Flag::TextureTransformation,
+         *      @ref Vector::Flag::TextureTransformation,
+         *      @ref DistanceFieldVector::setTextureMatrix(),
+         *      @ref Vector::setTextureMatrix()
          */
         AbstractVector<dimensions>& bindVectorTexture(GL::Texture2D& texture);
-
-        #ifdef MAGNUM_BUILD_DEPRECATED
-        /** @brief @copybrief bindVectorTexture()
-         * @deprecated Use @ref bindVectorTexture() instead.
-         */
-        CORRADE_DEPRECATED("use bindVectorTexture() instead") AbstractVector<dimensions>& setVectorTexture(GL::Texture2D& texture) {
-            return bindVectorTexture(texture);
-        }
-        #endif
 
     #ifndef DOXYGEN_GENERATING_OUTPUT
     protected:
     #else
     private:
     #endif
-        enum: Int { VectorTextureLayer = 15 };
+        /* Those textures are quite specific (and likely reused multiple times
+           per frame for e.g. text rendering, so put them in a specific slot.
+           Older iOS (and iOS WebGL) has only 8 texture units, so can't go
+           above that. Unit 7 is used by TextureTools::DistanceField. */
+        enum: Int { VectorTextureUnit = 6 };
 
         explicit AbstractVector(NoCreateT) noexcept: GL::AbstractShaderProgram{NoCreate} {}
         explicit AbstractVector() = default;

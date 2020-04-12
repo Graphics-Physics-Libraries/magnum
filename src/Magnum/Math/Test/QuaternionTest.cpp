@@ -28,6 +28,7 @@
 #include <Corrade/TestSuite/Compare/Numeric.h>
 #include <Corrade/Utility/DebugStl.h>
 
+#include "Magnum/Math/Functions.h"
 #include "Magnum/Math/Matrix4.h"
 #include "Magnum/Math/Quaternion.h"
 #include "Magnum/Math/StrictWeakOrdering.h"
@@ -93,9 +94,12 @@ struct QuaternionTest: Corrade::TestSuite::Tester {
     void rotation();
     void rotationNotNormalized();
     void angle();
+    void angleNormalizedButOver1();
     void angleNotNormalized();
     void matrix();
     void matrixNotOrthogonal();
+    void euler();
+    void eulerNotNormalized();
 
     void lerp();
     void lerp2D();
@@ -103,9 +107,14 @@ struct QuaternionTest: Corrade::TestSuite::Tester {
     void lerpShortestPath();
     void lerpShortestPathNotNormalized();
     void slerp();
+    void slerpLinearFallback();
+    template<class T> void slerpLinearFallbackIsNormalized();
     void slerp2D();
+    void slerpNormalizedButOver1();
     void slerpNotNormalized();
     void slerpShortestPath();
+    void slerpShortestPathLinearFallback();
+    template<class T> void slerpShortestPathLinearFallbackIsNormalized();
     void slerpShortestPathNotNormalized();
 
     void transformVector();
@@ -168,9 +177,12 @@ QuaternionTest::QuaternionTest() {
               &QuaternionTest::rotation,
               &QuaternionTest::rotationNotNormalized,
               &QuaternionTest::angle,
+              &QuaternionTest::angleNormalizedButOver1,
               &QuaternionTest::angleNotNormalized,
               &QuaternionTest::matrix,
               &QuaternionTest::matrixNotOrthogonal,
+              &QuaternionTest::euler,
+              &QuaternionTest::eulerNotNormalized,
 
               &QuaternionTest::lerp,
               &QuaternionTest::lerp2D,
@@ -178,9 +190,16 @@ QuaternionTest::QuaternionTest() {
               &QuaternionTest::lerpShortestPath,
               &QuaternionTest::lerpShortestPathNotNormalized,
               &QuaternionTest::slerp,
+              &QuaternionTest::slerpLinearFallback,
+              &QuaternionTest::slerpLinearFallbackIsNormalized<Float>,
+              &QuaternionTest::slerpLinearFallbackIsNormalized<Double>,
               &QuaternionTest::slerp2D,
+              &QuaternionTest::slerpNormalizedButOver1,
               &QuaternionTest::slerpNotNormalized,
               &QuaternionTest::slerpShortestPath,
+              &QuaternionTest::slerpShortestPathLinearFallback,
+              &QuaternionTest::slerpShortestPathLinearFallbackIsNormalized<Float>,
+              &QuaternionTest::slerpShortestPathLinearFallbackIsNormalized<Double>,
               &QuaternionTest::slerpShortestPathNotNormalized,
 
               &QuaternionTest::transformVector,
@@ -476,12 +495,35 @@ void QuaternionTest::rotationNotNormalized() {
 }
 
 void QuaternionTest::angle() {
+    auto a = Quaternion({1.0f, 2.0f, -3.0f}, -4.0f).normalized();
+    auto b = Quaternion({4.0f, -3.0f, 2.0f}, -1.0f).normalized();
+
     /* Verify also that the angle is the same as angle between 4D vectors */
-    Rad angle = Math::angle(Quaternion({1.0f, 2.0f, -3.0f}, -4.0f).normalized(),
-                            Quaternion({4.0f, -3.0f, 2.0f}, -1.0f).normalized());
-    CORRADE_COMPARE(angle, Math::angle(Vector4(1.0f, 2.0f, -3.0f, -4.0f).normalized(),
-                                       Vector4(4.0f, -3.0f, 2.0f, -1.0f).normalized()));
-    CORRADE_COMPARE(angle, Rad(1.704528f));
+    CORRADE_COMPARE(Math::angle(a, b), Math::angle(
+        Vector4{1.0f, 2.0f, -3.0f, -4.0f}.normalized(),
+        Vector4{4.0f, -3.0f, 2.0f, -1.0f}.normalized()));
+    CORRADE_COMPARE(Math::angle(a, b), 1.704528_radf);
+    CORRADE_COMPARE(Math::angle(-a, -b), 1.704528_radf);
+    CORRADE_COMPARE(Math::angle(-a, b), Rad(180.0_degf) - 1.704528_radf);
+    CORRADE_COMPARE(Math::angle(a, -b), Rad(180.0_degf) - 1.704528_radf);
+
+    /* Same / opposite. Well, almost. It's interesting how imprecise
+       normalization can get. */
+    CORRADE_COMPARE_WITH(Math::angle(a, a), 0.0_radf,
+        Corrade::TestSuite::Compare::around(0.0005_radf));
+    CORRADE_COMPARE_WITH(Math::angle(a, -a), 180.0_degf,
+        Corrade::TestSuite::Compare::around(0.0005_radf));
+}
+
+void QuaternionTest::angleNormalizedButOver1() {
+    /* This quaternion *is* normalized, but its length is larger than 1, which
+       would cause acos() to return a NaN. Ensure it's clamped to correct range
+       before passing it there. */
+    Quaternion a{{1.0f + Math::TypeTraits<Float>::epsilon()/2,  0.0f, 0.0f}, 0.0f};
+    CORRADE_VERIFY(a.isNormalized());
+
+    CORRADE_COMPARE(Math::angle(a, a), 0.0_radf);
+    CORRADE_COMPARE(Math::angle(a, -a), 180.0_degf);
 }
 
 void QuaternionTest::angleNotNormalized() {
@@ -552,6 +594,35 @@ void QuaternionTest::matrixNotOrthogonal() {
         "Matrix(1.70083, -1.05177, 0.0308525,\n"
         "       0.982733, 1.60878, 0.667885,\n"
         "       -0.376049, -0.552819, 1.88493)\n");
+}
+
+void QuaternionTest::euler() {
+    Quaternion a = Quaternion{{0.35f, 0.134f, 0.37f}, 0.02f}.normalized();
+    Math::Vector3<Rad> b{1.59867_radf, -1.15100_radf, 1.85697_radf};
+
+    CORRADE_COMPARE(a.toEuler(), b);
+    CORRADE_COMPARE(a,
+        Quaternion::rotation(b.z(), Vector3::zAxis())*
+        Quaternion::rotation(b.y(), Vector3::yAxis())*
+        Quaternion::rotation(b.x(), Vector3::xAxis()));
+
+    Quaternion a2{{-0.624252f, -0.331868f, -0.624468f}, 0.331983f};
+    Math::Vector3<Rad> b2{0.0_radf, -1.57045_radf, -2.16434_radf};
+
+    CORRADE_COMPARE(a2.toEuler(), b2);
+    CORRADE_COMPARE(a2,
+        Quaternion::rotation(b2.z(), Vector3::zAxis())*
+        Quaternion::rotation(b2.y(), Vector3::yAxis())*
+        Quaternion::rotation(b2.x(), Vector3::xAxis()));
+}
+
+void QuaternionTest::eulerNotNormalized() {
+    std::ostringstream out;
+    Error redirectError{&out};
+
+    Quaternion{{1.0f, 3.0f, -2.0f}, -4.0f}.toEuler();
+    CORRADE_COMPARE(out.str(),
+        "Math::Quaternion::toEuler(): Quaternion({1, 3, -2}, -4) is not normalized\n");
 }
 
 void QuaternionTest::lerp() {
@@ -636,12 +707,35 @@ void QuaternionTest::slerp() {
     CORRADE_COMPARE(slerp, expected);
     CORRADE_VERIFY(slerpShortestPath.isNormalized());
     CORRADE_COMPARE(slerpShortestPath, expected);
+}
 
-    /* Avoid division by zero */
+void QuaternionTest::slerpLinearFallback() {
+    Quaternion a = Quaternion::rotation(23.0_degf, Vector3::xAxis());
+
+    /* Returning the same */
     CORRADE_COMPARE(Math::slerp(a, a, 0.25f), a);
-    CORRADE_COMPARE(Math::slerp(a, -a, 0.42f), a);
-    CORRADE_COMPARE(Math::slerpShortestPath(a, a, 0.25f), a);
-    CORRADE_COMPARE(Math::slerpShortestPath(a, -a, 0.25f), a);
+
+    /* Returning the second when negated */
+    CORRADE_COMPARE(Math::slerp(a, -a, 0.0f), -a);
+    CORRADE_COMPARE(Math::slerp(a, -a, 0.5f), -a);
+    CORRADE_COMPARE(Math::slerp(a, -a, 1.0f), -a);
+}
+
+template<class T> void QuaternionTest::slerpLinearFallbackIsNormalized() {
+    setTestCaseTemplateName(TypeTraits<T>::name());
+
+    Math::Quaternion<T> a = Math::Quaternion<T>::rotation({}, Math::Vector3<T>::xAxis());
+    Math::Quaternion<T> b = Math::Quaternion<T>::rotation(Math::acos(T(1) - T(0.49999)*TypeTraits<T>::epsilon()), Math::Vector3<T>::xAxis());
+
+    /* Ensure we're in the special case */
+    CORRADE_VERIFY(std::abs(Math::dot(a, b)) > T(1) - T(0.5)*TypeTraits<T>::epsilon());
+
+    /* Edges */
+    CORRADE_COMPARE(Math::slerp(a, b, T(0.0)), a);
+    CORRADE_COMPARE(Math::slerp(a, b, T(1.0)), b);
+
+    /* Midpoint should still be normalized */
+    CORRADE_VERIFY(Math::slerp(a, b, T(0.5)).isNormalized());
 }
 
 void QuaternionTest::slerp2D() {
@@ -653,6 +747,21 @@ void QuaternionTest::slerp2D() {
     CORRADE_VERIFY(slerp.isNormalized());
     CORRADE_COMPARE(slerp.angle(), 29.7_degf); /* 15 + (57-15)*0.35 */
     CORRADE_COMPARE(slerp, (Quaternion{{0.0f, 0.0f, 0.256289f}, 0.9666f}));
+}
+
+void QuaternionTest::slerpNormalizedButOver1() {
+    /* This quaternion *is* normalized, but its length is larger than 1, which
+       would cause acos() to return a NaN. Ensure it's clamped to correct range
+       before passing it there. */
+    Quaternion a{{1.0f + Math::TypeTraits<Float>::epsilon()/2,  0.0f, 0.0f}, 0.0f};
+
+    /* Returning the same */
+    CORRADE_COMPARE(Math::slerp(a, a, 0.25f), a);
+
+    /* Returning the second when negated */
+    CORRADE_COMPARE(Math::slerp(a, -a, 0.0f), -a);
+    CORRADE_COMPARE(Math::slerp(a, -a, 0.5f), -a);
+    CORRADE_COMPARE(Math::slerp(a, -a, 1.0f), -a);
 }
 
 void QuaternionTest::slerpNotNormalized() {
@@ -685,6 +794,35 @@ void QuaternionTest::slerpShortestPath() {
     CORRADE_COMPARE(slerpShortestPath, (Quaternion{{0.0f, 0.0f, 0.290285f}, -0.95694f}));
 }
 
+void QuaternionTest::slerpShortestPathLinearFallback() {
+    Quaternion a = Quaternion::rotation(23.0_degf, Vector3::xAxis());
+
+    /* Returning the same */
+    CORRADE_COMPARE(Math::slerpShortestPath(a, a, 0.25f), a);
+
+    /* Returning the second when negated */
+    CORRADE_COMPARE(Math::slerpShortestPath(a, -a, 0.0f), -a);
+    CORRADE_COMPARE(Math::slerpShortestPath(a, -a, 0.5f), -a);
+    CORRADE_COMPARE(Math::slerpShortestPath(a, -a, 1.0f), -a);
+}
+
+template<class T> void QuaternionTest::slerpShortestPathLinearFallbackIsNormalized() {
+    setTestCaseTemplateName(TypeTraits<T>::name());
+
+    Math::Quaternion<T> a = Math::Quaternion<T>::rotation({}, Math::Vector3<T>::xAxis());
+    Math::Quaternion<T> b = Math::Quaternion<T>::rotation(Math::acos(T(1) - T(0.49999)*TypeTraits<T>::epsilon()), Math::Vector3<T>::xAxis());
+
+    /* Ensure we're in the special case */
+    CORRADE_VERIFY(std::abs(Math::dot(a, b)) > T(1) - T(0.5)*TypeTraits<T>::epsilon());
+
+    /* Edges */
+    CORRADE_COMPARE(Math::slerpShortestPath(a, b, T(0.0)), a);
+    CORRADE_COMPARE(Math::slerpShortestPath(a, b, T(1.0)), b);
+
+    /* Midpoint should still be normalized */
+    CORRADE_VERIFY(Math::slerpShortestPath(a, b, T(0.5)).isNormalized());
+}
+
 void QuaternionTest::slerpShortestPathNotNormalized() {
     std::ostringstream out;
     Error redirectError{&out};
@@ -711,6 +849,7 @@ void QuaternionTest::transformVectorNormalized() {
     Quaternion a = Quaternion::rotation(Deg(23.0f), Vector3::xAxis());
     Matrix4 m = Matrix4::rotationX(Deg(23.0f));
     Vector3 v(5.0f, -3.6f, 0.7f);
+
     Vector3 rotated = a.transformVectorNormalized(v);
     CORRADE_COMPARE(rotated, m.transformVector(v));
     CORRADE_COMPARE(rotated, a.transformVector(v));

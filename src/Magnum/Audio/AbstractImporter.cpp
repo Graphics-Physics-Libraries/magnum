@@ -26,6 +26,7 @@
 #include "AbstractImporter.h"
 
 #include <Corrade/Containers/Array.h>
+#include <Corrade/Containers/EnumSet.hpp>
 #include <Corrade/Utility/Assert.h>
 #include <Corrade/Utility/DebugStl.h>
 #include <Corrade/Utility/Directory.h>
@@ -43,25 +44,28 @@ std::string AbstractImporter::pluginInterface() {
 #ifndef CORRADE_PLUGINMANAGER_NO_DYNAMIC_PLUGIN_SUPPORT
 std::vector<std::string> AbstractImporter::pluginSearchPaths() {
     return {
+        /* Debug build */
         #ifdef CORRADE_IS_DEBUG_BUILD
-        #if defined(CORRADE_TARGET_WINDOWS) && !defined(MAGNUM_BUILD_STATIC)
-        Utility::Directory::join(Utility::Directory::path(Utility::Directory::dllLocation(
-            #ifdef __MINGW32__
-            "lib"
-            #endif
-            "MagnumAudio-d")), "magnum-d/audioimporters"),
+        #ifndef MAGNUM_BUILD_STATIC
+        Utility::Directory::join(Utility::Directory::path(Utility::Directory::libraryLocation(&pluginInterface)), "magnum-d/audioimporters"),
         #else
+        #ifndef CORRADE_TARGET_WINDOWS
+        /* On Windows, the plugin DLLs are next to the executable, so the one
+           below works. Elsewhere the plugins are in the lib dir instead */
+        "../lib/magnum-d/audioimporters",
+        #endif
         "magnum-d/audioimporters",
         #endif
         Utility::Directory::join(MAGNUM_PLUGINS_DEBUG_DIR, "audioimporters")
+
+        /* Release build */
         #else
-        #if defined(CORRADE_TARGET_WINDOWS) && !defined(MAGNUM_BUILD_STATIC)
-        Utility::Directory::join(Utility::Directory::path(Utility::Directory::dllLocation(
-            #ifdef __MINGW32__
-            "lib"
-            #endif
-            "MagnumAudio")), "magnum/audioimporters"),
+        #ifndef MAGNUM_BUILD_STATIC
+        Utility::Directory::join(Utility::Directory::path(Utility::Directory::libraryLocation(&pluginInterface)), "magnum/audioimporters"),
         #else
+        #ifndef CORRADE_TARGET_WINDOWS
+        "../lib/magnum/audioimporters",
+        #endif
         "magnum/audioimporters",
         #endif
         Utility::Directory::join(MAGNUM_PLUGINS_DIR, "audioimporters")
@@ -77,7 +81,7 @@ AbstractImporter::AbstractImporter(PluginManager::Manager<AbstractImporter>& man
 AbstractImporter::AbstractImporter(PluginManager::AbstractManager& manager, const std::string& plugin): PluginManager::AbstractManagingPlugin<AbstractImporter>{manager, plugin} {}
 
 bool AbstractImporter::openData(Containers::ArrayView<const char> data) {
-    CORRADE_ASSERT(features() & Feature::OpenData,
+    CORRADE_ASSERT(features() & ImporterFeature::OpenData,
         "Audio::AbstractImporter::openData(): feature not supported", {});
 
     close();
@@ -96,11 +100,11 @@ bool AbstractImporter::openFile(const std::string& filename) {
 }
 
 void AbstractImporter::doOpenFile(const std::string& filename) {
-    CORRADE_ASSERT(features() & Feature::OpenData, "Audio::AbstractImporter::openFile(): not implemented", );
+    CORRADE_ASSERT(features() & ImporterFeature::OpenData, "Audio::AbstractImporter::openFile(): not implemented", );
 
     /* Open file */
     if(!Utility::Directory::exists(filename)) {
-        Error() << "Trade::AbstractImporter::openFile(): cannot open file" << filename;
+        Error() << "Audio::AbstractImporter::openFile(): cannot open file" << filename;
         return;
     }
 
@@ -126,7 +130,29 @@ UnsignedInt AbstractImporter::frequency() const {
 
 Containers::Array<char> AbstractImporter::data() {
     CORRADE_ASSERT(isOpened(), "Audio::AbstractImporter::data(): no file opened", nullptr);
-    return doData();
+
+    Containers::Array<char> out = doData();
+    CORRADE_ASSERT(!out.deleter(), "Audio::AbstractImporter::data(): implementation is not allowed to use a custom Array deleter", {});
+    return out;
+}
+
+Debug& operator<<(Debug& debug, const ImporterFeature value) {
+    debug << "Audio::ImporterFeature" << Debug::nospace;
+
+    switch(value) {
+        /* LCOV_EXCL_START */
+        #define _c(v) case ImporterFeature::v: return debug << "::" #v;
+        _c(OpenData)
+        #undef _c
+        /* LCOV_EXCL_STOP */
+    }
+
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(UnsignedByte(value)) << Debug::nospace << ")";
+}
+
+Debug& operator<<(Debug& debug, const ImporterFeatures value) {
+    return Containers::enumSetDebugOutput(debug, value, "Audio::ImporterFeatures{}", {
+        ImporterFeature::OpenData});
 }
 
 }}

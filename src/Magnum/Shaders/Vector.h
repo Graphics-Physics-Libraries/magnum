@@ -30,13 +30,17 @@
  */
 
 #include "Magnum/DimensionTraits.h"
-#include "Magnum/Math/Color.h"
-#include "Magnum/Math/Matrix3.h"
-#include "Magnum/Math/Matrix4.h"
 #include "Magnum/Shaders/AbstractVector.h"
 #include "Magnum/Shaders/visibility.h"
 
 namespace Magnum { namespace Shaders {
+
+namespace Implementation {
+    enum class VectorFlag: UnsignedByte {
+        TextureTransformation = 1 << 0
+    };
+    typedef Containers::EnumSet<VectorFlag> VectorFlags;
+}
 
 /**
 @brief Vector shader
@@ -66,7 +70,41 @@ Common rendering setup:
 */
 template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT Vector: public AbstractVector<dimensions> {
     public:
-        explicit Vector();
+        #ifdef DOXYGEN_GENERATING_OUTPUT
+        /**
+         * @brief Flag
+         * @m_since_latest
+         *
+         * @see @ref Flags, @ref flags()
+         */
+        enum class Flag: UnsignedByte {
+            /**
+             * Enable texture coordinate transformation.
+             * @see @ref setTextureMatrix()
+             * @m_since_latest
+             */
+            TextureTransformation = 1 << 0
+        };
+
+        /**
+         * @brief Flags
+         * @m_since_latest
+         *
+         * @see @ref flags()
+         */
+        typedef Containers::EnumSet<Flag> Flags;
+        #else
+        /* Done this way to be prepared for possible future diversion of 2D
+           and 3D flags (e.g. introducing 3D-specific features) */
+        typedef Implementation::VectorFlag Flag;
+        typedef Implementation::VectorFlags Flags;
+        #endif
+
+        /**
+         * @brief Constructor
+         * @param flags     Flags
+         */
+        explicit Vector(Flags flags = {});
 
         /**
          * @brief Construct without creating the underlying OpenGL object
@@ -77,6 +115,8 @@ template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT Vector: public Abst
          *
          * This function can be safely used for constructing (and later
          * destructing) objects even without any OpenGL context being active.
+         * However note that this is a low-level and a potentially dangerous
+         * API, see the documentation of @ref NoCreate for alternatives.
          */
         explicit Vector(NoCreateT) noexcept
             /** @todoc remove workaround when doxygen is sane */
@@ -98,15 +138,29 @@ template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT Vector: public Abst
         Vector<dimensions>& operator=(Vector<dimensions>&&) noexcept = default;
 
         /**
+         * @brief Flags
+         * @m_since_latest
+         */
+        Flags flags() const { return _flags; }
+
+        /**
          * @brief Set transformation and projection matrix
          * @return Reference to self (for method chaining)
          *
          * Default is an identity matrix.
          */
-        Vector<dimensions>& setTransformationProjectionMatrix(const MatrixTypeFor<dimensions, Float>& matrix) {
-            GL::AbstractShaderProgram::setUniform(_transformationProjectionMatrixUniform, matrix);
-            return *this;
-        }
+        Vector<dimensions>& setTransformationProjectionMatrix(const MatrixTypeFor<dimensions, Float>& matrix);
+
+        /**
+         * @brief Set texture coordinate transformation matrix
+         * @return Reference to self (for method chaining)
+         * @m_since_latest
+         *
+         * Expects that the shader was created with
+         * @ref Flag::TextureTransformation enabled. Initial value is an
+         * identity matrix.
+         */
+        Vector<dimensions>& setTextureMatrix(const Matrix3& matrix);
 
         /**
          * @brief Set background color
@@ -115,10 +169,7 @@ template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT Vector: public Abst
          * Default is @cpp 0x00000000_rgbaf @ce.
          * @see @ref setColor()
          */
-        Vector<dimensions>& setBackgroundColor(const Color4& color) {
-            GL::AbstractShaderProgram::setUniform(_backgroundColorUniform, color);
-            return *this;
-        }
+        Vector<dimensions>& setBackgroundColor(const Color4& color);
 
         /**
          * @brief Set fill color
@@ -127,10 +178,7 @@ template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT Vector: public Abst
          * Default is @cpp 0xffffffff_rgbaf @ce.
          * @see @ref setBackgroundColor()
          */
-        Vector<dimensions>& setColor(const Color4& color) {
-            GL::AbstractShaderProgram::setUniform(_colorUniform, color);
-            return *this;
-        }
+        Vector<dimensions>& setColor(const Color4& color);
 
         #ifndef DOXYGEN_GENERATING_OUTPUT
         /* Overloads to remove WTF-factor from method chaining order */
@@ -138,17 +186,22 @@ template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT Vector: public Abst
             AbstractVector<dimensions>::bindVectorTexture(texture);
             return *this;
         }
-        #ifdef MAGNUM_BUILD_DEPRECATED
-        CORRADE_DEPRECATED("use bindVectorTexture() instead") Vector<dimensions>& setVectorTexture(GL::Texture2D& texture) {
-            return bindVectorTexture(texture);
-        }
-        #endif
         #endif
 
     private:
+        /* Prevent accidentally calling irrelevant functions */
+        #ifndef MAGNUM_TARGET_GLES
+        using GL::AbstractShaderProgram::drawTransformFeedback;
+        #endif
+        #if !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
+        using GL::AbstractShaderProgram::dispatchCompute;
+        #endif
+
+        Flags _flags;
         Int _transformationProjectionMatrixUniform{0},
-            _backgroundColorUniform{1},
-            _colorUniform{2};
+            _textureMatrixUniform{1},
+            _backgroundColorUniform{2},
+            _colorUniform{3};
 };
 
 /** @brief Two-dimensional vector shader */
@@ -156,6 +209,20 @@ typedef Vector<2> Vector2D;
 
 /** @brief Three-dimensional vector shader */
 typedef Vector<3> Vector3D;
+
+#ifdef DOXYGEN_GENERATING_OUTPUT
+/** @debugoperatorclassenum{Vector,Vector::Flag} */
+template<UnsignedInt dimensions> Debug& operator<<(Debug& debug, Vector<dimensions>::Flag value);
+
+/** @debugoperatorclassenum{Vector,Vector::Flags} */
+template<UnsignedInt dimensions> Debug& operator<<(Debug& debug, Vector<dimensions>::Flags value);
+#else
+namespace Implementation {
+    MAGNUM_SHADERS_EXPORT Debug& operator<<(Debug& debug, VectorFlag value);
+    MAGNUM_SHADERS_EXPORT Debug& operator<<(Debug& debug, VectorFlags value);
+    CORRADE_ENUMSET_OPERATORS(VectorFlags)
+}
+#endif
 
 }}
 

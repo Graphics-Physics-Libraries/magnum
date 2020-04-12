@@ -105,7 +105,7 @@ struct TextureState {
     void(AbstractTexture::*invalidateSubImageImplementation)(GLint, const Vector3i&, const Vector3i&);
 
     #if !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
-    void(BufferTexture::*setBufferImplementation)(BufferTextureFormat, Buffer&);
+    void(BufferTexture::*setBufferImplementation)(BufferTextureFormat, Buffer*);
     void(BufferTexture::*setBufferRangeImplementation)(BufferTextureFormat, Buffer&, GLintptr, GLsizeiptr);
     #endif
 
@@ -115,6 +115,7 @@ struct TextureState {
     #ifndef MAGNUM_TARGET_GLES
     GLint(CubeMapTexture::*getCubeLevelCompressedImageSizeImplementation)(GLint);
     void(CubeMapTexture::*getCubeImageImplementation)(CubeMapCoordinate, GLint, const Vector2i&, PixelFormat, PixelType, std::size_t, GLvoid*);
+    void(CubeMapTexture::*getFullCubeImageImplementation)(GLint, const Vector3i&, PixelFormat, PixelType, std::size_t, GLvoid*, const PixelStorage&);
     void(CubeMapTexture::*getFullCompressedCubeImageImplementation)(GLint, const Vector2i&, std::size_t, std::size_t, GLvoid*);
     void(CubeMapTexture::*getCompressedCubeImageImplementation)(CubeMapCoordinate, GLint, const Vector2i&, std::size_t, GLvoid*);
     void(CubeMapTexture::*cubeSubImage3DImplementation)(GLint, const Vector3i&, const Vector3i&, PixelFormat, PixelType, const GLvoid*, const PixelStorage&);

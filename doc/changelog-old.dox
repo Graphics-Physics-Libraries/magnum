@@ -137,7 +137,7 @@ for a high-level overview.
 
 @subsection changelog-2015-05-bugfixes Bug fixes
 
--   Fixed @ref TextureTools::distanceField() to work in GLSL < 4.20 (see
+-   Fixed @cpp TextureTools::distanceField() @ce to work in GLSL < 4.20 (see
     [mosra/magnum#62](https://github.com/mosra/magnum/issues/62)).
 -   Fixed @ref Shaders::MeshVisualizer to work in GLSL ES.
 -   Fixed @ref Shaders::Vector "Shaders::*Vector" on Intel GPUs.
@@ -343,7 +343,7 @@ for a high-level overview.
 -   @cpp Buffer::invalidateData() @ce, @cpp Buffer::invalidateSubData() @ce and
     @cpp Renderer::resetNotificationStrategy() @ce functions are enabled on
     OpenGL ES as a no-op
--   Added @ref std::vector overload of @ref MeshTools::combineIndexArrays()
+-   Added @ref std::vector overload of @cpp MeshTools::combineIndexArrays() @ce
     for greater runtime-usage flexibility
 -   @ref Platform::Sdl2Application now defaults to non-resizable window, you
     can change the behavior using @ref Platform::Sdl2Application::Configuration::setWindowFlags()
@@ -391,9 +391,9 @@ for a high-level overview.
     which filled @cpp Mesh @ce and @cpp Buffer @ce directly are deprecated as
     they had undesired side-effects in some cases, use the data-returning
     versions instead and then configure mesh and buffer manually
--   @ref MeshTools::combineIndexedArrays() taking @ref std::tuple is
+-   @cpp MeshTools::combineIndexedArrays() @ce taking @ref std::tuple is
     deprecated, use version taking @ref std::pair instead
--   @ref MeshTools::removeDuplicates() taking also list of indices is
+-   @cpp MeshTools::removeDuplicates() @ce taking also list of indices is
     deprecated, use the function in conjunction with @ref MeshTools::duplicate().
     See function documentation for more information.
 -   Parameter-less @cpp Mesh::draw() @ce and @cpp MeshView::draw() @ce are
@@ -422,7 +422,7 @@ for a high-level overview.
     -   Removed deprecated @cpp Matrix2 @ce and @cpp Matrix2d @ce typedefs, use
         @ref Matrix2x2 and @ref Matrix2x2d instead
     -   Removed deprecated `Magnum/Swizzle.h` header and @cpp Magnum::swizzle() @ce
-        function, use @ref Magnum/Math/Swizzle.h and @ref Math::swizzle()
+        function, use @ref Magnum/Math/Swizzle.h and @cpp Math::swizzle() @ce
         instead
     -   Removed deprecated @cpp *::maxSupported*() @ce limit queries, use the
         less verbose @cpp *::max*() @ce versions instead
@@ -510,8 +510,8 @@ No dependency changes in this release.
 -   New @ref Shaders::Generic class with common definitions, so you can
     configure mesh for the generic shader and render it with any other
     compatible shader
--   Convenience @cpp hasNormals() @ce, @cpp hasTextureCoords2D() @ce functions to
-    @ref Trade::MeshData2D and @ref Trade::MeshData3D
+-   Convenience @cpp hasNormals() @ce, @cpp hasTextureCoords2D() @ce functions
+    in @cpp Trade::MeshData2D @ce and @cpp Trade::MeshData3D @ce
 -   OpenGL ES 3.0 build now shares list of vendor extensions with OpenGL ES 2.0
     build (i.e. only those extensions that aren't part of ES 3.0 are present in
     @cpp Extensions @ce)
@@ -708,7 +708,7 @@ for a high-level overview.
 -   @cpp Matrix2 @ce and @cpp Matrix2d @ce is deprecated, use @ref Matrix2x2
     and @ref Matrix2x2d instead
 -   @cpp swizzle() @ce is deprecated, all of its functionality has been moved
-    into @ref Math::swizzle()
+    into @cpp Math::swizzle() @ce
 -   @cpp Buffer::setData() @ce and @cpp Buffer::setSubData() @ce overloads
     taking pair of data pointer and size are deprecated, use
     @cpp Containers::ArrayReference @ce-based @cpp Buffer::setData() @ce and

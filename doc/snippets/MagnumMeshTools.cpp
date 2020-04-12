@@ -24,20 +24,31 @@
 */
 
 #include "Magnum/Math/Color.h"
-#include "Magnum/MeshTools/CombineIndexedArrays.h"
+#include "Magnum/Math/FunctionsBatch.h"
 #include "Magnum/MeshTools/CompressIndices.h"
+#include "Magnum/MeshTools/Concatenate.h"
 #include "Magnum/MeshTools/Duplicate.h"
+#include "Magnum/MeshTools/FlipNormals.h"
 #include "Magnum/MeshTools/GenerateNormals.h"
 #include "Magnum/MeshTools/Interleave.h"
 #include "Magnum/MeshTools/RemoveDuplicates.h"
 #include "Magnum/MeshTools/Transform.h"
+#include "Magnum/Primitives/Cube.h"
+#include "Magnum/Trade/MeshData.h"
+
+#ifdef MAGNUM_BUILD_DEPRECATED
+#define _MAGNUM_NO_DEPRECATED_COMBINEINDEXEDARRAYS
+#include "Magnum/MeshTools/CombineIndexedArrays.h"
+#endif
 
 using namespace Magnum;
 using namespace Magnum::Math::Literals;
 
 int main() {
 
+#ifdef MAGNUM_BUILD_DEPRECATED
 {
+CORRADE_IGNORE_DEPRECATED_PUSH
 /* [combineIndexedArrays] */
 std::vector<UnsignedInt> vertexIndices;
 std::vector<Vector3> positions;
@@ -51,15 +62,41 @@ std::vector<UnsignedInt> indices = MeshTools::combineIndexedArrays(
     std::make_pair(std::cref(normalTextureIndices), std::ref(textureCoordinates))
 );
 /* [combineIndexedArrays] */
+CORRADE_IGNORE_DEPRECATED_POP
+}
+#endif
+
+{
+/* [compressIndices-offset] */
+Containers::ArrayView<const UnsignedInt> indices;
+UnsignedInt offset = Math::min(indices);
+std::pair<Containers::Array<char>, MeshIndexType> result =
+    MeshTools::compressIndices(indices, offset);
+
+// use `offset` to adjust vertex attribute offset …
+/* [compressIndices-offset] */
 }
 
 {
+/* [concatenate-make-mutable] */
+/* Flip triangles on a cube primitive so it's counterclockwise from the inside
+   in order to render a cube map */
+Trade::MeshData mesh = MeshTools::concatenate(Primitives::cubeSolid());
+MeshTools::flipFaceWindingInPlace(mesh.mutableIndices());
+/* [concatenate-make-mutable] */
+}
+
+#ifdef MAGNUM_BUILD_DEPRECATED
+{
+CORRADE_IGNORE_DEPRECATED_PUSH
 /* [compressIndicesAs] */
 std::vector<UnsignedInt> indices;
 Containers::Array<UnsignedShort> indexData =
     MeshTools::compressIndicesAs<UnsignedShort>(indices);
 /* [compressIndicesAs] */
+CORRADE_IGNORE_DEPRECATED_POP
 }
+#endif
 
 {
 /* [generateFlatNormals] */
@@ -76,25 +113,64 @@ Containers::Array<Vector3> normals =
 
 {
 /* [interleave2] */
-std::vector<Vector4> positions;
-std::vector<UnsignedShort> weights;
-std::vector<Color3ub> vertexColors;
+Containers::ArrayView<const Vector4> positions;
+Containers::ArrayView<const UnsignedShort> weights;
+Containers::ArrayView<const Color3ub> vertexColors;
 
 auto data = MeshTools::interleave(positions, weights, 2, vertexColors, 1);
 /* [interleave2] */
 }
 
 {
-/* [removeDuplicates1] */
-std::vector<UnsignedInt> indices;
-std::vector<Vector3> positions;
+Trade::MeshData data{MeshPrimitive::Lines, 0};
+UnsignedInt vertexCount{};
+Containers::Array<char> indexData;
+/* [interleavedLayout-extra] */
+Containers::ArrayView<const Trade::MeshAttributeData> attributes =
+    data.attributeData();
 
-indices = MeshTools::duplicate(indices, MeshTools::removeDuplicates(positions));
-/* [removeDuplicates1] */
+/* Take just positions and normals and add a four-byte padding in between */
+Trade::MeshData layout = MeshTools::interleavedLayout(
+    Trade::MeshData{MeshPrimitive::Triangles, 0}, vertexCount, {
+        attributes[data.attributeId(Trade::MeshAttribute::Position)],
+        Trade::MeshAttributeData{4},
+        attributes[data.attributeId(Trade::MeshAttribute::Normal)]
+    });
+/* [interleavedLayout-extra] */
 }
 
 {
-/* [removeDuplicates2] */
+Trade::MeshData data{MeshPrimitive::Lines, 0};
+Containers::ArrayView<Trade::MeshAttributeData> extraAttributes;
+UnsignedInt vertexCount{};
+Containers::Array<char> indexData;
+/* [interleavedLayout-indices] */
+Trade::MeshData layout =
+    MeshTools::interleavedLayout(data, vertexCount, extraAttributes);
+
+Trade::MeshIndexData indices;
+Trade::MeshData indexed{data.primitive(),
+    std::move(indexData), indices,
+    layout.releaseVertexData(), layout.releaseAttributeData()};
+/* [interleavedLayout-indices] */
+}
+
+{
+/* [removeDuplicates] */
+Containers::ArrayView<Vector3i> data;
+
+std::size_t size;
+Containers::Array<UnsignedInt> indices;
+std::tie(indices, size) = MeshTools::removeDuplicatesInPlace(
+    Containers::arrayCast<2, char>(data));
+data = data.prefix(size);
+/* [removeDuplicates] */
+}
+
+#ifdef MAGNUM_BUILD_DEPRECATED
+{
+CORRADE_IGNORE_DEPRECATED_PUSH
+/* [removeDuplicates-multiple] */
 std::vector<Vector3> positions;
 std::vector<Vector2> texCoords;
 
@@ -105,8 +181,10 @@ std::vector<UnsignedInt> indices = MeshTools::combineIndexedArrays(
     std::make_pair(std::cref(positionIndices), std::ref(positions)),
     std::make_pair(std::cref(texCoordIndices), std::ref(texCoords))
 );
-/* [removeDuplicates2] */
+/* [removeDuplicates-multiple] */
+CORRADE_IGNORE_DEPRECATED_POP
 }
+#endif
 
 {
 /* [transformVectors] */

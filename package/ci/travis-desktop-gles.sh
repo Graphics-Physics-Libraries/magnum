@@ -20,6 +20,7 @@ cmake .. \
     -DCMAKE_CXX_FLAGS="$CMAKE_CXX_FLAGS" \
     -DCMAKE_PREFIX_PATH="$HOME/deps" \
     -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_INSTALL_PREFIX=$HOME/deps \
     -DEGL_LIBRARY=$HOME/swiftshader/libEGL.so \
     -DOPENGLES2_LIBRARY=$HOME/swiftshader/libGLESv2.so \
     -DOPENGLES3_LIBRARY=$HOME/swiftshader/libGLESv2.so \
@@ -46,6 +47,7 @@ cmake .. \
     -DWITH_DISTANCEFIELDCONVERTER=OFF \
     -DWITH_FONTCONVERTER=OFF \
     -DWITH_IMAGECONVERTER=ON \
+    -DWITH_SCENECONVERTER=ON \
     -DWITH_GL_INFO=ON \
     -DWITH_AL_INFO=ON \
     -DBUILD_TESTS=ON \
@@ -55,5 +57,8 @@ cmake .. \
 ninja -j4
 CORRADE_TEST_COLOR=ON ctest -V
 if [ "$TARGET_GLES2" == "ON" ]; then CORRADE_TEST_COLOR=ON MAGNUM_DISABLE_EXTENSIONS="OES_vertex_array_object" ctest -V -R GLTest; fi
-src/Magnum/Audio/magnum-al-info > /dev/null
-src/Magnum/Platform/magnum-gl-info --limits > /dev/null
+Debug/bin/magnum-al-info > /dev/null
+Debug/bin/magnum-gl-info --limits > /dev/null
+
+# Test install, after running the tests as for them it shouldn't be needed
+ninja install

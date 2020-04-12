@@ -48,14 +48,43 @@ template<class T> class AbstractBasicTranslationRotation3D: public AbstractBasic
         explicit AbstractBasicTranslationRotation3D() = default;
 
         /**
-         * @brief Rotate object
+         * @brief Rotate the object using a quaternion
+         * @param quaternion    Normalized quaternion
+         * @return Reference to self (for method chaining)
+         * @m_since_latest
+         *
+         * Expects that the quaternion is normalized.
+         * @see @ref rotate(Math::Rad<T>, const Math::Vector3<T>&),
+         *      @ref rotateLocal(const Math::Quaternion<T>&), @ref rotateX(),
+         *      @ref rotateY(), @ref rotateZ()
+         */
+        AbstractBasicTranslationRotation3D<T>& rotate(const Math::Quaternion<T>& quaternion) {
+            doRotate(quaternion);
+            return *this;
+        }
+
+        /**
+         * @brief Rotate the object using a quaternion as a local transformation
+         * @m_since_latest
+         *
+         * Similar to the above, except that the transformation is applied
+         * before all others.
+         */
+        AbstractBasicTranslationRotation3D<T>& rotateLocal(const Math::Quaternion<T>& quaternion) {
+            doRotateLocal(quaternion);
+            return *this;
+        }
+
+        /**
+         * @brief Rotate the object
          * @param angle             Angle (counterclockwise)
          * @param normalizedAxis    Normalized rotation axis
          * @return Reference to self (for method chaining)
          *
-         * @see @ref rotateLocal(), @ref rotateX(), @ref rotateY(),
-         *      @ref rotateZ(), @ref Math::Vector3::xAxis(),
-         *      @ref Math::Vector3::yAxis(), @ref Math::Vector3::zAxis()
+         * @see @ref rotate(const Math::Quaternion<T>&), @ref rotateLocal(),
+         *      @ref rotateX(), @ref rotateY(), @ref rotateZ(),
+         *      @ref Math::Vector3::xAxis(), @ref Math::Vector3::yAxis(),
+         *      @ref Math::Vector3::zAxis()
          */
         AbstractBasicTranslationRotation3D<T>& rotate(Math::Rad<T> angle, const Math::Vector3<T>& normalizedAxis) {
             doRotate(angle, normalizedAxis);
@@ -63,7 +92,7 @@ template<class T> class AbstractBasicTranslationRotation3D: public AbstractBasic
         }
 
         /**
-         * @brief Rotate object as a local transformation
+         * @brief Rotate the object as a local transformation
          *
          * Similar to the above, except that the transformation is applied
          * before all others.
@@ -74,7 +103,7 @@ template<class T> class AbstractBasicTranslationRotation3D: public AbstractBasic
         }
 
         /**
-         * @brief Rotate object around X axis
+         * @brief Rotate the object around X axis
          * @param angle             Angle (counterclockwise)
          * @return Reference to self (for method chaining)
          *
@@ -89,7 +118,7 @@ template<class T> class AbstractBasicTranslationRotation3D: public AbstractBasic
         }
 
         /**
-         * @brief Rotate object around X axis as a local transformation
+         * @brief Rotate the object around X axis as a local transformation
          *
          * Similar to the above, except that the transformation is applied
          * before all others. In some implementations faster than calling
@@ -102,7 +131,7 @@ template<class T> class AbstractBasicTranslationRotation3D: public AbstractBasic
         }
 
         /**
-         * @brief Rotate object around Y axis
+         * @brief Rotate the object around Y axis
          * @param angle             Angle (counterclockwise)
          * @return Reference to self (for method chaining)
          *
@@ -117,7 +146,7 @@ template<class T> class AbstractBasicTranslationRotation3D: public AbstractBasic
         }
 
         /**
-         * @brief Rotate object around Y axis as a local transformation
+         * @brief Rotate the object around Y axis as a local transformation
          *
          * Similar to the above, except that the transformation is applied
          * before all others. In some implementations faster than calling
@@ -130,7 +159,7 @@ template<class T> class AbstractBasicTranslationRotation3D: public AbstractBasic
         }
 
         /**
-         * @brief Rotate object around Z axis
+         * @brief Rotate the object around Z axis
          * @param angle             Angle (counterclockwise)
          * @return Reference to self (for method chaining)
          *
@@ -145,7 +174,7 @@ template<class T> class AbstractBasicTranslationRotation3D: public AbstractBasic
         }
 
         /**
-         * @brief Rotate object around Z axis as a local transformation
+         * @brief Rotate the object around Z axis as a local transformation
          *
          * Similar to the above, except that the transformation is applied
          * before all others. In some implementations faster than calling
@@ -176,15 +205,23 @@ template<class T> class AbstractBasicTranslationRotation3D: public AbstractBasic
     protected:
         ~AbstractBasicTranslationRotation3D() = default;
 
-    #ifdef DOXYGEN_GENERATING_OUTPUT
-    protected:
-    #else
     private:
-    #endif
-        /** @brief Polymorphic implementation for @ref rotate() */
+        /**
+         * @brief Polymorphic implementation for @ref rotate(const Math::Quaternion<T>&)
+         * @m_since_latest
+         */
+        virtual void doRotate(const Math::Quaternion<T>&) = 0;
+
+        /**
+         * @brief Polymorphic implementation for @ref rotateLocal(const Math::Quaternion<T>&)
+         * @m_since_latest
+         */
+        virtual void doRotateLocal(const Math::Quaternion<T>&) = 0;
+
+        /** @brief Polymorphic implementation for @ref rotate(Math::Rad<T>, const Math::Vector3<T>&) */
         virtual void doRotate(Math::Rad<T> angle, const Math::Vector3<T>& normalizedAxis) = 0;
 
-        /** @brief Polymorphic implementation for @ref rotateLocal() */
+        /** @brief Polymorphic implementation for @ref rotateLocal(Math::Rad<T>, const Math::Vector3<T>&) */
         virtual void doRotateLocal(Math::Rad<T> angle, const Math::Vector3<T>& normalizedAxis) = 0;
 
         /**

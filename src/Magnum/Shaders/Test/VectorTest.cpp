@@ -23,7 +23,9 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+#include <sstream>
 #include <Corrade/TestSuite/Tester.h>
+#include <Corrade/Utility/DebugStl.h>
 
 #include "Magnum/Shaders/Vector.h"
 
@@ -32,47 +34,57 @@ namespace Magnum { namespace Shaders { namespace Test { namespace {
 struct VectorTest: TestSuite::Tester {
     explicit VectorTest();
 
-    void constructNoCreate2D();
-    void constructNoCreate3D();
+    template<UnsignedInt dimensions> void constructNoCreate();
+    template<UnsignedInt dimensions> void constructCopy();
 
-    void constructCopy2D();
-    void constructCopy3D();
+    void debugFlag();
+    void debugFlags();
 };
 
 VectorTest::VectorTest() {
-    addTests({&VectorTest::constructNoCreate2D,
-              &VectorTest::constructNoCreate3D,
+    addTests({&VectorTest::constructNoCreate<2>,
+              &VectorTest::constructNoCreate<3>,
 
-              &VectorTest::constructCopy2D,
-              &VectorTest::constructCopy3D});
+              &VectorTest::constructCopy<2>,
+              &VectorTest::constructCopy<3>,
+
+              &VectorTest::debugFlag,
+              &VectorTest::debugFlags});
 }
 
-void VectorTest::constructNoCreate2D() {
+template<UnsignedInt dimensions> void VectorTest::constructNoCreate() {
+    setTestCaseTemplateName(std::to_string(dimensions));
+
     {
-        Vector2D shader{NoCreate};
+        Vector<dimensions> shader{NoCreate};
         CORRADE_COMPARE(shader.id(), 0);
     }
 
     CORRADE_VERIFY(true);
 }
 
-void VectorTest::constructNoCreate3D() {
-    {
-        Vector3D shader{NoCreate};
-        CORRADE_COMPARE(shader.id(), 0);
-    }
+template<UnsignedInt dimensions> void VectorTest::constructCopy() {
+    setTestCaseTemplateName(std::to_string(dimensions));
 
-    CORRADE_VERIFY(true);
+    CORRADE_VERIFY((std::is_constructible<Vector<dimensions>, Vector<dimensions>&&>{}));
+    CORRADE_VERIFY(!(std::is_constructible<Vector<dimensions>, const Vector<dimensions>&>{}));
+
+    CORRADE_VERIFY((std::is_assignable<Vector<dimensions>, Vector<dimensions>&&>{}));
+    CORRADE_VERIFY(!(std::is_assignable<Vector<dimensions>, const Vector<dimensions>&>{}));
 }
 
-void VectorTest::constructCopy2D() {
-    CORRADE_VERIFY(!(std::is_constructible<Vector2D, const Vector2D&>{}));
-    CORRADE_VERIFY(!(std::is_assignable<Vector2D, const Vector2D&>{}));
+void VectorTest::debugFlag() {
+    std::ostringstream out;
+
+    Debug{&out} << Vector2D::Flag::TextureTransformation << Vector2D::Flag(0xf0);
+    CORRADE_COMPARE(out.str(), "Shaders::Vector::Flag::TextureTransformation Shaders::Vector::Flag(0xf0)\n");
 }
 
-void VectorTest::constructCopy3D() {
-    CORRADE_VERIFY(!(std::is_constructible<Vector3D, const Vector3D&>{}));
-    CORRADE_VERIFY(!(std::is_assignable<Vector3D, const Vector3D&>{}));
+void VectorTest::debugFlags() {
+    std::ostringstream out;
+
+    Debug{&out} << Vector3D::Flags{Vector3D::Flag::TextureTransformation|Vector3D::Flag(0xf0)} << Vector3D::Flags{};
+    CORRADE_COMPARE(out.str(), "Shaders::Vector::Flag::TextureTransformation|Shaders::Vector::Flag(0xf0) Shaders::Vector::Flags{}\n");
 }
 
 }}}}

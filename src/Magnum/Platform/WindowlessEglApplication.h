@@ -52,11 +52,10 @@ namespace Magnum { namespace Platform {
 /**
 @brief Windowless EGL context
 
-@m_keywords{WindowlessGLContext}
+@m_keywords{WindowlessGLContext EGL}
 
 GL context using EGL without any windowing system, used in
-@ref WindowlessEglApplication. Does not have any default framebuffer. It is
-built if `WITH_WINDOWLESSEGLAPPLICATION` is enabled in CMake.
+@ref WindowlessEglApplication. Does not have any default framebuffer.
 
 Meant to be used when there is a need to manage (multiple) GL contexts
 manually. See @ref platform-windowless-contexts for more information. If no
@@ -120,6 +119,17 @@ class WindowlessEglContext {
          * otherwise returns @cpp true @ce.
          */
         bool makeCurrent();
+
+        /**
+         * @brief Underlying OpenGL context
+         * @m_since_latest
+         *
+         * Use in case you need to call EGL functionality directly or in order
+         * to create a shared context. Returns @cpp nullptr @ce in case the
+         * context was not created yet.
+         * @see @ref Configuration::setSharedContext()
+         */
+        EGLContext glContext() { return _context; }
 
     private:
         EGLDisplay _display{};
@@ -234,11 +244,62 @@ class WindowlessEglContext::Configuration {
             _flags &= ~flags;
             return *this;
         }
+
+        /**
+         * @brief Device ID to use
+         *
+         * @requires_gles Device selection is not available in WebGL.
+         */
+        UnsignedInt device() const { return _device; }
+
+        /**
+         * @brief Set device ID to use
+         * @return Reference to self (for method chaining)
+         *
+         * The device ID is expected to be smaller than the count of devices
+         * reported by EGL. When using @ref WindowlessEglApplication, this is
+         * also exposed as a `--magnum-device` command-line option and a
+         * `MAGNUM_DEVICE` environment variable.
+         * @requires_gles Device selection is not available in WebGL.
+         */
+        Configuration& setDevice(UnsignedInt id) {
+            _device = id;
+            return *this;
+        }
+
+        /**
+         * @brief Create a shared context
+         * @return Reference to self (for method chaining)
+         * @m_since_latest
+         *
+         * When set, the created context will share a subset of OpenGL objects
+         * with @p context, instead of being independent. Many caveats and
+         * limitations apply to shared OpenGL contexts, please consult the
+         * OpenGL specification for details. Default is `EGL_NO_CONTEXT`, i.e.
+         * no sharing.
+         * @see @ref WindowlessEglContext::glContext(),
+         *      @ref WindowlessEglApplication::glContext()
+         * @requires_gles Context sharing is not available in WebGL.
+         */
+        Configuration& setSharedContext(EGLContext context) {
+            _sharedContext = context;
+            return *this;
+        }
+
+        /**
+         * @brief Shared context
+         * @m_since_latest
+         *
+         * @requires_gles Context sharing is not available in WebGL.
+         */
+        EGLContext sharedContext() const { return _sharedContext; }
         #endif
 
     private:
         #ifndef MAGNUM_TARGET_WEBGL
         Flags _flags;
+        UnsignedInt _device;
+        EGLContext _sharedContext = EGL_NO_CONTEXT;
         #endif
 };
 
@@ -249,15 +310,14 @@ CORRADE_ENUMSET_OPERATORS(WindowlessEglContext::Configuration::Flags)
 /**
 @brief Windowless EGL application
 
-@m_keywords{WindowlessApplication}
+@m_keywords{WindowlessApplication EGL}
 
 Application for offscreen rendering using @ref WindowlessEglContext. This
 application library is in theory available for all platforms for which EGL
 works (Linux desktop or ES, @ref CORRADE_TARGET_IOS "iOS",
 @ref CORRADE_TARGET_ANDROID "Android" and also
 @ref CORRADE_TARGET_EMSCRIPTEN "Emscripten"). See other
-`Windowless*Application` classes for an alternative. It is built if
-`WITH_WINDOWLESSEGLAPPLICATION` is enabled in CMake.
+`Windowless*Application` classes for an alternative.
 
 @section Platform-WindowlessEglApplication-bootstrap Bootstrap application
 
@@ -318,9 +378,9 @@ together with a troubleshooting guide is available in @ref platforms-html5.
 
 @section Platform-WindowlessEglApplication-usage General usage
 
-In order to use this library from CMake, you need to copy `FindEGL.cmake` from
-the modules directory in Magnum source to the `modules/` dir in your project
-(so it is able to find the EGL library). Request the `WindowlessEglApplication`
+This application library is built if `WITH_WINDOWLESSEGLAPPLICATION` is enabled
+when building Magnum. To use this library from CMake, put [FindEGL.cmake](https://github.com/mosra/magnum/blob/master/modules/FindEGL.cmake)
+into your `modules/` directory, request the `WindowlessEglApplication`
 component of the `Magnum` package and link to the
 `Magnum::WindowlessEglApplication` target:
 
@@ -328,7 +388,16 @@ component of the `Magnum` package and link to the
 find_package(Magnum REQUIRED WindowlessEglApplication)
 
 # ...
-target_link_libraries(your-app Magnum::WindowlessEglApplication)
+target_link_libraries(your-app PRIVATE Magnum::WindowlessEglApplication)
+@endcode
+
+Additionally, if you're using Magnum as a CMake subproject, do the following
+* *before* calling @cmake find_package() @ce to ensure it's enabled, as the
+library is not built by default:
+
+@code{.cmake}
+set(WITH_WINDOWLESSEGLAPPLICATION ON CACHE BOOL "" FORCE)
+add_subdirectory(magnum EXCLUDE_FROM_ALL)
 @endcode
 
 If no other application is requested, you can also use the generic
@@ -350,14 +419,52 @@ If no other application header is included, this class is also aliased to
 @cpp Platform::WindowlessApplication @ce and the macro is aliased to
 @cpp MAGNUM_WINDOWLESSAPPLICATION_MAIN() @ce to simplify porting.
 
-@subsection Platform-WindowlessEglApplication-usage-device-enumeration EGL device enumeration
+@section Platform-WindowlessEglApplication-device-selection GPU device selection
 
 The application prefers to use the @m_class{m-doc-external}
 [EGL_EXT_device_enumeration](https://www.khronos.org/registry/EGL/extensions/EXT/EGL_EXT_device_enumeration.txt),
 @m_class{m-doc-external} [EGL_EXT_platform_base](https://www.khronos.org/registry/EGL/extensions/EXT/EGL_EXT_platform_base.txt) and
 @m_class{m-doc-external} [EGL_EXT_platform_device](https://www.khronos.org/registry/EGL/extensions/EXT/EGL_EXT_platform_device.txt)
-where available instead of `EGL_DEFAULT_DISPLAY` to work better on headless
-setups. The application always chooses the first found device.
+extensions where available instead of `EGL_DEFAULT_DISPLAY` to work better on
+headless setups. The application chooses the first found device by default, you
+can override that either with @ref Configuration::setDevice() or using a
+`--magnum-device` command-line option (and the `MAGNUM_DEVICE` environment
+variable). Unfortunately EGL doesn't provide any reasonable way to enumerate or
+filter named devices, so the best you can do is checking reported device count
+printed by the `--magnum-log verbose` @ref GL-Context-command-line "command-line option",
+and then going from `0` up to figure out the desired device ID.
+
+@m_class{m-block m-danger}
+
+@par No EGL devices found
+@parblock
+Systems running Mesa 19.2 (which has the above extensions) that also have
+`libEGL_nvidia.so` installed (for example as a CUDA dependency) may fail
+to create the context with the following error (with additional output
+produced when the `--magnum-gpu-validation`
+@ref GL-Context-command-line "command-line option" is enabled):
+
+@m_class{m-console-wrap}
+
+@code{.shell-session}
+eglQueryDevicesEXT(): EGL_BAD_ALLOC error: In internal function: Additional INFO may be available
+eglQueryDevicesEXT(): EGL_BAD_ALLOC error: In function eglQueryDevicesEXT(), backend failed to query devices
+Platform::WindowlessEglApplication::tryCreateContext(): no EGL devices found
+@endcode
+
+This is due to the NVidia's EGL implementation failing to enumerate devices
+(because there aren't any), which then causes the GLVND wrapper to stop
+instead of enumerating the Mesa devices as well. The solution is
+whitelisting all EGL implementations except the NVidia one
+<a href="https://github.com/NVIDIA/libglvnd/blob/master/src/EGL/icd_enumeration.md">as described in the libglvnd documentation</a>
+using the `__EGL_VENDOR_LIBRARY_FILENAMES` environment variable, for example:
+
+@m_class{m-console-wrap}
+
+@code{.sh}
+__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json ./my-application
+@endcode
+@endparblock
 */
 class WindowlessEglApplication {
     public:
@@ -427,6 +534,17 @@ class WindowlessEglApplication {
          */
         virtual int exec() = 0;
 
+        /**
+         * @brief Underlying OpenGL context
+         * @m_since_latest
+         *
+         * Use in case you need to call EGL functionality directly or in order
+         * to create a shared context. Returns @cpp nullptr @ce in case the
+         * context was not created yet.
+         * @see @ref Configuration::setSharedContext()
+         */
+        EGLContext glContext() { return _glContext.glContext(); }
+
     protected:
         /* Nobody will need to have (and delete) WindowlessEglApplication*,
            thus this is faster than public pure virtual destructor */
@@ -460,11 +578,18 @@ class WindowlessEglApplication {
     private:
         WindowlessEglContext _glContext;
         Containers::Pointer<Platform::GLContext> _context;
+
+        #ifndef MAGNUM_TARGET_WEBGL
+        /* These are saved from command-line arguments */
+        UnsignedInt _commandLineDevice;
+        #endif
 };
 
 /** @hideinitializer
 @brief Entry point for windowless EGL application
 @param className Class name
+
+@m_keywords{MAGNUM_WINDOWLESSAPPLICATION_MAIN()}
 
 See @ref Magnum::Platform::WindowlessEglApplication "Platform::WindowlessEglApplication"
 for usage information. This macro abstracts out platform-specific entry point

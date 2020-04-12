@@ -57,10 +57,9 @@ namespace Magnum { namespace Platform {
 /**
 @brief Windowless WGL context
 
-@m_keywords{WindowlessGLContext}
+@m_keywords{WindowlessGLContext WGL}
 
-GL context using pure WINAPI, used in @ref WindowlessWglApplication. It is
-built if `WITH_WINDOWLESSWGLAPPLICATION` is enabled in CMake.
+GL context using pure WINAPI, used in @ref WindowlessWglApplication.
 
 Meant to be used when there is a need to manage (multiple) GL contexts
 manually. See @ref platform-windowless-contexts for more information. If no
@@ -134,6 +133,17 @@ class WindowlessWglContext {
          * otherwise returns @cpp true @ce.
          */
         bool makeCurrent();
+
+        /**
+         * @brief Underlying OpenGL context
+         * @m_since_latest
+         *
+         * Use in case you need to call WGL functionality directly or in order
+         * to create a shared context. Returns @cpp nullptr @ce in case the
+         * context was not created yet.
+         * @see @ref Configuration::setSharedContext()
+         */
+        HGLRC glContext() { return _context; }
 
     private:
         HWND _window{};
@@ -234,8 +244,33 @@ class WindowlessWglContext::Configuration {
             return *this;
         }
 
+        /**
+         * @brief Create a shared context
+         * @return Reference to self (for method chaining)
+         * @m_since_latest
+         *
+         * When set, the created context will share a subset of OpenGL objects
+         * with @p context, instead of being independent. Many caveats and
+         * limitations apply to shared OpenGL contexts, please consult the
+         * OpenGL specification for details. Default is @cpp nullptr @ce, i.e.
+         * no sharing.
+         * @see @ref WindowlessWglContext::glContext(),
+         *      @ref WindowlessWglApplication::glContext()
+         */
+        Configuration& setSharedContext(HGLRC context) {
+            _sharedContext = context;
+            return *this;
+        }
+
+        /**
+         * @brief Shared context
+         * @m_since_latest
+         */
+        HGLRC sharedContext() const { return _sharedContext; }
+
     private:
         Flags _flags;
+        HGLRC _sharedContext = nullptr;
 };
 
 CORRADE_ENUMSET_OPERATORS(WindowlessWglContext::Configuration::Flags)
@@ -243,11 +278,10 @@ CORRADE_ENUMSET_OPERATORS(WindowlessWglContext::Configuration::Flags)
 /**
 @brief Windowless WGL application
 
-@m_keywords{WindowlessApplication}
+@m_keywords{WindowlessApplication WGL}
 
 Application for offscreen rendering using @ref WindowlessWglContext. This
-application library is available on desktop OpenGL on Windows. It is built if
-`WITH_WINDOWLESSWGLAPPLICATION` is enabled in CMake.
+application library is available on desktop OpenGL on Windows.
 
 @section Platform-WindowlessWglApplication-bootstrap Bootstrap application
 
@@ -270,8 +304,10 @@ See @ref cmake for more information.
 
 @section Platform-WindowlessWglApplication-usage General usage
 
-In order to use this library from CMake, you need to request the
-`WindowlessWglApplication` component of the `Magnum` package and link to the `Magnum::WindowlessWglApplication` target:
+This application library is built if `WITH_WINDOWLESSWGLAPPLICATION` is enabled
+when building Magnum. To use this library from CMake, request the
+`WindowlessWglApplication` component of the `Magnum` package and link to the
+`Magnum::WindowlessWglApplication` target:
 
 @code{.cmake}
 find_package(Magnum REQUIRED)
@@ -281,8 +317,17 @@ endif()
 
 # ...
 if(CORRADE_TARGET_WINDOWS)
-    target_link_libraries(your-app Magnum::WindowlessWglApplication)
+    target_link_libraries(your-app PRIVATE Magnum::WindowlessWglApplication)
 endif()
+@endcode
+
+Additionally, if you're using Magnum as a CMake subproject, do the following
+* *before* calling @cmake find_package() @ce to ensure it's enabled, as the
+library is not built by default:
+
+@code{.cmake}
+set(WITH_WINDOWLESSWGLAPPLICATION ON CACHE BOOL "" FORCE)
+add_subdirectory(magnum EXCLUDE_FROM_ALL)
 @endcode
 
 If no other application is requested, you can also use the generic
@@ -376,6 +421,17 @@ class WindowlessWglApplication {
          */
         virtual int exec() = 0;
 
+        /**
+         * @brief Underlying OpenGL context
+         * @m_since_latest
+         *
+         * Use in case you need to call WGL functionality directly or in order
+         * to create a shared context. Returns @cpp nullptr @ce in case the
+         * context was not created yet.
+         * @see @ref Configuration::setSharedContext()
+         */
+        HGLRC glContext() { return _glContext.glContext(); }
+
     protected:
         /* Nobody will need to have (and delete) WindowlessWglApplication*,
            thus this is faster than public pure virtual destructor */
@@ -414,6 +470,8 @@ class WindowlessWglApplication {
 /** @hideinitializer
 @brief Entry point for windowless WGL application
 @param className Class name
+
+@m_keywords{MAGNUM_WINDOWLESSAPPLICATION_MAIN()}
 
 See @ref Magnum::Platform::WindowlessWglApplication "Platform::WindowlessWglApplication"
 for usage information. This macro abstracts out platform-specific entry point

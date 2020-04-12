@@ -25,7 +25,8 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-#include <vector>
+#include <Corrade/Containers/Array.h>
+#include <Corrade/Containers/StridedArrayView.h>
 
 #include "Magnum/Magnum.h"
 #include "Magnum/Trade/Trade.h"
@@ -34,12 +35,14 @@ namespace Magnum { namespace Primitives { namespace Implementation {
 
 class Spheroid {
     public:
-        enum class TextureCoords: UnsignedByte {
-            DontGenerate,
-            Generate
+        enum class Flag: UnsignedByte {
+            TextureCoordinates = 1 << 0,
+            Tangents = 1 << 1
         };
 
-        Spheroid(UnsignedInt segments, TextureCoords textureCoords);
+        typedef Containers::EnumSet<Flag> Flags;
+
+        explicit Spheroid(UnsignedInt segments, Flags flags);
 
         void capVertex(Float y, Float normalY, Float textureCoordsV);
         void hemisphereVertexRings(UnsignedInt count, Float centerY, Rad startRingAngle, Rad ringAngleIncrement, Float startTextureCoordsV, Float textureCoordsVIncrement);
@@ -49,17 +52,27 @@ class Spheroid {
         void topFaceRing();
         void capVertexRing(Float y, Float textureCoordsV, const Vector3& normal);
 
-        Trade::MeshData3D finalize();
+        Trade::MeshData finalize();
 
     private:
-        UnsignedInt segments;
-        TextureCoords textureCoords;
+        UnsignedInt _segments;
+        Flags _flags;
+        std::size_t _stride;
+        std::size_t _textureCoordinateOffset,
+            _tangentOffset;
+        std::size_t _attributeCount;
 
-        std::vector<UnsignedInt> indices;
-        std::vector<Vector3> positions;
-        std::vector<Vector3> normals;
-        std::vector<Vector2> textureCoords2D;
+        Containers::Array<UnsignedInt> _indexData;
+        Containers::Array<char> _vertexData;
+
+        void append(const Vector3& position, const Vector3& normal);
+        Vector3 lastVertexPosition(std::size_t offsetFromEnd);
+        Vector3 lastVertexNormal(std::size_t offsetFromEnd);
+        Vector4& lastVertexTangent(std::size_t offsetFromEnd);
+        Vector2& lastVertexTextureCoords(std::size_t offsetFromEnd);
 };
+
+CORRADE_ENUMSET_OPERATORS(Spheroid::Flags)
 
 }}}
 

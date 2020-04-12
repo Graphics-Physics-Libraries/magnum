@@ -42,17 +42,20 @@ cmake .. ^
     -DWITH_DISTANCEFIELDCONVERTER=ON ^
     -DWITH_FONTCONVERTER=ON ^
     -DWITH_IMAGECONVERTER=ON ^
+    -DWITH_SCENECONVERTER=ON ^
     -DWITH_GL_INFO=ON ^
     -DWITH_AL_INFO=ON ^
     -DBUILD_TESTS=ON ^
     -DBUILD_GL_TESTS=ON ^
     -G Ninja || exit /b
 cmake --build . || exit /b
-cmake --build . --target install || exit /b
 
 rem Test
 set CORRADE_TEST_COLOR=ON
 ctest -V -E GLTest || exit /b
+
+rem Test install, after running the tests as for them it shouldn't be needed
+cmake --build . --target install || exit /b
 
 rem Coverage upload
 set PATH=C:\msys64\usr\bin;%PATH%

@@ -29,16 +29,16 @@
 #include "Magnum/Math/Color.h"
 #include "Magnum/Primitives/Implementation/Spheroid.h"
 #include "Magnum/Primitives/Implementation/WireframeSpheroid.h"
-#include "Magnum/Trade/MeshData3D.h"
+#include "Magnum/Trade/MeshData.h"
 
 namespace Magnum { namespace Primitives {
 
-Trade::MeshData3D cylinderSolid(const UnsignedInt rings, const UnsignedInt segments, const Float halfLength, const CylinderFlags flags) {
+Trade::MeshData cylinderSolid(const UnsignedInt rings, const UnsignedInt segments, const Float halfLength, const CylinderFlags flags) {
     CORRADE_ASSERT(rings >= 1 && segments >= 3,
         "Primitives::cylinderSolid(): at least one ring and three segments expected",
-        (Trade::MeshData3D{MeshPrimitive::Triangles, {}, {}, {}, {}, {}, nullptr}));
+        (Trade::MeshData{MeshPrimitive::Triangles, 0}));
 
-    Implementation::Spheroid cylinder(segments, flags & CylinderFlag::GenerateTextureCoords ? Implementation::Spheroid::TextureCoords::Generate : Implementation::Spheroid::TextureCoords::DontGenerate);
+    Implementation::Spheroid cylinder{segments, Implementation::Spheroid::Flag(UnsignedByte(flags))};
 
     const Float length = 2.0f*halfLength;
     const Float textureCoordsV = flags & CylinderFlag::CapEnds ? 1.0f/(length+2.0f) : 0.0f;
@@ -58,18 +58,23 @@ Trade::MeshData3D cylinderSolid(const UnsignedInt rings, const UnsignedInt segme
         cylinder.capVertex(halfLength, 1.0f, 1.0f);
     }
 
-    /* Faces */
+    /* Faces. Account for the extra vertices for caps and texture coords. */
     if(flags & CylinderFlag::CapEnds) cylinder.bottomFaceRing();
-    cylinder.faceRings(rings, flags & CylinderFlag::CapEnds ? (1 + segments) : 0);
+    if(flags & CylinderFlag::CapEnds && flags & (CylinderFlag::TextureCoordinates|CylinderFlag::Tangents))
+        cylinder.faceRings(rings, 2 + segments);
+    else if(flags & CylinderFlag::CapEnds)
+        cylinder.faceRings(rings, 1 + segments);
+    else
+        cylinder.faceRings(rings, 0);
     if(flags & CylinderFlag::CapEnds) cylinder.topFaceRing();
 
     return cylinder.finalize();
 }
 
-Trade::MeshData3D cylinderWireframe(const UnsignedInt rings, const UnsignedInt segments, const Float halfLength) {
+Trade::MeshData cylinderWireframe(const UnsignedInt rings, const UnsignedInt segments, const Float halfLength) {
     CORRADE_ASSERT(rings >= 1 && segments >= 4 && segments%4 == 0,
         "Primitives::cylinderWireframe(): at least one ring and multiples of 4 segments expected",
-        (Trade::MeshData3D{MeshPrimitive::Lines, {}, {}, {}, {}, {}, nullptr}));
+        (Trade::MeshData{MeshPrimitive::Lines, 0}));
 
     Implementation::WireframeSpheroid cylinder(segments/4);
 

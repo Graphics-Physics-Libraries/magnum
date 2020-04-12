@@ -27,8 +27,11 @@
 #include <Corrade/Containers/Optional.h>
 #include <Corrade/PluginManager/Manager.h>
 #include <Corrade/Utility/Directory.h>
+#include <Corrade/Utility/Resource.h>
 
 #include "Magnum/FileCallback.h"
+#include "Magnum/Math/Color.h"
+#include "Magnum/Math/Matrix3.h"
 #include "Magnum/Shaders/Vector.h"
 #include "Magnum/Text/AbstractFont.h"
 #include "Magnum/Text/DistanceFieldGlyphCache.h"
@@ -164,8 +167,8 @@ std::tie(mesh, std::ignore) = Text::Renderer2D::render(*font, cache, 0.15f,
 /* Draw the text on the screen */
 shader.setTransformationProjectionMatrix(projectionMatrix)
     .setColor(0xffffff_rgbf)
-    .bindVectorTexture(cache.texture());
-mesh.draw(shader);
+    .bindVectorTexture(cache.texture())
+    .draw(mesh);
 /* [Renderer-usage1] */
 
 /* [Renderer-usage2] */
@@ -179,8 +182,8 @@ renderer.render("Hello World Countdown: 10");
 /* Draw the text on the screen */
 shader.setTransformationProjectionMatrix(projectionMatrix)
     .setColor(0xffffff_rgbf)
-    .bindVectorTexture(cache.texture());
-renderer.mesh().draw(shader);
+    .bindVectorTexture(cache.texture())
+    .draw(renderer.mesh());
 /* [Renderer-usage2] */
 }
 

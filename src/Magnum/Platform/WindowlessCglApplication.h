@@ -41,6 +41,9 @@
 #include "Magnum/GL/OpenGL.h"
 #include "Magnum/Platform/Platform.h"
 
+#ifndef DOXYGEN_GENERATING_OUTPUT
+#define GL_SILENCE_DEPRECATION /* YES I KNOW, APPLE! FFS */
+#endif
 #include <OpenGL/OpenGL.h>
 #include <OpenGL/CGLTypes.h>
 #include <OpenGL/CGLCurrent.h>
@@ -50,11 +53,10 @@ namespace Magnum { namespace Platform {
 /**
 @brief Windowless CGL context
 
-@m_keywords{WindowlessGLContext}
+@m_keywords{WindowlessGLContext CGL}
 
 GL context used in @ref WindowlessCglApplication. Does not have any default
-framebuffer. It is built if `WITH_WINDOWLESSCGLAPPLICATION` is enabled in
-CMake.
+framebuffer.
 
 Meant to be used when there is a need to manage (multiple) GL contexts
 manually. See @ref platform-windowless-contexts for more information. If no
@@ -124,6 +126,17 @@ class WindowlessCglContext {
          */
         bool makeCurrent();
 
+        /**
+         * @brief Underlying OpenGL context
+         * @m_since_latest
+         *
+         * Use in case you need to call CGL functionality directly or in order
+         * to create a shared context. Returns @cpp nullptr @ce in case the
+         * context was not created yet.
+         * @see @ref Configuration::setSharedContext()
+         */
+        CGLContextObj glContext() { return _context; }
+
     private:
         CGLPixelFormatObj _pixelFormat{};
         CGLContextObj _context{};
@@ -140,16 +153,42 @@ class WindowlessCglContext {
 class WindowlessCglContext::Configuration {
     public:
         constexpr /*implicit*/ Configuration() {}
+
+        /**
+         * @brief Create a shared context
+         * @return Reference to self (for method chaining)
+         * @m_since_latest
+         *
+         * When set, the created context will share a subset of OpenGL objects
+         * with @p context, instead of being independent. Many caveats and
+         * limitations apply to shared OpenGL contexts, please consult the
+         * OpenGL specification for details. Default is @cpp nullptr @ce, i.e.
+         * no sharing.
+         * @see @ref WindowlessCglContext::glContext(),
+         *      @ref WindowlessCglApplication::glContext()
+         */
+        Configuration& setSharedContext(CGLContextObj context) {
+            _sharedContext = context;
+            return *this;
+        }
+
+        /**
+         * @brief Shared context
+         * @m_since_latest
+         */
+        CGLContextObj sharedContext() const { return _sharedContext; }
+
+    private:
+        CGLContextObj _sharedContext = nullptr;
 };
 
 /**
 @brief Windowless CGL application
 
-@m_keywords{WindowlessApplication}
+@m_keywords{WindowlessApplication CGL}
 
 Application for offscreen rendering using @ref WindowlessCglContext. This
-application library is available on desktop OpenGL on macOS. It is built if
-`WITH_WINDOWLESSCGLAPPLICATION` is enabled in CMake.
+application library is available on desktop OpenGL on macOS.
 
 @section Platform-WindowlessCglApplication-bootstrap Bootstrap application
 
@@ -172,7 +211,8 @@ See @ref cmake for more information.
 
 @section Platform-WindowlessCglApplication-usage General usage
 
-In order to use this library from CMake, you need to request the
+This application library is built if `WITH_WINDOWLESSCGLAPPLICATION` is enabled
+when building Magnum. To use this library from CMake, request the
 `WindowlessCglApplication` component of the `Magnum` package and link to the `Magnum::WindowlessCglApplication` target:
 
 @code{.cmake}
@@ -183,8 +223,17 @@ endif()
 
 # ...
 if(CORRADE_TARGET_APPLE)
-    target_link_libraries(your-app Magnum::WindowlessCglApplication)
+    target_link_libraries(your-app PRIVATE Magnum::WindowlessCglApplication)
 endif()
+@endcode
+
+Additionally, if you're using Magnum as a CMake subproject, do the following
+* *before* calling @cmake find_package() @ce to ensure it's enabled, as the
+library is not built by default:
+
+@code{.cmake}
+set(WITH_WINDOWLESSCGLAPPLICATION ON CACHE BOOL "" FORCE)
+add_subdirectory(magnum EXCLUDE_FROM_ALL)
 @endcode
 
 If no other application is requested, you can also use the generic
@@ -278,6 +327,17 @@ class WindowlessCglApplication {
          */
         virtual int exec() = 0;
 
+        /**
+         * @brief Underlying OpenGL context
+         * @m_since_latest
+         *
+         * Use in case you need to call CGL functionality directly or in order
+         * to create a shared context. Returns @cpp nullptr @ce in case the
+         * context was not created yet.
+         * @see @ref Configuration::setSharedContext()
+         */
+        CGLContextObj glContext() { return _glContext.glContext(); }
+
     protected:
         /* Nobody will need to have (and delete) WindowlessCglApplication*,
            thus this is faster than public pure virtual destructor */
@@ -316,6 +376,8 @@ class WindowlessCglApplication {
 /** @hideinitializer
 @brief Entry point for windowless CGL application
 @param className Class name
+
+@m_keywords{MAGNUM_WINDOWLESSAPPLICATION_MAIN()}
 
 See @ref Magnum::Platform::WindowlessCglApplication "Platform::WindowlessCglApplication"
 for usage information. This macro abstracts out platform-specific entry point

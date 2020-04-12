@@ -31,16 +31,13 @@
 #include "Magnum/GL/Context.h"
 #include "Magnum/GL/Extensions.h"
 #include "Magnum/GL/Shader.h"
+#include "Magnum/Math/Color.h"
+#include "Magnum/Math/Matrix3.h"
+#include "Magnum/Math/Matrix4.h"
 
 #include "Magnum/Shaders/Implementation/CreateCompatibilityShader.h"
 
 namespace Magnum { namespace Shaders {
-
-namespace {
-    template<UnsignedInt> constexpr const char* vertexShaderName();
-    template<> constexpr const char* vertexShaderName<2>() { return "VertexColor2D.vert"; }
-    template<> constexpr const char* vertexShaderName<3>() { return "VertexColor3D.vert"; }
-}
 
 template<UnsignedInt dimensions> VertexColor<dimensions>::VertexColor() {
     #ifdef MAGNUM_BUILD_STATIC
@@ -59,8 +56,9 @@ template<UnsignedInt dimensions> VertexColor<dimensions>::VertexColor() {
     GL::Shader vert = Implementation::createCompatibilityShader(rs, version, GL::Shader::Type::Vertex);
     GL::Shader frag = Implementation::createCompatibilityShader(rs, version, GL::Shader::Type::Fragment);
 
-    vert.addSource(rs.get("generic.glsl"))
-        .addSource(rs.get(vertexShaderName<dimensions>()));
+    vert.addSource(dimensions == 2 ? "#define TWO_DIMENSIONS\n" : "#define THREE_DIMENSIONS\n")
+        .addSource(rs.get("generic.glsl"))
+        .addSource(rs.get("VertexColor.vert"));
     frag.addSource(rs.get("generic.glsl"))
         .addSource(rs.get("VertexColor.frag"));
 
@@ -92,6 +90,11 @@ template<UnsignedInt dimensions> VertexColor<dimensions>::VertexColor() {
     #ifdef MAGNUM_TARGET_GLES
     setTransformationProjectionMatrix(MatrixTypeFor<dimensions, Float>{});
     #endif
+}
+
+template<UnsignedInt dimensions> VertexColor<dimensions>& VertexColor<dimensions>::setTransformationProjectionMatrix(const MatrixTypeFor<dimensions, Float>& matrix) {
+    setUniform(_transformationProjectionMatrixUniform, matrix);
+    return *this;
 }
 
 template class VertexColor<2>;

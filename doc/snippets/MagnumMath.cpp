@@ -162,9 +162,14 @@ static_cast<void>(x);
 {
 /* [matrix-vector-access-swizzle] */
 Vector4i orig{-1, 2, 3, 4};
-Vector4i bgra = Math::swizzle<'b', 'g', 'r', 'a'>(orig); // { 3, 2, -1, 4 }
-Math::Vector<6, Int> w10xyz = Math::swizzle<'w', '1', '0', 'x', 'y', 'z'>(orig);
+Vector4i bgra = Math::gather<'b', 'g', 'r', 'a'>(orig); // { 3, 2, -1, 4 }
+Math::Vector<6, Int> w10xyz = Math::gather<'w', '1', '0', 'x', 'y', 'z'>(orig);
     // { 4, 1, 0, -1, 2, 3 }
+
+Vector4 vec{1.5f, 3.0f, 0.1f, 1.1f};
+Vector2 coords{5.0f, -2.0f};
+Math::scatter<'z', 'w'>(vec, coords); // { 1.5, 3.0, 5.0, -2.0 }
+
 /* [matrix-vector-access-swizzle] */
 static_cast<void>(bgra);
 static_cast<void>(w10xyz);
@@ -709,14 +714,6 @@ if(!(b < a - epsilon || a + epsilon < b)) {
 }
 
 {
-/* [Color3-pack] */
-Color3 a{1.0f, 0.5f, 0.75f};
-auto b = Math::pack<Color3ub>(a); // b == {255, 127, 191}
-/* [Color3-pack] */
-static_cast<void>(b);
-}
-
-{
 /* [Color3-fromSrgb] */
 Math::Vector3<UnsignedByte> srgb;
 auto rgb = Color3::fromSrgb(srgb);
@@ -734,6 +731,16 @@ static_cast<void>(b);
 }
 
 {
+/* [Color3-unpack] */
+Color3ub a{0xff, 0x33, 0x66};
+auto bFromSrgb = Color3::fromSrgb(a);       // {1.0f, 0.03311f, 0.1329f}
+auto bFromLinear = Math::unpack<Color3>(a); // {1.0f, 0.2f, 0.4f}
+/* [Color3-unpack] */
+static_cast<void>(bFromLinear);
+static_cast<void>(bFromSrgb);
+}
+
+{
 /* [Color3-toSrgb] */
 Color3 color;
 Math::Vector3<UnsignedByte> srgb = color.toSrgb<UnsignedByte>();
@@ -742,18 +749,20 @@ static_cast<void>(srgb);
 }
 
 {
+/* [Color3-pack] */
+Color3 a{1.0f, 0.2f, 0.4f};
+auto bSrgb = a.toSrgb<UnsignedByte>();  // {0xff, 0x7c, 0xaa}
+auto bLinear = Math::pack<Color3ub>(a); // {0xff, 0x33, 0x66}
+/* [Color3-pack] */
+static_cast<void>(bLinear);
+static_cast<void>(bSrgb);
+}
+
+{
 /* [Color4-fromSrgbAlpha] */
 Math::Vector4<UnsignedByte> srgbAlpha;
 auto rgba = Color4::fromSrgbAlpha(srgbAlpha);
 /* [Color4-fromSrgbAlpha] */
-static_cast<void>(rgba);
-}
-
-{
-/* [Color4-fromSrgb] */
-Math::Vector3<UnsignedByte> srgb;
-auto rgba = Color4::fromSrgb(srgb, 0.5f);
-/* [Color4-fromSrgb] */
 static_cast<void>(rgba);
 }
 
@@ -767,10 +776,13 @@ static_cast<void>(b);
 }
 
 {
-/* [Color4-fromSrgb-int] */
-Color4 rgba = Color4::fromSrgb(0xff3366, 0.5f);
-/* [Color4-fromSrgb-int] */
-static_cast<void>(rgba);
+/* [Color4-unpack] */
+Color4ub a{0xff, 0x33, 0x66, 0x99};
+auto bFromSrgb = Color4::fromSrgbAlpha(a);  // {1.0f, 0.03311f, 0.1329f, 0.6f}
+auto bFromLinear = Math::unpack<Color4>(a); // {1.0f, 0.2f, 0.4f, 0.6f}
+/* [Color4-unpack] */
+static_cast<void>(bFromLinear);
+static_cast<void>(bFromSrgb);
 }
 
 {
@@ -779,6 +791,16 @@ Color4 color;
 Math::Vector4<UnsignedByte> srgbAlpha = color.toSrgbAlpha<UnsignedByte>();
 /* [Color4-toSrgbAlpha] */
 static_cast<void>(srgbAlpha);
+}
+
+{
+/* [Color4-pack] */
+Color4 a{1.0f, 0.2f, 0.4f, 0.6f};
+auto bSrgb = a.toSrgbAlpha<UnsignedByte>(); // {0xff, 0x7c, 0xaa, 0x99}
+auto bLinear = Math::pack<Color4ub>(a);     // {0xff, 0x33, 0x66, 0x99}
+/* [Color4-pack] */
+static_cast<void>(bLinear);
+static_cast<void>(bSrgb);
 }
 
 {
@@ -983,6 +1005,17 @@ Math::Matrix2x2<Byte> integral{floatingPoint}; // {{1, 2}, {-15, 7}}
 }
 
 {
+/* [Quaternion-fromEuler] */
+Rad x, y, z;
+Quaternion a =
+    Quaternion::rotation(z, Vector3::zAxis())*
+    Quaternion::rotation(y, Vector3::yAxis())*
+    Quaternion::rotation(x, Vector3::xAxis());
+/* [Quaternion-fromEuler] */
+static_cast<void>(a);
+}
+
+{
 /* [unpack-template-explicit] */
 // Literal type is (signed) char, but we assumed unsigned char, a != 1.0f
 Float a = Math::unpack<Float>('\xFF');
@@ -1077,13 +1110,25 @@ static_cast<void>(mySet);
 }
 
 {
-/* [swizzle] */
+/* [gather] */
 Vector4i original(-1, 2, 3, 4);
 
-auto vec = Math::swizzle<'w', '1', '0', 'x', 'y', 'z'>(original);
+auto vec = Math::gather<'w', '1', '0', 'x', 'y', 'z'>(original);
         // vec == { 4, 1, 0, -1, 2, 3 }
-/* [swizzle] */
+/* [gather] */
 static_cast<void>(vec);
+}
+
+{
+/* [scatter] */
+Vector4 vec{1.5f, 3.0f, 0.1f, 1.1f};
+Vector2 coords{5.0f, -2.0f};
+vec = Math::scatter<'z', 'w'>(vec, coords); // { 1.5, 3.0, 5.0, -2.0 }
+
+/* Combine the two for more advanced swizzles */
+Vector4 vec2;
+vec2 = Math::scatter<'w', 'x', 'y'>(vec2, Math::gather<'x', 'w', 'y'>(vec));
+/* [scatter] */
 }
 
 {
@@ -1100,6 +1145,19 @@ Math::TypeTraits<Float>::equalsZero(a - b,
 Vector4 floatingPoint{1.3f, 2.7f, -15.0f, 7.0f};
 Vector4i integral{floatingPoint}; // {1, 2, -15, 7}
 /* [Vector-conversion] */
+}
+
+{
+/* [Vector-length-integer] */
+Vector2i a{25, -1};
+Float length = Vector2{a}.length();         // ~25.099
+/* [Vector-length-integer] */
+static_cast<void>(length);
+
+/* [Vector-length-manhattan] */
+Int manhattanLength = Math::abs(a).sum();   // 26
+/* [Vector-length-manhattan] */
+static_cast<void>(manhattanLength);
 }
 
 {

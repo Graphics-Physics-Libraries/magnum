@@ -26,6 +26,7 @@
 
 #include <sstream>
 #include <Corrade/TestSuite/Tester.h>
+#include <Corrade/Utility/FormatStl.h>
 
 #include "Magnum/AbstractResourceLoader.h"
 #include "Magnum/ResourceManager.h"
@@ -34,6 +35,11 @@ namespace Magnum { namespace Test { namespace {
 
 struct ResourceManagerTest: TestSuite::Tester {
     explicit ResourceManagerTest();
+
+    void constructResource();
+    void constructResourceEmpty();
+    void constructResourceCopy();
+    void constructResourceMove();
 
     void compare();
     void state();
@@ -51,6 +57,7 @@ struct ResourceManagerTest: TestSuite::Tester {
     void loaderSetNullptr();
 
     void debugResourceState();
+    void debugResourceKey();
 };
 
 struct Data {
@@ -65,7 +72,12 @@ typedef Magnum::ResourceManager<Int, Data> ResourceManager;
 size_t Data::count = 0;
 
 ResourceManagerTest::ResourceManagerTest() {
-    addTests({&ResourceManagerTest::compare,
+    addTests({&ResourceManagerTest::constructResource,
+              &ResourceManagerTest::constructResourceEmpty,
+              &ResourceManagerTest::constructResourceCopy,
+              &ResourceManagerTest::constructResourceMove,
+
+              &ResourceManagerTest::compare,
               &ResourceManagerTest::state,
               &ResourceManagerTest::stateFallback,
               &ResourceManagerTest::stateDisallowed,
@@ -80,7 +92,77 @@ ResourceManagerTest::ResourceManagerTest() {
               &ResourceManagerTest::loader,
               &ResourceManagerTest::loaderSetNullptr,
 
-              &ResourceManagerTest::debugResourceState});
+              &ResourceManagerTest::debugResourceState,
+              &ResourceManagerTest::debugResourceKey});
+}
+
+void ResourceManagerTest::constructResource() {
+    ResourceManager rm;
+    rm.set("thing", 6432);
+
+    Resource<Int> a = rm.get<Int>("thing");
+    CORRADE_COMPARE(a.key(), ResourceKey("thing"));
+    CORRADE_COMPARE(a.state(), ResourceState::Final);
+    CORRADE_COMPARE(*a, 6432);
+    CORRADE_COMPARE(rm.referenceCount<Int>("thing"), 1);
+}
+
+void ResourceManagerTest::constructResourceEmpty() {
+    Resource<Int> a;
+    CORRADE_COMPARE(a.key(), ResourceKey{});
+    CORRADE_COMPARE(a.state(), ResourceState::Final);
+    CORRADE_VERIFY(!a);
+}
+
+void ResourceManagerTest::constructResourceCopy() {
+    ResourceManager rm;
+    rm.set("thing", 6432);
+
+    Resource<Int> a = rm.get<Int>("thing");
+    CORRADE_COMPARE(rm.referenceCount<Int>("thing"), 1);
+
+    Resource<Int> b = a;
+    CORRADE_COMPARE(a.key(), ResourceKey("thing"));
+    CORRADE_COMPARE(b.key(), ResourceKey("thing"));
+    CORRADE_COMPARE(a.state(), ResourceState::Final);
+    CORRADE_COMPARE(b.state(), ResourceState::Final);
+    CORRADE_COMPARE(*a, 6432);
+    CORRADE_COMPARE(*b, 6432);
+    CORRADE_COMPARE(rm.referenceCount<Int>("thing"), 2);
+
+    Resource<Int> c;
+    c = b;
+    CORRADE_COMPARE(b.key(), ResourceKey("thing"));
+    CORRADE_COMPARE(c.key(), ResourceKey("thing"));
+    CORRADE_COMPARE(b.state(), ResourceState::Final);
+    CORRADE_COMPARE(c.state(), ResourceState::Final);
+    CORRADE_COMPARE(*b, 6432);
+    CORRADE_COMPARE(*c, 6432);
+    CORRADE_COMPARE(rm.referenceCount<Int>("thing"), 3);
+}
+
+void ResourceManagerTest::constructResourceMove() {
+    ResourceManager rm;
+    rm.set("thing", 6432);
+
+    Resource<Int> a = rm.get<Int>("thing");
+    CORRADE_COMPARE(rm.referenceCount<Int>("thing"), 1);
+
+    Resource<Int> b = std::move(a);
+    CORRADE_COMPARE(b.key(), ResourceKey("thing"));
+    CORRADE_COMPARE(b.state(), ResourceState::Final);
+    CORRADE_COMPARE(*b, 6432);
+    CORRADE_COMPARE(rm.referenceCount<Int>("thing"), 1);
+
+    Resource<Int> c;
+    c = std::move(b);
+    CORRADE_COMPARE(c.key(), ResourceKey("thing"));
+    CORRADE_COMPARE(c.state(), ResourceState::Final);
+    CORRADE_COMPARE(*c, 6432);
+    CORRADE_COMPARE(rm.referenceCount<Int>("thing"), 1);
+
+    CORRADE_VERIFY(std::is_nothrow_move_constructible<Resource<Int>>::value);
+    CORRADE_VERIFY(std::is_nothrow_move_assignable<Resource<Int>>::value);
 }
 
 void ResourceManagerTest::compare() {
@@ -139,9 +221,15 @@ void ResourceManagerTest::state() {
 void ResourceManagerTest::stateFallback() {
     {
         ResourceManager rm;
-        rm.setFallback(Containers::pointer<Data>());
 
+        /* Fetching a resource that's not loaded first */
         Resource<Data> data = rm.get<Data>("data");
+        CORRADE_VERIFY(!data);
+        CORRADE_COMPARE(data.state(), ResourceState::NotLoaded);
+        CORRADE_COMPARE(rm.state<Data>("data"), ResourceState::NotLoaded);
+
+        /* Setting a fallback should make the resource fetch it */
+        rm.setFallback(Containers::pointer<Data>());
         CORRADE_VERIFY(data);
         CORRADE_COMPARE(data.state(), ResourceState::NotLoadedFallback);
         CORRADE_COMPARE(rm.state<Data>("data"), ResourceState::NotLoadedFallback);
@@ -158,6 +246,12 @@ void ResourceManagerTest::stateFallback() {
 
         /* Only fallback is here */
         CORRADE_COMPARE(Data::count, 1);
+
+        /* Unsetting a fallback should make the resource go back to empty */
+        rm.setFallback<Data>(nullptr);
+        CORRADE_VERIFY(!data);
+        CORRADE_COMPARE(data.state(), ResourceState::NotFound);
+        CORRADE_COMPARE(rm.state<Data>("data"), ResourceState::NotFound);
     }
 
     /* Fallback gets destroyed */
@@ -203,7 +297,7 @@ void ResourceManagerTest::basic() {
     int a = 43; /* Done this way to prevent a memory leak on assert (yes, the code is bad) */
     rm.set(answerKey, &a, ResourceDataState::Mutable, ResourcePolicy::Resident);
     CORRADE_COMPARE(*theAnswer, 42);
-    CORRADE_COMPARE(out.str(), "ResourceManager::set(): cannot change already final resource " + answerKey.hexString() + '\n');
+    CORRADE_COMPARE(out.str(), Utility::formatString("ResourceManager::set(): cannot change already final resource ResourceKey(0x{})\n", answerKey.hexString()));
 
     /* But non-final can be changed */
     rm.set(questionKey, 20, ResourceDataState::Final, ResourcePolicy::Resident);
@@ -421,6 +515,13 @@ void ResourceManagerTest::debugResourceState() {
     std::ostringstream out;
     Debug{&out} << ResourceState::Loading << ResourceState(0xbe);
     CORRADE_COMPARE(out.str(), "ResourceState::Loading ResourceState(0xbe)\n");
+}
+
+void ResourceManagerTest::debugResourceKey() {
+    std::ostringstream out;
+    ResourceKey hello = "hello";
+    Debug{&out} << hello;
+    CORRADE_COMPARE(out.str(), Utility::formatString("ResourceKey(0x{})\n", hello.hexString()));
 }
 
 }}}

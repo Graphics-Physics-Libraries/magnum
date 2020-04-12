@@ -250,13 +250,21 @@ std::int32_t AndroidApplication::inputEvent(android_app* state, AInputEvent* eve
         switch(action) {
             case AMOTION_EVENT_ACTION_DOWN:
             case AMOTION_EVENT_ACTION_UP: {
+                /* On a touch screen move events aren't reported when the
+                   finger is moving above (of course), so remember the position
+                   always */
+                app._previousMouseMovePosition = {Int(AMotionEvent_getX(event, 0)), Int(AMotionEvent_getY(event, 0))};
                 MouseEvent e(event);
                 action == AMOTION_EVENT_ACTION_DOWN ? app.mousePressEvent(e) : app.mouseReleaseEvent(e);
                 return e.isAccepted() ? 1 : 0;
             }
 
             case AMOTION_EVENT_ACTION_MOVE: {
-                MouseMoveEvent e(event);
+                Vector2i position{Int(AMotionEvent_getX(event, 0)), Int(AMotionEvent_getY(event, 0))};
+                MouseMoveEvent e{event,
+                    app._previousMouseMovePosition == Vector2i{-1} ? Vector2i{} :
+                    position - app._previousMouseMovePosition};
+                app._previousMouseMovePosition = position;
                 app.mouseMoveEvent(e);
                 return e.isAccepted() ? 1 : 0;
             }
@@ -269,7 +277,7 @@ std::int32_t AndroidApplication::inputEvent(android_app* state, AInputEvent* eve
 }
 
 AndroidApplication::GLConfiguration::GLConfiguration():
-    _colorBufferSize{8, 8, 8, 0}, _depthBufferSize{24}, _stencilBufferSize{0} {}
+    _colorBufferSize{8, 8, 8, 8}, _depthBufferSize{24}, _stencilBufferSize{0} {}
 
 void AndroidApplication::exec(android_app* state, Containers::Pointer<AndroidApplication>(*instancer)(const Arguments&)) {
     state->onAppCmd = commandEvent;

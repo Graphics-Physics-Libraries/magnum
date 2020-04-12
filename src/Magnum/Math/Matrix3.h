@@ -113,7 +113,8 @@ template<class T> class Matrix3: public Matrix3x3<T> {
          * @cpp Matrix3::scaling(Vector2::yScale(-1.0f)) @ce. @f[
          *      \boldsymbol{A} = \boldsymbol{I} - 2 \boldsymbol{NN}^T ~~~~~ \boldsymbol{N} = \begin{pmatrix} n_x \\ n_y \end{pmatrix}
          * @f]
-         * @see @ref Matrix4::reflection(), @ref Vector::isNormalized()
+         * @see @ref Matrix4::reflection(), @ref Vector::isNormalized(),
+         *      @ref reflect()
          */
         static Matrix3<T> reflection(const Vector2<T>& normal) {
             CORRADE_ASSERT(normal.isNormalized(),
@@ -450,6 +451,14 @@ template<class T> class Matrix3: public Matrix3x3<T> {
          *          | \boldsymbol{b} |
          *      \end{pmatrix}
          * @f]
+         *
+         * Note that the returned vector is sign-less and the signs are instead
+         * contained in @ref rotation() const / @ref rotationShear() const in
+         * order to ensure @f$ \boldsymbol{R} \boldsymbol{S} = \boldsymbol{M} @f$
+         * for @f$ \boldsymbol{R} @f$ and @f$ \boldsymbol{S} @f$ extracted out
+         * of @f$ \boldsymbol{M} @f$. The signs can be extracted for example by
+         * applying @ref Math::sign() on a @ref diagonal(), but keep in mind
+         * that the signs can be negative even for pure rotation matrices.
          *
          * @see @ref scalingSquared(), @ref uniformScaling(),
          *      @ref rotation() const, @ref Matrix4::scaling() const

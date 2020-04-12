@@ -32,6 +32,7 @@
 #include "Magnum/Magnum.h"
 #include "Magnum/Math/Math.h"
 #include "Magnum/Animation/Track.h"
+#include "Magnum/Trade/Data.h"
 #include "Magnum/Trade/Trade.h"
 #include "Magnum/Trade/visibility.h"
 
@@ -64,8 +65,8 @@ enum class AnimationTrackType: UnsignedByte {
 
     /**
      * @ref Magnum::Vector3 "Vector3". Usually used for
-     * @ref AnimationTrackTarget::Translation3D and
-     * @ref AnimationTrackTarget::Scaling3D.
+     * @ref AnimationTrackTargetType::Translation3D and
+     * @ref AnimationTrackTargetType::Scaling3D.
      */
     Vector3,
 
@@ -227,24 +228,36 @@ class AnimationTrackData {
          * initialization of the track array for @ref AnimationData, expected
          * to be replaced with concrete values later.
          */
-        /*implicit*/ AnimationTrackData() noexcept: _type{}, _resultType{}, _targetType{}, _target{}, _view{} {}
+        explicit AnimationTrackData() noexcept: _type{}, _resultType{}, _targetType{}, _target{}, _view{} {}
 
         /**
-         * @brief Constructor
+         * @brief Type-erased constructor
          * @param type          Value type
          * @param resultType    Result type
          * @param targetType    Track target type
          * @param target        Track target
          * @param view          Type-erased @ref Animation::TrackView instance
          */
-        /*implicit*/ AnimationTrackData(AnimationTrackType type, AnimationTrackType resultType, AnimationTrackTargetType targetType, UnsignedInt target, Animation::TrackViewStorage<Float> view) noexcept: _type{type}, _resultType{resultType}, _targetType{targetType}, _target{target}, _view{view} {}
+        explicit AnimationTrackData(AnimationTrackType type, AnimationTrackType resultType, AnimationTrackTargetType targetType, UnsignedInt target, Animation::TrackViewStorage<const Float> view) noexcept: _type{type}, _resultType{resultType}, _targetType{targetType}, _target{target}, _view{view} {}
 
         /** @overload
          *
          * Equivalent to the above with @p type used as both value type and
          * result type.
          */
-        /*implicit*/ AnimationTrackData(AnimationTrackType type, AnimationTrackTargetType targetType, UnsignedInt target, Animation::TrackViewStorage<Float> view) noexcept: _type{type}, _resultType{type}, _targetType{targetType}, _target{target}, _view{view} {}
+        explicit AnimationTrackData(AnimationTrackType type, AnimationTrackTargetType targetType, UnsignedInt target, Animation::TrackViewStorage<const Float> view) noexcept: _type{type}, _resultType{type}, _targetType{targetType}, _target{target}, _view{view} {}
+
+        /**
+         * @brief Constructor
+         * @param targetType    Track target type
+         * @param target        Track target
+         * @param view          @ref Animation::TrackView instance
+         * @m_since_latest
+         *
+         * Detects @ref AnimationTrackType from @p view type and delegates to
+         * @ref AnimationTrackData(AnimationTrackType, AnimationTrackType, AnimationTrackTargetType, UnsignedInt, Animation::TrackViewStorage<const Float>).
+         */
+        template<class V, class R> explicit AnimationTrackData(AnimationTrackTargetType targetType, UnsignedInt target, Animation::TrackView<const Float, const V, R> view) noexcept;
 
     private:
         friend AnimationData;
@@ -252,7 +265,7 @@ class AnimationTrackData {
         AnimationTrackType _type, _resultType;
         AnimationTrackTargetType _targetType;
         UnsignedInt _target;
-        Animation::TrackViewStorage<Float> _view;
+        Animation::TrackViewStorage<const Float> _view;
 };
 
 /**
@@ -278,12 +291,26 @@ array is then updated during calls to @ref Animation::Player::advance().
 It's also possible to directly update object transformations using callbacks,
 among other things. See documentation of the @ref Animation::Player class for
 more information.
+
+@section Trade-AnimationData-usage-mutable Mutable data access
+
+The interfaces implicitly provide @cpp const @ce views on the contained
+keyframe data through the @ref data() and @ref track() accessors. This is done
+because in general case the data can also refer to a memory-mapped file or
+constant memory. In cases when it's desirable to modify the data in-place,
+there's the @ref mutableData() and @ref mutableTrack() set of functions. To use
+these, you need to check that the data are mutable using @ref dataFlags()
+first. The following snippet inverts the Y coordinate of a translation
+animation:
+
+@snippet MagnumTrade.cpp AnimationData-usage-mutable
+
 @experimental
 */
 class MAGNUM_TRADE_EXPORT AnimationData {
     public:
         /**
-         * @brief Construct with implicit duration
+         * @brief Construct an animation data
          * @param data          Buffer containing all keyframe data for this
          *      animation clip
          * @param tracks        Track data
@@ -292,11 +319,47 @@ class MAGNUM_TRADE_EXPORT AnimationData {
          * Each item of @p track should have an @ref Animation::TrackView
          * instance pointing its key/value views to @p data. The @ref duration()
          * is automatically calculated from durations of all tracks.
+         *
+         * The @ref dataFlags() are implicitly set to a combination of
+         * @ref DataFlag::Owned and @ref DataFlag::Mutable. For non-owned data
+         * use the @ref AnimationData(DataFlags,  Containers::ArrayView<const void>, Containers::Array<AnimationTrackData>&&, const void*)
+         * constructor instead.
          */
         explicit AnimationData(Containers::Array<char>&& data, Containers::Array<AnimationTrackData>&& tracks, const void* importerState = nullptr) noexcept;
 
         /**
-         * @brief Construct with explicit duration
+         * @overload
+         * @m_since_latest
+         */
+        /* Not noexcept because allocation happens inside */
+        explicit AnimationData(Containers::Array<char>&& data, std::initializer_list<AnimationTrackData> tracks, const void* importerState = nullptr);
+
+        /**
+         * @brief Construct a non-owned animation data
+         * @param dataFlags     Data flags
+         * @param data          View on a buffer containing all keyframe data
+         *      for this animation clip
+         * @param tracks        Track data
+         * @param importerState Importer-specific state
+         * @m_since_latest
+         *
+         * Compared to @ref AnimationData(Containers::Array<char>&&, Containers::Array<AnimationTrackData>&&, const void*)
+         * creates an instance that doesn't own the passed data. The
+         * @p dataFlags parameter can contain @ref DataFlag::Mutable to
+         * indicate the external data can be modified, and is expected to *not*
+         * have @ref DataFlag::Owned set.
+         */
+        explicit AnimationData(DataFlags dataFlags, Containers::ArrayView<const void> data, Containers::Array<AnimationTrackData>&& tracks, const void* importerState = nullptr) noexcept;
+
+        /**
+         * @overload
+         * @m_since_latest
+         */
+        /* Not noexcept because allocation happens inside */
+        explicit AnimationData(DataFlags dataFlags, Containers::ArrayView<const void> data, std::initializer_list<AnimationTrackData> tracks, const void* importerState = nullptr);
+
+        /**
+         * @brief Construct an animation data with explicit duration
          * @param data          Buffer containing all keyframe data for this
          *      animation clip
          * @param tracks        Track data
@@ -305,8 +368,45 @@ class MAGNUM_TRADE_EXPORT AnimationData {
          *
          * Each item of @p track should have an @ref Animation::TrackView
          * instance pointing its key/value views to @p data.
+         *
+         * The @ref dataFlags() are implicitly set to a combination of
+         * @ref DataFlag::Owned and @ref DataFlag::Mutable. For non-owned data
+         * use the @ref AnimationData(DataFlags,  Containers::ArrayView<const void>, Containers::Array<AnimationTrackData>&&, const Range1D&, const void*)
+         * constructor instead.
          */
         explicit AnimationData(Containers::Array<char>&& data, Containers::Array<AnimationTrackData>&& tracks, const Range1D& duration, const void* importerState = nullptr) noexcept;
+
+        /**
+         * @overload
+         * @m_since_latest
+         */
+        /* Not noexcept because allocation happens inside */
+        explicit AnimationData(Containers::Array<char>&& data, std::initializer_list<AnimationTrackData> tracks, const Range1D& duration, const void* importerState = nullptr);
+
+        /**
+         * @brief Construct a non-owned animation data with explicit duration
+         * @param dataFlags     Data flags
+         * @param data          View on a buffer containing all keyframe data
+         *      for this animation clip
+         * @param tracks        Track data
+         * @param duration      Animation track duration
+         * @param importerState Importer-specific state
+         * @m_since_latest
+         *
+         * Compared to @ref AnimationData(Containers::Array<char>&&, Containers::Array<AnimationTrackData>&&, const Range1D&, const void*)
+         * creates an instance that doesn't own the passed data. The
+         * @p dataFlags parameter can contain @ref DataFlag::Mutable to
+         * indicate the external data can be modified, and is expected to *not*
+         * have @ref DataFlag::Owned set.
+         */
+        explicit AnimationData(DataFlags dataFlags, Containers::ArrayView<const void> data, Containers::Array<AnimationTrackData>&& tracks, const Range1D& duration, const void* importerState = nullptr) noexcept;
+
+        /**
+         * @overload
+         * @m_since_latest
+         */
+        /* Not noexcept because allocation happens inside */
+        explicit AnimationData(DataFlags dataFlags, Containers::ArrayView<const void> data, std::initializer_list<AnimationTrackData> tracks, const Range1D& duration, const void* importerState = nullptr);
 
         ~AnimationData();
 
@@ -323,17 +423,39 @@ class MAGNUM_TRADE_EXPORT AnimationData {
         AnimationData& operator=(AnimationData&&) noexcept;
 
         /**
+         * @brief Data flags
+         * @m_since_latest
+         *
+         * @see @ref release(), @ref mutableData(), @ref mutableTrack()
+         */
+        DataFlags dataFlags() const { return _dataFlags; }
+
+        /**
          * @brief Raw data
          *
          * Contains data for all tracks contained in this clip.
-         * @see @ref release()
+         * @see @ref release(), @ref mutableData()
          */
-        Containers::ArrayView<char> data() & { return _data; }
-        Containers::ArrayView<char> data() && = delete; /**< @overload */
-
-        /** @overload */
         Containers::ArrayView<const char> data() const & { return _data; }
-        Containers::ArrayView<const char> data() const && = delete; /**< @overload */
+
+        /** @brief Taking a view to a r-value instance is not allowed */
+        Containers::ArrayView<const char> data() const && = delete;
+
+        /**
+         * @brief Mutable raw data
+         * @m_since_latest
+         *
+         * Like @ref data(), but returns a non-const view. Expects that the
+         * animation is mutable.
+         * @see @ref dataFlags()
+         */
+        Containers::ArrayView<char> mutableData() &;
+
+        /**
+         * @brief Taking a view to a r-value instance is not allowed
+         * @m_since_latest
+         */
+        Containers::ArrayView<char> mutableData() && = delete;
 
         /** @brief Duration */
         Range1D duration() const { return _duration; }
@@ -400,7 +522,17 @@ class MAGNUM_TRADE_EXPORT AnimationData {
          * checked version below to access a concrete @ref Animation::TrackView
          * type.
          */
-        const Animation::TrackViewStorage<Float>& track(UnsignedInt id) const;
+        const Animation::TrackViewStorage<const Float>& track(UnsignedInt id) const;
+
+        /**
+         * @brief Mutable track data storage
+         * @m_since_latest
+         *
+         * Like @ref track(), but returns a mutable view. Expects that the
+         * animation is mutable.
+         * @see @ref dataFlags()
+         */
+        const Animation::TrackViewStorage<Float>& mutableTrack(UnsignedInt id);
 
         /**
          * @brief Track data
@@ -414,16 +546,29 @@ class MAGNUM_TRADE_EXPORT AnimationData {
          * use the view or you need to release the data array using
          * @ref release() and manage its lifetime yourself.
          */
-        template<class V, class R = Animation::ResultOf<V>> const Animation::TrackView<Float, V, R>& track(UnsignedInt id) const;
+        template<class V, class R = Animation::ResultOf<V>> const Animation::TrackView<const Float, const V, R>& track(UnsignedInt id) const;
+
+        /**
+         * @brief Mutable track data
+         * @m_since_latest
+         *
+         * Like @ref track(), but returns a mutable view. Expects that the
+         * animation is mutable.
+         * @see @ref dataFlags()
+         */
+        template<class V, class R = Animation::ResultOf<V>> const Animation::TrackView<Float, V, R>& mutableTrack(UnsignedInt id);
 
         /**
          * @brief Release data storage
          *
          * Releases the ownership of the data array and resets internal state
-         * to default.
-         * @see @ref data()
+         * to default. The animation then behaves like it's empty. Note that
+         * the returned array has a custom no-op deleter when the data are not
+         * owned by the animation, and while the returned array type is
+         * mutable, the actual memory might be not.
+         * @see @ref data(), @ref dataFlags()
          */
-        Containers::Array<char> release() { return std::move(_data); }
+        Containers::Array<char> release();
 
         /**
          * @brief Importer-specific state
@@ -433,6 +578,12 @@ class MAGNUM_TRADE_EXPORT AnimationData {
         const void* importerState() const { return _importerState; }
 
     private:
+        /* For custom deleter checks. Not done in the constructors here because
+           the restriction is pointless when used outside of plugin
+           implementations. */
+        friend AbstractImporter;
+
+        DataFlags _dataFlags;
         Range1D _duration;
         Containers::Array<char> _data;
         Containers::Array<AnimationTrackData> _tracks;
@@ -500,10 +651,19 @@ namespace Implementation {
 }
 #endif
 
-template<class V, class R> const Animation::TrackView<Float, V, R>& AnimationData::track(UnsignedInt id) const {
-    const Animation::TrackViewStorage<Float>& storage = track(id);
-    CORRADE_ASSERT(Implementation::animationTypeFor<V>() == _tracks[id]._type, "Trade::AnimationData::track(): improper type requested for" << _tracks[id]._type, (static_cast<const Animation::TrackView<Float, V, R>&>(storage)));
-    CORRADE_ASSERT(Implementation::animationTypeFor<R>() == _tracks[id]._resultType, "Trade::AnimationData::track(): improper result type requested for" << _tracks[id]._resultType, (static_cast<const Animation::TrackView<Float, V, R>&>(storage)));
+template<class V, class R> inline AnimationTrackData::AnimationTrackData(AnimationTrackTargetType targetType, UnsignedInt target, Animation::TrackView<const Float, const V, R> view) noexcept: AnimationTrackData{Implementation::animationTypeFor<V>(), Implementation::animationTypeFor<R>(), targetType, target, view} {}
+
+template<class V, class R> const Animation::TrackView<const Float, const V, R>& AnimationData::track(UnsignedInt id) const {
+    const Animation::TrackViewStorage<const Float>& storage = track(id);
+    CORRADE_ASSERT(Implementation::animationTypeFor<V>() == _tracks[id]._type, "Trade::AnimationData::track(): improper type requested for" << _tracks[id]._type, (static_cast<const Animation::TrackView<const Float, const V, R>&>(storage)));
+    CORRADE_ASSERT(Implementation::animationTypeFor<R>() == _tracks[id]._resultType, "Trade::AnimationData::track(): improper result type requested for" << _tracks[id]._resultType, (static_cast<const Animation::TrackView<const Float, const V, R>&>(storage)));
+    return static_cast<const Animation::TrackView<const Float, const V, R>&>(storage);
+}
+
+template<class V, class R> const Animation::TrackView<Float, V, R>& AnimationData::mutableTrack(UnsignedInt id) {
+    const Animation::TrackViewStorage<Float>& storage = mutableTrack(id);
+    CORRADE_ASSERT(Implementation::animationTypeFor<V>() == _tracks[id]._type, "Trade::AnimationData::mutableTrack(): improper type requested for" << _tracks[id]._type, (static_cast<const Animation::TrackView<Float, V, R>&>(storage)));
+    CORRADE_ASSERT(Implementation::animationTypeFor<R>() == _tracks[id]._resultType, "Trade::AnimationData::mutableTrack(): improper result type requested for" << _tracks[id]._resultType, (static_cast<const Animation::TrackView<Float, V, R>&>(storage)));
     return static_cast<const Animation::TrackView<Float, V, R>&>(storage);
 }
 

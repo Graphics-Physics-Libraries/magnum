@@ -63,14 +63,14 @@ but these structs are better suited for compile-time decisions rather than
 usage.
 
 This library is built if `WITH_GL` is enabled when building Magnum. To use this
-library with CMake, you need to request the `GL` component of the `Magnum`
-package and link to the `Magnum::GL` target:
+library with CMake, request the `GL` component of the `Magnum` package and link
+to the `Magnum::GL` target:
 
 @code{.cmake}
 find_package(Magnum REQUIRED GL)
 
 # ...
-target_link_libraries(your-app Magnum::GL)
+target_link_libraries(your-app PRIVATE Magnum::GL)
 @endcode
 
 See @ref building, @ref cmake and @ref opengl for more information.
@@ -92,6 +92,7 @@ namespace AMD {
     _extension(  0,AMD,transform_feedback3_lines_triangles, GL210, None) // #397
     _extension(  1,AMD,vertex_shader_layer,             GL210,  None) // #417
     _extension(  2,AMD,shader_trinary_minmax,           GL210,  None) // #428
+    _extension(  3,AMD,shader_explicit_vertex_parameter, GL210, None) // #485
 } namespace ARB {
     _extension( 10,ARB,texture_rectangle,               GL210, GL310) // #38
     _extension( 11,ARB,color_buffer_float,              GL210, GL300) // #39
@@ -211,13 +212,14 @@ namespace AMD {
     _extension(125,ARB,sparse_buffer,                   GL210,  None) // #172
     _extension(126,ARB,transform_feedback_overflow_query, GL300, GL460) // #173
     _extension(127,ARB,ES3_2_compatibility,             GL450,  None) // #177
-    _extension(128,ARB,shader_atomic_counter_ops,       GL300, GL460) // #182
-    _extension(129,ARB,gl_spirv,                        GL330, GL460) // #190
-    _extension(130,ARB,polygon_offset_clamp,            GL330, GL460) // #193
-    _extension(131,ARB,spirv_extensions,                GL330, GL460) // #194
-    _extension(132,ARB,texture_filter_anisotropic,      GL210, GL460) // #195
+    _extension(128,ARB,sample_locations,                GL450,  None) // #181
+    _extension(129,ARB,shader_atomic_counter_ops,       GL300, GL460) // #182
+    _extension(130,ARB,gl_spirv,                        GL330, GL460) // #190
+    _extension(131,ARB,polygon_offset_clamp,            GL330, GL460) // #193
+    _extension(132,ARB,spirv_extensions,                GL330, GL460) // #194
+    _extension(133,ARB,texture_filter_anisotropic,      GL210, GL460) // #195
 } namespace ATI {
-    _extension(133,ATI,texture_mirror_once,             GL210,  None) // #221
+    _extension(134,ATI,texture_mirror_once,             GL210,  None) // #221
 } namespace EXT {
     _extension(139,EXT,texture_filter_anisotropic,      GL210,  None) // #187
     _extension(140,EXT,texture_compression_s3tc,        GL210,  None) // #198
@@ -257,8 +259,12 @@ namespace AMD {
     _extension(176,NV,depth_buffer_float,               GL210, GL300) // #334
     _extension(177,NV,conditional_render,               GL210, GL300) // #346
     /* NV_draw_texture not supported */                               // #430
+    _extension(178,NV,fragment_shader_barycentric,      GL450,  None) // #526
+} namespace OVR {
+    _extension(185,OVR,multiview,                       GL300,  None) // #478
+    _extension(186,OVR,multiview2,                      GL300,  None) // #479
 } namespace MAGNUM {
-    _extension(180,MAGNUM,shader_vertex_id,             GL300, GL300)
+    _extension(187,MAGNUM,shader_vertex_id,             GL300, GL300)
 }
 #elif defined(MAGNUM_TARGET_WEBGL)
 namespace ANGLE {
@@ -274,16 +280,24 @@ namespace ANGLE {
     _extension( 4,EXT,sRGB,                         GLES200, GLES300) // #17
     _extension( 5,EXT,blend_minmax,                 GLES200, GLES300) // #25
     #endif
+    #ifdef MAGNUM_TARGET_GLES2
+    /* Replaced by EXT_disjoint_timer_query_webgl2 in WebGL 2 */
     _extension( 6,EXT,disjoint_timer_query,         GLES200,    None) // #26
+    #endif
     #ifdef MAGNUM_TARGET_GLES2
     _extension( 7,EXT,shader_texture_lod,           GLES200, GLES300) // #27
     #endif
     #ifndef MAGNUM_TARGET_GLES2
     /* Replaces WEBGL_color_buffer_float from WebGL 1 */
     _extension( 8,EXT,color_buffer_float,           GLES300,    None) // #31
+    /* Replaces WEBGL_disjoint_timer_query from WebGL 1 */
+    _extension( 9,EXT,disjoint_timer_query_webgl2,  GLES300,    None) // #33
     #endif
-    _extension( 9,EXT,texture_compression_rgtc,     GLES200,    None) // #38
-    _extension(10,EXT,texture_compression_bptc,     GLES200,    None) // #39
+    _extension(10,EXT,texture_compression_rgtc,     GLES200,    None) // #38
+    _extension(11,EXT,texture_compression_bptc,     GLES200,    None) // #39
+    #ifndef MAGNUM_TARGET_GLES2
+    _extension(12,EXT,draw_buffers_indexed,         GLES300,    None) // #45
+    #endif
 } namespace OES {
     #ifdef MAGNUM_TARGET_GLES2
     _extension(15,OES,texture_float,                GLES200, GLES300) // #1
@@ -296,6 +310,10 @@ namespace ANGLE {
     #ifdef MAGNUM_TARGET_GLES2
     _extension(21,OES,texture_half_float_linear,    GLES200, GLES300) // #21
     _extension(22,OES,fbo_render_mipmap,            GLES200, GLES300) // #28
+    #endif
+} namespace OVR {
+    #ifndef MAGNUM_TARGET_GLES2
+    _extension(23,OVR,multiview2,                   GLES300,    None) // #36
     #endif
 } namespace WEBGL {
     _extension(25,WEBGL,compressed_texture_s3tc,    GLES200,    None) // #8
@@ -460,6 +478,9 @@ namespace ANDROID {
     _extension( 95,NV,shader_noperspective_interpolation, GLES300, None) // #201
     #endif
     _extension( 96,NV,polygon_mode,                 GLES200,    None) // #238
+    #ifndef MAGNUM_TARGET_GLES2
+    _extension( 97,NV,fragment_shader_barycentric,  GLES320,    None) // #316
+    #endif
 } namespace OES {
     #ifdef MAGNUM_TARGET_GLES2
     _extension(100,OES,depth24,                     GLES200, GLES300) // #24
@@ -493,14 +514,20 @@ namespace ANDROID {
     _extension(120,OES,surfaceless_context,         GLES200, GLES300) // #116
     #endif
     #ifndef MAGNUM_TARGET_GLES2
-    _extension(121,OES,sample_shading,              GLES300, GLES320) // #169
-    _extension(122,OES,sample_variables,            GLES300, GLES320) // #170
-    _extension(123,OES,shader_image_atomic,         GLES310, GLES320) // #171
-    _extension(124,OES,shader_multisample_interpolation, GLES300, GLES320) // #172
+    _extension(121,OES,texture_compression_astc,    GLES300,    None) // #162
+    _extension(122,OES,sample_shading,              GLES300, GLES320) // #169
+    _extension(123,OES,sample_variables,            GLES300, GLES320) // #170
+    _extension(124,OES,shader_image_atomic,         GLES310, GLES320) // #171
+    _extension(125,OES,shader_multisample_interpolation, GLES300, GLES320) // #172
     #endif
-    _extension(125,OES,texture_stencil8,            GLES200, GLES320) // #173
+    _extension(126,OES,texture_stencil8,            GLES200, GLES320) // #173
     #ifndef MAGNUM_TARGET_GLES2
-    _extension(126,OES,texture_storage_multisample_2d_array, GLES310, GLES320) // #174
+    _extension(127,OES,texture_storage_multisample_2d_array, GLES310, GLES320) // #174
+    #endif
+} namespace OVR {
+    #ifndef MAGNUM_TARGET_GLES2
+    _extension(128,OVR,multiview,                   GLES300,    None) // #241
+    _extension(129,OVR,multiview2,                  GLES300,    None) // #242
     #endif
 } namespace MAGNUM {
     #ifndef MAGNUM_TARGET_GLES2

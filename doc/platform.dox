@@ -171,10 +171,13 @@ following code listing.
 
 @note Fully contained application using with manual Magnum initialization on
     top of Qt toolkit is available in `base-qt` branch of
-    [Magnum Bootstrap](https://github.com/mosra/magnum-bootstrap) repository.
+    [Magnum Bootstrap](https://github.com/mosra/magnum-bootstrap/tree/base-qt)
+    repository. Similar project, but for wxWidgets and gtkmm are in the
+    [base-wxwidgets](https://github.com/mosra/magnum-bootstrap/tree/base-wxwidgets)
+    and [base-gtkmm](https://github.com/mosra/magnum-bootstrap/tree/base-gtkmm)
+    branches.
 @note
-    There's also an example showing @ref examples-triangle-plain-glfw "usage of
-    plain GLFW to render a basic triangle".
+    There's also an example showing @ref examples-triangle-plain-glfw "usage of plain GLFW to render a basic triangle".
 
 @snippet MagnumPlatform-custom.cpp custom
 

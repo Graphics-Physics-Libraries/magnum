@@ -68,7 +68,7 @@ Defined if built as static libraries. Default are shared libraries.
 
 #ifdef MAGNUM_BUILD_DEPRECATED
 /** @brief Multi-threaded build
- * @deprecated Use @ref CORRADE_BUILD_MULTITHREADED instead.
+ * @m_deprecated_since{2019,10} Use @ref CORRADE_BUILD_MULTITHREADED instead.
  */
 #define MAGNUM_BUILD_MULTITHREADED
 #undef MAGNUM_BUILD_MULTITHREADED
@@ -201,23 +201,11 @@ Equivalent to GLSL @glsl int @ce.
 */
 typedef std::int32_t Int;
 
-#ifndef CORRADE_TARGET_EMSCRIPTEN
-/**
-@brief Unsigned long (64bit)
-
-@partialsupport 64-bit integers are not available under
-    @ref CORRADE_TARGET_EMSCRIPTEN "Emscripten".
-*/
+/** @brief Unsigned long (64bit) */
 typedef std::uint64_t UnsignedLong;
 
-/**
-@brief Signed long (64bit)
-
-@partialsupport 64-bit integers are not available in
-    @ref CORRADE_TARGET_EMSCRIPTEN "Emscripten".
-*/
+/** @brief Signed long (64bit) */
 typedef std::int64_t Long;
-#endif
 
 /**
 @brief Float (32bit)
@@ -232,6 +220,7 @@ typedef Math::Half Half;
 
 /**
 @brief Two-component bool vector
+@m_since{2019,10}
 
 Equivalent to GLSL @glsl bvec2 @ce.
 @m_keyword{bvec2,GLSL bvec2,}
@@ -240,6 +229,7 @@ typedef Math::BoolVector<2> BoolVector2;
 
 /**
 @brief Three-component bool vector
+@m_since{2019,10}
 
 Equivalent to GLSL @glsl bvec3 @ce.
 @m_keyword{bvec3,GLSL bvec3,}
@@ -248,6 +238,7 @@ typedef Math::BoolVector<3> BoolVector3;
 
 /**
 @brief Four-component bool vector
+@m_since{2019,10}
 
 Equivalent to GLSL @glsl bvec4 @ce.
 @m_keyword{bvec4,GLSL bvec4,}
@@ -277,6 +268,78 @@ Equivalent to GLSL @glsl vec4 @ce.
 @m_keyword{vec4,GLSL vec4,}
 */
 typedef Math::Vector4<Float> Vector4;
+
+/**
+@brief Two-component unsigned byte vector
+@m_since_latest
+*/
+typedef Math::Vector2<UnsignedByte> Vector2ub;
+
+/**
+@brief Three-component unsigned byte vector
+@m_since_latest
+*/
+typedef Math::Vector3<UnsignedByte> Vector3ub;
+
+/**
+@brief Four-component unsigned byte vector
+@m_since_latest
+*/
+typedef Math::Vector4<UnsignedByte> Vector4ub;
+
+/**
+@brief Two-component signed byte vector
+@m_since_latest
+*/
+typedef Math::Vector2<Byte> Vector2b;
+
+/**
+@brief Three-component signed byte vector
+@m_since_latest
+*/
+typedef Math::Vector3<Byte> Vector3b;
+
+/**
+@brief Four-component signed byte vector
+@m_since_latest
+*/
+typedef Math::Vector4<Byte> Vector4b;
+
+/**
+@brief Two-component unsigned short vector
+@m_since_latest
+*/
+typedef Math::Vector2<UnsignedShort> Vector2us;
+
+/**
+@brief Three-component unsigned short vector
+@m_since_latest
+*/
+typedef Math::Vector3<UnsignedShort> Vector3us;
+
+/**
+@brief Four-component unsigned short vector
+@m_since_latest
+*/
+typedef Math::Vector4<UnsignedShort> Vector4us;
+
+/**
+@brief Two-component signed short vector
+@m_since_latest
+*/
+typedef Math::Vector2<Short> Vector2s;
+
+/**
+@brief Three-component signed short vector
+@m_since_latest
+*/
+typedef Math::Vector3<Short> Vector3s;
+
+/**
+@brief Four-component signed short vector
+@m_since_latest
+*/
+typedef Math::Vector4<Short> Vector4s;
 
 /**
 @brief Two-component unsigned integer vector
@@ -346,6 +409,12 @@ typedef Math::ColorHsv<Float> ColorHsv;
 typedef Math::Color3<UnsignedByte> Color3ub;
 
 /**
+@brief Three-component (RGB) unsigned short color
+@m_since_latest
+*/
+typedef Math::Color3<UnsignedShort> Color3us;
+
+/**
 @brief Four-component (RGBA) unsigned byte color
 
 @attention 8bit-per-channel colors are commonly treated as being in sRGB color
@@ -354,6 +423,12 @@ typedef Math::Color3<UnsignedByte> Color3ub;
     @ref Color4::toSrgbAlpha() for proper sRGB handling.
 */
 typedef Math::Color4<UnsignedByte> Color4ub;
+
+/**
+@brief Four-component (RGB) unsigned short color
+@m_since_latest
+*/
+typedef Math::Color4<UnsignedShort> Color4us;
 
 /**
 @brief 3x3 float transformation matrix
@@ -447,6 +522,222 @@ Equivalent to GLSL @glsl mat4x3 @ce.
 */
 typedef Math::Matrix4x3<Float> Matrix4x3;
 
+/**
+@brief Signed byte matrix with 2 columns and 2 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 8-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+
+Note that this type doesn't have the columns four-byte aligned, which may
+negatively affect performance in some cases. For better alignment use
+@ref Matrix2x4b and ignore the bottom two rows.
+*/
+typedef Math::Matrix2x2<Byte> Matrix2x2b;
+
+/**
+@brief Signed byte matrix with 2 columns and 3 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 8-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+
+Note that this type doesn't have the columns four-byte aligned, which may
+negatively affect performance in some cases. For better alignment use
+@ref Matrix2x4b and ignore the bottom row.
+*/
+typedef Math::Matrix2x3<Byte> Matrix2x3b;
+
+/**
+@brief Signed byte matrix with 2 columns and 4 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 8-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+*/
+typedef Math::Matrix2x4<Byte> Matrix2x4b;
+
+/**
+@brief Signed byte matrix with 3 columns and 2 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 8-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+
+Note that this type doesn't have the columns four-byte aligned, which may
+negatively affect performance in some cases. For better alignment use
+@ref Matrix3x4b and ignore the bottom two rows.
+*/
+typedef Math::Matrix3x2<Byte> Matrix3x2b;
+
+/**
+@brief Signed byte matrix with 3 columns and 3 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 8-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+
+Note that this type doesn't have the columns four-byte aligned, which may
+negatively affect performance in some cases. For better alignment use
+@ref Matrix3x4b and ignore the bottom row.
+*/
+typedef Math::Matrix3x3<Byte> Matrix3x3b;
+
+/**
+@brief Signed byte matrix with 3 columns and 4 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 8-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+*/
+typedef Math::Matrix3x4<Byte> Matrix3x4b;
+
+/**
+@brief Signed byte matrix with 4 columns and 2 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 8-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+
+Note that this type doesn't have the columns four-byte aligned, which may
+negatively affect performance in some cases. For better alignment use
+@ref Matrix4x4b and ignore the bottom two rows.
+*/
+typedef Math::Matrix4x2<Byte> Matrix4x2b;
+
+/**
+@brief Signed byte matrix with 4 columns and 3 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 8-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+
+Note that this type doesn't have the columns four-byte aligned, which may
+negatively affect performance in some cases. For better alignment use
+@ref Matrix4x4b and ignore the bottom row.
+*/
+typedef Math::Matrix4x3<Byte> Matrix4x3b;
+
+/**
+@brief Signed byte matrix with 4 columns and 4 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 8-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+*/
+typedef Math::Matrix4x4<Byte> Matrix4x4b;
+
+/**
+@brief Signed short matrix with 2 columns and 2 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 16-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+*/
+typedef Math::Matrix2x2<Short> Matrix2x2s;
+
+/**
+@brief Signed short matrix with 2 columns and 3 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 16-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+
+Note that this type doesn't have the columns four-byte aligned, which may
+negatively affect performance in some cases. For better alignment use
+@ref Matrix2x4s and ignore the bottom row.
+*/
+typedef Math::Matrix2x3<Short> Matrix2x3s;
+
+/**
+@brief Signed short matrix with 2 columns and 4 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 16-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+*/
+typedef Math::Matrix2x4<Short> Matrix2x4s;
+
+/**
+@brief Signed short matrix with 3 columns and 2 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 16-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+*/
+typedef Math::Matrix3x2<Short> Matrix3x2s;
+
+/**
+@brief Signed short matrix with 3 columns and 3 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 16-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+
+Note that this type doesn't have the columns four-byte aligned, which may
+negatively affect performance in some cases. For better alignment use
+@ref Matrix3x4s and ignore the bottom row.
+*/
+typedef Math::Matrix3x3<Short> Matrix3x3s;
+
+/**
+@brief Signed short matrix with 3 columns and 4 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 16-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+*/
+typedef Math::Matrix3x4<Short> Matrix3x4s;
+
+/**
+@brief Signed short matrix with 4 columns and 2 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 16-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+*/
+typedef Math::Matrix4x2<Short> Matrix4x2s;
+
+/**
+@brief Signed short matrix with 4 columns and 3 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 16-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+
+Note that this type doesn't have the columns four-byte aligned, which may
+negatively affect performance in some cases. For better alignment use
+@ref Matrix4x4s and ignore the bottom row.
+*/
+typedef Math::Matrix4x3<Short> Matrix4x3s;
+
+/**
+@brief Signed short matrix with 4 columns and 4 rows
+@m_since_latest
+
+Storage only, in ordet to support matrices packed into 16-bit types. For
+performing arithmetic on this type use @ref Math::unpack() / @ref Math::unpackInto() to convert to a float type first and then @ref Math::pack()
+/ @ref Math::packInto() back again.
+*/
+typedef Math::Matrix4x4<Short> Matrix4x4s;
+
 /** @brief Float two-dimensional quadratic Bézier curve */
 typedef Math::QuadraticBezier2D<Float> QuadraticBezier2D;
 
@@ -516,7 +807,121 @@ typedef Math::Range3D<Int> Range3Di;
 /** @brief Float frustum */
 typedef Math::Frustum<Float> Frustum;
 
-/*@}*/
+/* Since 1.8.17, the original short-hand group closing doesn't work anymore.
+   FFS. */
+/**
+ * @}
+ */
+
+/** @{ @name Half-precision types
+
+These types are for storage and conversion from / to single-precision types,
+no arithmetic operations are implemented. See @ref types for more information,
+for performing arithmetic on these types use @ref Math::unpackHalf() / @ref Math::unpackHalfInto() to convert to a 32-bit float type first and then
+@ref Math::packHalf() / @ref Math::packHalfInto() back again.
+*/
+
+/**
+@brief Two-component half-float vector
+@m_since_latest
+*/
+typedef Math::Vector2<Half> Vector2h;
+
+/**
+@brief Three-component half-float vector
+@m_since_latest
+*/
+typedef Math::Vector3<Half> Vector3h;
+
+/**
+@brief Four-component half-float vector
+@m_since_latest
+*/
+typedef Math::Vector4<Half> Vector4h;
+
+/**
+@brief Three-component (RGB) half-float color
+@m_since_latest
+*/
+typedef Math::Color3<Half> Color3h;
+
+/**
+@brief Four-component (RGBA) half-float color
+@m_since_latest
+*/
+typedef Math::Color4<Half> Color4h;
+
+/**
+@brief Half-float matrix with 2 columns and 2 rows
+@m_since_latest
+*/
+typedef Math::Matrix2x2<Half> Matrix2x2h;
+
+/**
+@brief Half-float matrix with 2 columns and 3 rows
+@m_since_latest
+
+Note that this type doesn't have the columns four-byte aligned, which may
+negatively affect performance in some cases. For better alignment use
+@ref Matrix2x4h and ignore the bottom row.
+*/
+typedef Math::Matrix2x3<Half> Matrix2x3h;
+
+/**
+@brief Half-float matrix with 2 columns and 4 rows
+@m_since_latest
+*/
+typedef Math::Matrix2x4<Half> Matrix2x4h;
+
+/**
+@brief Half-float matrix with 3 columns and 2 rows
+@m_since_latest
+*/
+typedef Math::Matrix3x2<Half> Matrix3x2h;
+
+/**
+@brief Half-float matrix with 3 columns and 3 rows
+@m_since_latest
+
+Note that this type doesn't have the columns four-byte aligned, which may
+negatively affect performance in some cases. For better alignment use
+@ref Matrix3x4h and ignore the bottom row.
+*/
+typedef Math::Matrix3x3<Half> Matrix3x3h;
+
+/**
+@brief Half-float matrix with 3 columns and 4 rows
+@m_since_latest
+*/
+typedef Math::Matrix3x4<Half> Matrix3x4h;
+
+/**
+@brief Half-float matrix with 4 columns and 2 rows
+@m_since_latest
+*/
+typedef Math::Matrix4x2<Half> Matrix4x2h;
+
+/**
+@brief Half-float matrix with 4 columns and 3 rows
+@m_since_latest
+
+Note that this type doesn't have the columns four-byte aligned, which may
+negatively affect performance in some cases. For better alignment use
+@ref Matrix4x4h and ignore the bottom row.
+*/
+typedef Math::Matrix4x3<Half> Matrix4x3h;
+
+/**
+@brief Half-float matrix with 4 columns and 4 rows
+@m_since_latest
+*/
+typedef Math::Matrix4x4<Half> Matrix4x4h;
+
+/* Since 1.8.17, the original short-hand group closing doesn't work anymore.
+   FFS. */
+/**
+ * @}
+ */
 
 /** @{ @name Double-precision types
 
@@ -707,7 +1112,11 @@ typedef Math::Range3D<Double> Range3Dd;
 /** @brief Double frustum */
 typedef Math::Frustum<Double> Frustumd;
 
-/*@}*/
+/* Since 1.8.17, the original short-hand group closing doesn't work anymore.
+   FFS. */
+/**
+ * @}
+ */
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
 template<UnsignedInt, class T> class Array;
@@ -748,7 +1157,8 @@ typedef BasicMutableCompressedImageView<2> MutableCompressedImageView2D;
 typedef BasicMutableCompressedImageView<3> MutableCompressedImageView3D;
 
 enum class MeshPrimitive: UnsignedInt;
-enum class MeshIndexType: UnsignedInt;
+enum class MeshIndexType: UnsignedByte;
+enum class VertexFormat: UnsignedInt;
 
 enum class PixelFormat: UnsignedInt;
 enum class CompressedPixelFormat: UnsignedInt;

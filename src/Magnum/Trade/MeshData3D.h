@@ -25,14 +25,24 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+#ifdef MAGNUM_BUILD_DEPRECATED
 /** @file
  * @brief Class @ref Magnum::Trade::MeshData3D
+ * @m_deprecated_since_latest Use @ref Magnum/Trade/MeshData.h and the
+ *      @ref Magnum::Trade::MeshData "MeshData" class instead.
  */
+#endif
 
+#include "Magnum/configure.h"
+
+#ifdef MAGNUM_BUILD_DEPRECATED
 #include <vector>
 
-#include "Magnum/Magnum.h"
-#include "Magnum/Trade/visibility.h"
+#include "Magnum/Trade/MeshData.h"
+
+#ifndef _MAGNUM_NO_DEPRECATED_MESHDATA
+CORRADE_DEPRECATED_FILE("use Magnum/Trade/MeshData.h and the MeshData class instead")
+#endif
 
 namespace Magnum { namespace Trade {
 
@@ -49,9 +59,11 @@ to positions and normals:
 
 @snippet MagnumTrade.cpp MeshData3D-transform
 
+@m_deprecated_since_latest Use @ref MeshData instead.
+
 @see @ref AbstractImporter::mesh3D(), @ref MeshData2D
 */
-class MAGNUM_TRADE_EXPORT MeshData3D {
+class CORRADE_DEPRECATED("use MeshData instead") MAGNUM_TRADE_EXPORT MeshData3D {
     public:
         /**
          * @brief Constructor
@@ -67,6 +79,16 @@ class MAGNUM_TRADE_EXPORT MeshData3D {
          * @param importerState     Importer-specific state
          */
         explicit MeshData3D(MeshPrimitive primitive, std::vector<UnsignedInt> indices, std::vector<std::vector<Vector3>> positions, std::vector<std::vector<Vector3>> normals, std::vector<std::vector<Vector2>> textureCoords2D, std::vector<std::vector<Color4>> colors, const void* importerState = nullptr);
+
+        #ifdef MAGNUM_BUILD_DEPRECATED
+        /**
+         * @brief Construct from @ref MeshData
+         * @m_deprecated_since_latest Use @ref MeshData directly instead.
+         */
+        /* No data moving can take place because std::vector is damn shitty
+           regarding memory ownership transfer, so it can well be a copy. */
+        CORRADE_DEPRECATED("use MeshData directly instead") /*implicit*/ MeshData3D(const MeshData& other);
+        #endif
 
         /** @brief Copying is not allowed */
         MeshData3D(const MeshData3D&) = delete;
@@ -189,5 +211,8 @@ class MAGNUM_TRADE_EXPORT MeshData3D {
 };
 
 }}
+#else
+#error use Magnum/Trade/MeshData.h and the MeshData class instead
+#endif
 
 #endif

@@ -156,7 +156,7 @@ void AbstractTexture::unbind(const Int firstTextureUnit, const std::size_t count
 }
 
 /** @todoc const std::initializer_list makes Doxygen grumpy */
-void AbstractTexture::bind(const Int firstTextureUnit, std::initializer_list<AbstractTexture*> textures) {
+void AbstractTexture::bind(const Int firstTextureUnit, Containers::ArrayView<AbstractTexture* const> textures) {
     /* State tracker is updated in the implementations */
     Context::current().state().texture->bindMultiImplementation(firstTextureUnit, {textures.begin(), textures.size()});
 }
@@ -289,7 +289,7 @@ void AbstractTexture::unbindImage(const Int imageUnit) {
 
 #ifndef MAGNUM_TARGET_GLES
 /** @todoc const Containers::ArrayView makes Doxygen grumpy */
-void AbstractTexture::bindImagesInternal(const Int firstImageUnit, Containers::ArrayView<AbstractTexture* const> textures) {
+void AbstractTexture::bindImages(const Int firstImageUnit, Containers::ArrayView<AbstractTexture* const> textures) {
     Implementation::TextureState& textureState = *Context::current().state().texture;
 
     /* Create array of IDs and also update bindings in state tracker */
@@ -660,7 +660,7 @@ PixelFormat pixelFormatForInternalFormat(const TextureFormat internalFormat) {
         case TextureFormat::RGB32F:
         #endif
         #ifndef MAGNUM_TARGET_GLES
-        case TextureFormat::R3B3G2:
+        case TextureFormat::R3G3B2:
         case TextureFormat::RGB4:
         case TextureFormat::RGB5:
         #endif
@@ -821,6 +821,12 @@ PixelFormat pixelFormatForInternalFormat(const TextureFormat internalFormat) {
             return PixelFormat::SRGBAlpha;
             #endif
 
+        #if defined(MAGNUM_TARGET_GLES) && !defined(MAGNUM_TARGET_WEBGL)
+        case TextureFormat::BGRA:
+        case TextureFormat::BGRA8:
+            return PixelFormat::BGRA;
+        #endif
+
         #ifndef MAGNUM_TARGET_GLES2
         case TextureFormat::RGBA8UI:
         case TextureFormat::RGBA8I:
@@ -919,6 +925,12 @@ PixelType pixelTypeForInternalFormat(const TextureFormat internalFormat) {
         #endif
         #ifndef MAGNUM_TARGET_GLES
         case TextureFormat::RGBA2: /**< @todo really? */
+        #endif
+        #if defined(MAGNUM_TARGET_GLES) && !defined(MAGNUM_TARGET_WEBGL)
+        case TextureFormat::BGRA:
+        case TextureFormat::BGRA8:
+        #endif
+        #ifndef MAGNUM_TARGET_GLES
         case TextureFormat::CompressedRed:
         case TextureFormat::CompressedRG:
         case TextureFormat::CompressedRGB:
@@ -1063,7 +1075,7 @@ PixelType pixelTypeForInternalFormat(const TextureFormat internalFormat) {
         case TextureFormat::RG16F:
         case TextureFormat::RGB16F:
         case TextureFormat::RGBA16F:
-            return PixelType::HalfFloat;
+            return PixelType::Half;
 
         case TextureFormat::R32UI:
         case TextureFormat::RG32UI:
@@ -1091,7 +1103,7 @@ PixelType pixelTypeForInternalFormat(const TextureFormat internalFormat) {
         #endif
 
         #ifndef MAGNUM_TARGET_GLES
-        case TextureFormat::R3B3G2:
+        case TextureFormat::R3G3B2:
             return PixelType::UnsignedByte332;
         case TextureFormat::RGB4:
             return PixelType::UnsignedShort4444;

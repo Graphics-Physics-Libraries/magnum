@@ -164,6 +164,8 @@ class MAGNUM_GL_EXPORT CubeMapTexture: public AbstractTexture {
          *
          * This function can be safely used for constructing (and later
          * destructing) objects even without any OpenGL context being active.
+         * However note that this is a low-level and a potentially dangerous
+         * API, see the documentation of @ref NoCreate for alternatives.
          * @see @ref CubeMapTexture(), @ref wrap()
          */
         explicit CubeMapTexture(NoCreateT) noexcept: AbstractTexture{NoCreate, GL_TEXTURE_CUBE_MAP} {}
@@ -436,7 +438,7 @@ class MAGNUM_GL_EXPORT CubeMapTexture: public AbstractTexture {
 
         #ifdef MAGNUM_BUILD_DEPRECATED
         /** @brief @copybrief setSrgbDecode()
-         * @deprecated Use @ref setSrgbDecode() instead.
+         * @m_deprecated_since{2018,10} Use @ref setSrgbDecode() instead.
          */
         CORRADE_DEPRECATED("use setSrgbDecode() instead") CubeMapTexture& setSRGBDecode(bool decode) {
             return setSrgbDecode(decode);
@@ -527,7 +529,7 @@ class MAGNUM_GL_EXPORT CubeMapTexture: public AbstractTexture {
          *
          * If @gl_extension{ARB,direct_state_access} (part of OpenGL 4.5) is not
          * available, it is assumed that faces have the same size and just the
-         * size of @ref Coordinate::PositiveX face is queried. See
+         * size of @ref CubeMapCoordinate::PositiveX face is queried. See
          * @ref Texture::imageSize() for more information.
          * @requires_gles31 Texture image size queries are not available in
          *      OpenGL ES 3.0 and older.
@@ -692,6 +694,7 @@ class MAGNUM_GL_EXPORT CubeMapTexture: public AbstractTexture {
 
         /**
          * @brief Read given texture mip level and coordinate to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref image(CubeMapCoordinate, Int, Image2D&) the
          * function reads the pixels into the memory provided by @p image,
@@ -758,6 +761,7 @@ class MAGNUM_GL_EXPORT CubeMapTexture: public AbstractTexture {
 
         /**
          * @brief Read given compressed texture mip level to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref compressedImage(CubeMapCoordinate, Int, CompressedImage2D&)
          * the function reads the pixels into the memory provided by @p image,
@@ -813,6 +817,7 @@ class MAGNUM_GL_EXPORT CubeMapTexture: public AbstractTexture {
 
         /**
          * @brief Read a range of given texture mip level to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref subImage(Int, const Range3Di&, Image3D&) the
          * function reads the pixels into the memory provided by @p image,
@@ -873,6 +878,7 @@ class MAGNUM_GL_EXPORT CubeMapTexture: public AbstractTexture {
 
         /**
          * @brief Read a range of given compressed texture mip level to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref compressedSubImage(Int, const Range3Di&, CompressedImage3D&)
          * the function reads the pixels into the memory provided by @p image,
@@ -1173,8 +1179,8 @@ class MAGNUM_GL_EXPORT CubeMapTexture: public AbstractTexture {
          * @brief @copybrief Texture::invalidateSubImage()
          *
          * Z coordinate is equivalent to number of texture face, i.e.
-         * @ref Coordinate::PositiveX is `0` and so on, in the same order as in
-         * the enum.
+         * @ref CubeMapCoordinate::PositiveX is `0` and so on, in the same
+         * order as in the enum.
          *
          * See @ref Texture::invalidateSubImage() for more information.
          */
@@ -1212,6 +1218,10 @@ class MAGNUM_GL_EXPORT CubeMapTexture: public AbstractTexture {
         #endif
 
         #ifndef MAGNUM_TARGET_GLES
+        void MAGNUM_GL_LOCAL getImageImplementationDSA(GLint level, const Vector3i& size, PixelFormat format, PixelType type, std::size_t dataSize, GLvoid* data, const PixelStorage& storage);
+        void MAGNUM_GL_LOCAL getImageImplementationDSAAmdSliceBySlice(GLint level, const Vector3i& size, PixelFormat format, PixelType type, std::size_t dataSize, GLvoid* data, const PixelStorage& storage);
+        void MAGNUM_GL_LOCAL getImageImplementationSliceBySlice(GLint level, const Vector3i& size, PixelFormat format, PixelType type, std::size_t dataSize, GLvoid* data, const PixelStorage& storage);
+
         void MAGNUM_GL_LOCAL getCompressedImageImplementationDSA(GLint level, const Vector2i& size, std::size_t dataOffset, std::size_t dataSize, GLvoid* data);
         void MAGNUM_GL_LOCAL getCompressedImageImplementationDSASingleSliceWorkaround(GLint level, const Vector2i& size, std::size_t dataOffset, std::size_t dataSize, GLvoid* data);
 
@@ -1224,9 +1234,10 @@ class MAGNUM_GL_EXPORT CubeMapTexture: public AbstractTexture {
         void MAGNUM_GL_LOCAL getCompressedImageImplementationRobustness(CubeMapCoordinate coordinate, GLint level, const Vector2i& size, std::size_t dataSize, GLvoid* data);
         #endif
 
-        void MAGNUM_GL_LOCAL subImageImplementationDefault(GLint level, const Vector3i& offset, const Vector3i& size, PixelFormat format, PixelType type, const GLvoid* data, const PixelStorage&);
-        #ifndef MAGNUM_TARGET_WEBGL
-        void MAGNUM_GL_LOCAL subImageImplementationSvga3DSliceBySlice(GLint level, const Vector3i& offset, const Vector3i& size, PixelFormat format, PixelType type, const GLvoid* data, const PixelStorage&);
+        #ifndef MAGNUM_TARGET_GLES
+        void MAGNUM_GL_LOCAL subImageImplementationDSA(GLint level, const Vector3i& offset, const Vector3i& size, PixelFormat format, PixelType type, const GLvoid* data, const PixelStorage&);
+        void MAGNUM_GL_LOCAL subImageImplementationDSASliceBySlice(GLint level, const Vector3i& offset, const Vector3i& size, PixelFormat format, PixelType type, const GLvoid* data, const PixelStorage&);
+        void MAGNUM_GL_LOCAL subImageImplementationSliceBySlice(GLint level, const Vector3i& offset, const Vector3i& size, PixelFormat format, PixelType type, const GLvoid* data, const PixelStorage&);
         #endif
 
         void MAGNUM_GL_LOCAL subImageImplementationDefault(CubeMapCoordinate coordinate, GLint level, const Vector2i& offset, const Vector2i& size, PixelFormat format, PixelType type, const GLvoid* data);

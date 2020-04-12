@@ -49,25 +49,28 @@ std::string AbstractFont::pluginInterface() {
 #ifndef CORRADE_PLUGINMANAGER_NO_DYNAMIC_PLUGIN_SUPPORT
 std::vector<std::string> AbstractFont::pluginSearchPaths() {
     return {
+        /* Debug build */
         #ifdef CORRADE_IS_DEBUG_BUILD
-        #if defined(CORRADE_TARGET_WINDOWS) && !defined(MAGNUM_BUILD_STATIC)
-        Utility::Directory::join(Utility::Directory::path(Utility::Directory::dllLocation(
-            #ifdef __MINGW32__
-            "lib"
-            #endif
-            "MagnumText-d")), "magnum-d/fonts"),
+        #ifndef MAGNUM_BUILD_STATIC
+        Utility::Directory::join(Utility::Directory::path(Utility::Directory::libraryLocation(&pluginInterface)), "magnum-d/fonts"),
         #else
+        #ifndef CORRADE_TARGET_WINDOWS
+        /* On Windows, the plugin DLLs are next to the executable, so the one
+           below works. Elsewhere the plugins are in the lib dir instead */
+        "../lib/magnum-d/fonts",
+        #endif
         "magnum-d/fonts",
         #endif
         Utility::Directory::join(MAGNUM_PLUGINS_DEBUG_DIR, "fonts")
+
+        /* Release build */
         #else
-        #if defined(CORRADE_TARGET_WINDOWS) && !defined(MAGNUM_BUILD_STATIC)
-        Utility::Directory::join(Utility::Directory::path(Utility::Directory::dllLocation(
-            #ifdef __MINGW32__
-            "lib"
-            #endif
-            "MagnumText")), "magnum/fonts"),
+        #ifndef MAGNUM_BUILD_STATIC
+        Utility::Directory::join(Utility::Directory::path(Utility::Directory::libraryLocation(&pluginInterface)), "magnum/fonts"),
         #else
+        #ifndef CORRADE_TARGET_WINDOWS
+        "../lib/magnum/fonts",
+        #endif
         "magnum/fonts",
         #endif
         Utility::Directory::join(MAGNUM_PLUGINS_DIR, "fonts")
@@ -82,7 +85,7 @@ AbstractFont::AbstractFont(PluginManager::AbstractManager& manager, const std::s
 
 void AbstractFont::setFileCallback(Containers::Optional<Containers::ArrayView<const char>>(*callback)(const std::string&, InputFileCallbackPolicy, void*), void* const userData) {
     CORRADE_ASSERT(!isOpened(), "Text::AbstractFont::setFileCallback(): can't be set while a font is opened", );
-    CORRADE_ASSERT(features() & (Feature::FileCallback|Feature::OpenData), "Text::AbstractFont::setFileCallback(): font plugin supports neither loading from data nor via callbacks, callbacks can't be used", );
+    CORRADE_ASSERT(features() & (FontFeature::FileCallback|FontFeature::OpenData), "Text::AbstractFont::setFileCallback(): font plugin supports neither loading from data nor via callbacks, callbacks can't be used", );
 
     _fileCallback = callback;
     _fileCallbackUserData = userData;
@@ -92,7 +95,7 @@ void AbstractFont::setFileCallback(Containers::Optional<Containers::ArrayView<co
 void AbstractFont::doSetFileCallback(Containers::Optional<Containers::ArrayView<const char>>(*)(const std::string&, InputFileCallbackPolicy, void*), void*) {}
 
 bool AbstractFont::openData(Containers::ArrayView<const char> data, const Float size) {
-    CORRADE_ASSERT(features() & Feature::OpenData,
+    CORRADE_ASSERT(features() & FontFeature::OpenData,
         "Text::AbstractFont::openData(): feature not supported", false);
 
     /* We accept empty data here (instead of checking for them and failing so
@@ -136,13 +139,13 @@ bool AbstractFont::openFile(const std::string& filename, const Float size) {
 
     /* If file loading callbacks are not set or the font implementation
        supports handling them directly, call into the implementation */
-    if(!_fileCallback || (doFeatures() & Feature::FileCallback)) {
+    if(!_fileCallback || (doFeatures() & FontFeature::FileCallback)) {
         metrics = doOpenFile(filename, size);
 
     /* Otherwise, if loading from data is supported, use the callback and pass
        the data through to openData(). Mark the file as ready to be closed once
        opening is finished. */
-    } else if(doFeatures() & Feature::OpenData) {
+    } else if(doFeatures() & FontFeature::OpenData) {
         /* This needs to be duplicated here and in the doOpenFile()
            implementation in order to support both following cases:
             - plugins that don't support FileCallback but have their own
@@ -173,7 +176,7 @@ bool AbstractFont::openFile(const std::string& filename, const Float size) {
 }
 
 auto AbstractFont::doOpenFile(const std::string& filename, const Float size) -> Metrics {
-    CORRADE_ASSERT(features() & Feature::OpenData, "Text::AbstractFont::openFile(): not implemented", {});
+    CORRADE_ASSERT(features() & FontFeature::OpenData, "Text::AbstractFont::openFile(): not implemented", {});
 
     Metrics metrics;
 
@@ -245,7 +248,7 @@ Vector2 AbstractFont::glyphAdvance(const UnsignedInt glyph) {
 void AbstractFont::fillGlyphCache(AbstractGlyphCache& cache, const std::string& characters) {
     CORRADE_ASSERT(isOpened(),
         "Text::AbstractFont::fillGlyphCache(): no font opened", );
-    CORRADE_ASSERT(!(features() & Feature::PreparedGlyphCache),
+    CORRADE_ASSERT(!(features() & FontFeature::PreparedGlyphCache),
         "Text::AbstractFont::fillGlyphCache(): feature not supported", );
 
     doFillGlyphCache(cache, Utility::Unicode::utf32(characters));
@@ -258,7 +261,7 @@ void AbstractFont::doFillGlyphCache(AbstractGlyphCache&, const std::u32string&) 
 Containers::Pointer<AbstractGlyphCache> AbstractFont::createGlyphCache() {
     CORRADE_ASSERT(isOpened(),
         "Text::AbstractFont::createGlyphCache(): no font opened", nullptr);
-    CORRADE_ASSERT(features() & Feature::PreparedGlyphCache,
+    CORRADE_ASSERT(features() & FontFeature::PreparedGlyphCache,
         "Text::AbstractFont::createGlyphCache(): feature not supported", nullptr);
 
     return doCreateGlyphCache();
@@ -275,10 +278,12 @@ Containers::Pointer<AbstractLayouter> AbstractFont::layout(const AbstractGlyphCa
     return doLayout(cache, size, text);
 }
 
-Debug& operator<<(Debug& debug, const AbstractFont::Feature value) {
+Debug& operator<<(Debug& debug, const FontFeature value) {
+    debug << "Text::FontFeature" << Debug::nospace;
+
     switch(value) {
         /* LCOV_EXCL_START */
-        #define _c(v) case AbstractFont::Feature::v: return debug << "Text::AbstractFont::Feature::" #v;
+        #define _c(v) case FontFeature::v: return debug << "::" #v;
         _c(OpenData)
         _c(FileCallback)
         _c(PreparedGlyphCache)
@@ -286,14 +291,14 @@ Debug& operator<<(Debug& debug, const AbstractFont::Feature value) {
         /* LCOV_EXCL_STOP */
     }
 
-    return debug << "Text::AbstractFont::Feature(" << Debug::nospace << reinterpret_cast<void*>(UnsignedByte(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(UnsignedByte(value)) << Debug::nospace << ")";
 }
 
-Debug& operator<<(Debug& debug, const AbstractFont::Features value) {
-    return Containers::enumSetDebugOutput(debug, value, "Text::AbstractFont::Features{}", {
-        AbstractFont::Feature::OpenData,
-        AbstractFont::Feature::FileCallback,
-        AbstractFont::Feature::PreparedGlyphCache});
+Debug& operator<<(Debug& debug, const FontFeatures value) {
+    return Containers::enumSetDebugOutput(debug, value, "Text::FontFeatures{}", {
+        FontFeature::OpenData,
+        FontFeature::FileCallback,
+        FontFeature::PreparedGlyphCache});
 }
 
 AbstractLayouter::AbstractLayouter(UnsignedInt glyphCount): _glyphCount(glyphCount) {}

@@ -27,10 +27,9 @@
 #include <Corrade/TestSuite/Compare/Container.h>
 
 #include "Magnum/Mesh.h"
-#include "Magnum/Math/Vector3.h"
+#include "Magnum/Math/Vector4.h"
 #include "Magnum/Primitives/Circle.h"
-#include "Magnum/Trade/MeshData2D.h"
-#include "Magnum/Trade/MeshData3D.h"
+#include "Magnum/Trade/MeshData.h"
 
 namespace Magnum { namespace Primitives { namespace Test { namespace {
 
@@ -38,32 +37,50 @@ struct CircleTest: TestSuite::Tester {
     explicit CircleTest();
 
     void solid2D();
-    void solid2DTextureCoords();
-
     void solid3D();
-    void solid3DTextureCoords();
 
     void wireframe2D();
     void wireframe3D();
 };
 
+constexpr struct {
+    const char* name;
+    Circle2DFlags flags;
+} Solid2DData[] {
+    {"", Circle2DFlags{}},
+    {"texture coordinates", Circle2DFlag::TextureCoordinates}
+};
+
+constexpr struct {
+    const char* name;
+    Circle3DFlags flags;
+} Solid3DData[] {
+    {"", Circle3DFlags{}},
+    {"texture coordinates", Circle3DFlag::TextureCoordinates},
+    {"tangents", Circle3DFlag::Tangents},
+    {"both", Circle3DFlag::TextureCoordinates|Circle3DFlag::Tangents}
+};
+
 CircleTest::CircleTest() {
-    addTests({&CircleTest::solid2D,
-              &CircleTest::solid2DTextureCoords,
+    addInstancedTests({&CircleTest::solid2D},
+        Containers::arraySize(Solid2DData));
 
-              &CircleTest::solid3D,
-              &CircleTest::solid3DTextureCoords,
+    addInstancedTests({&CircleTest::solid3D},
+        Containers::arraySize(Solid3DData));
 
-              &CircleTest::wireframe2D,
+    addTests({&CircleTest::wireframe2D,
               &CircleTest::wireframe3D});
 }
 
 void CircleTest::solid2D() {
-    Trade::MeshData2D circle = Primitives::circle2DSolid(8);
+    auto&& data = Solid2DData[testCaseInstanceId()];
+    setTestCaseDescription(data.name);
 
-    CORRADE_VERIFY(!circle.isIndexed());
+    Trade::MeshData circle = Primitives::circle2DSolid(8, data.flags);
+
     CORRADE_COMPARE(circle.primitive(), MeshPrimitive::TriangleFan);
-    CORRADE_COMPARE_AS(circle.positions(0), (std::vector<Vector2>{
+    CORRADE_VERIFY(!circle.isIndexed());
+    CORRADE_COMPARE_AS(circle.attribute<Vector2>(Trade::MeshAttribute::Position), Containers::arrayView<Vector2>({
         { 0.0f,  0.0f},
         { 1.0f,  0.0f}, { Constants::sqrt2()/2.0f,  Constants::sqrt2()/2.0f},
         { 0.0f,  1.0f}, {-Constants::sqrt2()/2.0f,  Constants::sqrt2()/2.0f},
@@ -71,39 +88,28 @@ void CircleTest::solid2D() {
         { 0.0f, -1.0f}, { Constants::sqrt2()/2.0f, -Constants::sqrt2()/2.0f},
         { 1.0f,  0.0f}
     }), TestSuite::Compare::Container);
-    CORRADE_COMPARE(circle.textureCoords2DArrayCount(), 0);
-}
 
-void CircleTest::solid2DTextureCoords() {
-    Trade::MeshData2D circle = Primitives::circle2DSolid(8, Primitives::CircleTextureCoords::Generate);
-
-    CORRADE_VERIFY(!circle.isIndexed());
-    CORRADE_COMPARE(circle.primitive(), MeshPrimitive::TriangleFan);
-    CORRADE_COMPARE_AS(circle.positions(0), (std::vector<Vector2>{
-        { 0.0f,  0.0f},
-        { 1.0f,  0.0f}, { Constants::sqrt2()/2.0f,  Constants::sqrt2()/2.0f},
-        { 0.0f,  1.0f}, {-Constants::sqrt2()/2.0f,  Constants::sqrt2()/2.0f},
-        {-1.0f,  0.0f}, {-Constants::sqrt2()/2.0f, -Constants::sqrt2()/2.0f},
-        { 0.0f, -1.0f}, { Constants::sqrt2()/2.0f, -Constants::sqrt2()/2.0f},
-        { 1.0f,  0.0f}
-    }), TestSuite::Compare::Container);
-    CORRADE_COMPARE(circle.textureCoords2DArrayCount(), 1);
-    CORRADE_COMPARE_AS(circle.textureCoords2D(0), (std::vector<Vector2>{
-        {0.5f, 0.5f},
-        {1.0f, 0.5f}, {0.5f + Constants::sqrt2()/4.0f, 0.5f + Constants::sqrt2()/4.0f},
-        {0.5f, 1.0f}, {0.5f - Constants::sqrt2()/4.0f, 0.5f + Constants::sqrt2()/4.0f},
-        {0.0f, 0.5f}, {0.5f - Constants::sqrt2()/4.0f, 0.5f - Constants::sqrt2()/4.0f},
-        {0.5f, 0.0f}, {0.5f + Constants::sqrt2()/4.0f, 0.5f - Constants::sqrt2()/4.0f},
-        {1.0f, 0.5f}
-    }), TestSuite::Compare::Container);
+    if(data.flags & Circle2DFlag::TextureCoordinates) {
+        CORRADE_COMPARE_AS(circle.attribute<Vector2>(Trade::MeshAttribute::TextureCoordinates), Containers::arrayView<Vector2>({
+            {0.5f, 0.5f},
+            {1.0f, 0.5f}, {0.5f + Constants::sqrt2()/4.0f, 0.5f + Constants::sqrt2()/4.0f},
+            {0.5f, 1.0f}, {0.5f - Constants::sqrt2()/4.0f, 0.5f + Constants::sqrt2()/4.0f},
+            {0.0f, 0.5f}, {0.5f - Constants::sqrt2()/4.0f, 0.5f - Constants::sqrt2()/4.0f},
+            {0.5f, 0.0f}, {0.5f + Constants::sqrt2()/4.0f, 0.5f - Constants::sqrt2()/4.0f},
+            {1.0f, 0.5f}
+        }), TestSuite::Compare::Container);
+    } else CORRADE_VERIFY(!circle.hasAttribute(Trade::MeshAttribute::TextureCoordinates));
 }
 
 void CircleTest::solid3D() {
-    Trade::MeshData3D circle = Primitives::circle3DSolid(8);
+    auto&& data = Solid3DData[testCaseInstanceId()];
+    setTestCaseDescription(data.name);
 
-    CORRADE_VERIFY(!circle.isIndexed());
+    Trade::MeshData circle = Primitives::circle3DSolid(8, data.flags);
+
     CORRADE_COMPARE(circle.primitive(), MeshPrimitive::TriangleFan);
-    CORRADE_COMPARE_AS(circle.positions(0), (std::vector<Vector3>{
+    CORRADE_VERIFY(!circle.isIndexed());
+    CORRADE_COMPARE_AS(circle.attribute<Vector3>(Trade::MeshAttribute::Position), Containers::arrayView<Vector3>({
         { 0.0f,  0.0f, 0.0f},
         { 1.0f,  0.0f, 0.0f}, { Constants::sqrt2()/2.0f,  Constants::sqrt2()/2.0f, 0.0f},
         { 0.0f,  1.0f, 0.0f}, {-Constants::sqrt2()/2.0f,  Constants::sqrt2()/2.0f, 0.0f},
@@ -111,7 +117,23 @@ void CircleTest::solid3D() {
         { 0.0f, -1.0f, 0.0f}, { Constants::sqrt2()/2.0f, -Constants::sqrt2()/2.0f, 0.0f},
         { 1.0f,  0.0f, 0.0f}
     }), TestSuite::Compare::Container);
-    CORRADE_COMPARE_AS(circle.normals(0), (std::vector<Vector3>{
+
+    if(data.flags & Circle3DFlag::Tangents) {
+        CORRADE_COMPARE_AS(circle.attribute<Vector4>(Trade::MeshAttribute::Tangent), Containers::arrayView<Vector4>({
+            {1.0f,  0.0f, 0.0f, 1.0f},
+            {1.0f,  0.0f, 0.0f, 1.0f},
+            {1.0f,  0.0f, 0.0f, 1.0f},
+            {1.0f,  0.0f, 0.0f, 1.0f},
+            {1.0f,  0.0f, 0.0f, 1.0f},
+            {1.0f,  0.0f, 0.0f, 1.0f},
+            {1.0f,  0.0f, 0.0f, 1.0f},
+            {1.0f,  0.0f, 0.0f, 1.0f},
+            {1.0f,  0.0f, 0.0f, 1.0f},
+            {1.0f,  0.0f, 0.0f, 1.0f}
+        }), TestSuite::Compare::Container);
+    } else CORRADE_VERIFY(!circle.hasAttribute(Trade::MeshAttribute::Tangent));
+
+    CORRADE_COMPARE_AS(circle.attribute<Vector3>(Trade::MeshAttribute::Normal), Containers::arrayView<Vector3>({
         { 0.0f,  0.0f, 1.0f},
         { 0.0f,  0.0f, 1.0f},
         { 0.0f,  0.0f, 1.0f},
@@ -123,51 +145,39 @@ void CircleTest::solid3D() {
         { 0.0f,  0.0f, 1.0f},
         { 0.0f,  0.0f, 1.0f}
     }), TestSuite::Compare::Container);
-    CORRADE_COMPARE(circle.textureCoords2DArrayCount(), 0);
-}
 
-void CircleTest::solid3DTextureCoords() {
-    Trade::MeshData3D circle = Primitives::circle3DSolid(8, Primitives::CircleTextureCoords::Generate);
+    if(data.flags & Circle3DFlag::TextureCoordinates) {
+        CORRADE_COMPARE_AS(circle.attribute<Vector2>(Trade::MeshAttribute::TextureCoordinates), Containers::arrayView<Vector2>({
+            {0.5f, 0.5f},
+            {1.0f, 0.5f}, {0.5f + Constants::sqrt2()/4.0f, 0.5f + Constants::sqrt2()/4.0f},
+            {0.5f, 1.0f}, {0.5f - Constants::sqrt2()/4.0f, 0.5f + Constants::sqrt2()/4.0f},
+            {0.0f, 0.5f}, {0.5f - Constants::sqrt2()/4.0f, 0.5f - Constants::sqrt2()/4.0f},
+            {0.5f, 0.0f}, {0.5f + Constants::sqrt2()/4.0f, 0.5f - Constants::sqrt2()/4.0f},
+            {1.0f, 0.5f}
+        }), TestSuite::Compare::Container);
+    } else CORRADE_VERIFY(!circle.hasAttribute(Trade::MeshAttribute::TextureCoordinates));
 
-    CORRADE_VERIFY(!circle.isIndexed());
-    CORRADE_COMPARE(circle.primitive(), MeshPrimitive::TriangleFan);
-    CORRADE_COMPARE_AS(circle.positions(0), (std::vector<Vector3>{
-        { 0.0f,  0.0f, 0.0f},
-        { 1.0f,  0.0f, 0.0f}, { Constants::sqrt2()/2.0f,  Constants::sqrt2()/2.0f, 0.0f},
-        { 0.0f,  1.0f, 0.0f}, {-Constants::sqrt2()/2.0f,  Constants::sqrt2()/2.0f, 0.0f},
-        {-1.0f,  0.0f, 0.0f}, {-Constants::sqrt2()/2.0f, -Constants::sqrt2()/2.0f, 0.0f},
-        { 0.0f, -1.0f, 0.0f}, { Constants::sqrt2()/2.0f, -Constants::sqrt2()/2.0f, 0.0f},
-        { 1.0f,  0.0f, 0.0f}
-    }), TestSuite::Compare::Container);
-    CORRADE_COMPARE_AS(circle.normals(0), (std::vector<Vector3>{
-        { 0.0f,  0.0f, 1.0f},
-        { 0.0f,  0.0f, 1.0f},
-        { 0.0f,  0.0f, 1.0f},
-        { 0.0f,  0.0f, 1.0f},
-        { 0.0f,  0.0f, 1.0f},
-        { 0.0f,  0.0f, 1.0f},
-        { 0.0f,  0.0f, 1.0f},
-        { 0.0f,  0.0f, 1.0f},
-        { 0.0f,  0.0f, 1.0f},
-        { 0.0f,  0.0f, 1.0f}
-    }), TestSuite::Compare::Container);
-    CORRADE_COMPARE(circle.textureCoords2DArrayCount(), 1);
-    CORRADE_COMPARE_AS(circle.textureCoords2D(0), (std::vector<Vector2>{
-        {0.5f, 0.5f},
-        {1.0f, 0.5f}, {0.5f + Constants::sqrt2()/4.0f, 0.5f + Constants::sqrt2()/4.0f},
-        {0.5f, 1.0f}, {0.5f - Constants::sqrt2()/4.0f, 0.5f + Constants::sqrt2()/4.0f},
-        {0.0f, 0.5f}, {0.5f - Constants::sqrt2()/4.0f, 0.5f - Constants::sqrt2()/4.0f},
-        {0.5f, 0.0f}, {0.5f + Constants::sqrt2()/4.0f, 0.5f - Constants::sqrt2()/4.0f},
-        {1.0f, 0.5f}
-    }), TestSuite::Compare::Container);
+    if(data.flags & Circle3DFlag::Tangents) {
+        auto tangents = circle.attribute<Vector4>(Trade::MeshAttribute::Tangent);
+        auto normals = circle.attribute<Vector3>(Trade::MeshAttribute::Normal);
+        for(std::size_t i = 0; i != tangents.size(); ++i) {
+            CORRADE_ITERATION(i);
+            CORRADE_ITERATION(tangents[i]);
+            CORRADE_ITERATION(normals[i]);
+            CORRADE_VERIFY(tangents[i].xyz().isNormalized());
+            CORRADE_VERIFY(normals[i].isNormalized());
+            CORRADE_COMPARE(Math::dot(tangents[i].xyz(), normals[i]), 0.0f);
+        }
+    }
 }
 
 void CircleTest::wireframe2D() {
-    Trade::MeshData2D circle = Primitives::circle2DWireframe(8);
+    Trade::MeshData circle = Primitives::circle2DWireframe(8);
 
-    CORRADE_VERIFY(!circle.isIndexed());
     CORRADE_COMPARE(circle.primitive(), MeshPrimitive::LineLoop);
-    CORRADE_COMPARE_AS(circle.positions(0), (std::vector<Vector2>{
+    CORRADE_VERIFY(!circle.isIndexed());
+    CORRADE_COMPARE(circle.attributeCount(), 1);
+    CORRADE_COMPARE_AS(circle.attribute<Vector2>(Trade::MeshAttribute::Position), Containers::arrayView<Vector2>({
         { 1.0f,  0.0f}, { Constants::sqrt2()/2.0f,  Constants::sqrt2()/2.0f},
         { 0.0f,  1.0f}, {-Constants::sqrt2()/2.0f,  Constants::sqrt2()/2.0f},
         {-1.0f,  0.0f}, {-Constants::sqrt2()/2.0f, -Constants::sqrt2()/2.0f},
@@ -176,11 +186,12 @@ void CircleTest::wireframe2D() {
 }
 
 void CircleTest::wireframe3D() {
-    Trade::MeshData3D circle = Primitives::circle3DWireframe(8);
+    Trade::MeshData circle = Primitives::circle3DWireframe(8);
 
-    CORRADE_VERIFY(!circle.isIndexed());
     CORRADE_COMPARE(circle.primitive(), MeshPrimitive::LineLoop);
-    CORRADE_COMPARE_AS(circle.positions(0), (std::vector<Vector3>{
+    CORRADE_VERIFY(!circle.isIndexed());
+    CORRADE_COMPARE(circle.attributeCount(), 1);
+    CORRADE_COMPARE_AS(circle.attribute<Vector3>(Trade::MeshAttribute::Position), Containers::arrayView<Vector3>({
         { 1.0f,  0.0f, 0.0f}, { Constants::sqrt2()/2.0f,  Constants::sqrt2()/2.0f, 0.0f},
         { 0.0f,  1.0f, 0.0f}, {-Constants::sqrt2()/2.0f,  Constants::sqrt2()/2.0f, 0.0f},
         {-1.0f,  0.0f, 0.0f}, {-Constants::sqrt2()/2.0f, -Constants::sqrt2()/2.0f, 0.0f},

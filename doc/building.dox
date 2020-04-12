@@ -29,7 +29,7 @@ namespace Magnum {
 /** @page building Downloading and building
 @brief Guide how to download and build Magnum on different platforms.
 
-@m_keywords{Building}
+@m_keywords{Building Vcpkg Hunter}
 @m_keyword{ANGLE OpenGL compatibility layer,,}
 
 @tableofcontents
@@ -39,8 +39,8 @@ Minimal set of tools and libraries required for building is:
 
 -   C++ compiler with good C++11 support. Compilers which are tested to have
     everything needed are **GCC** >= 4.8.1, **Clang** >= 3.3 and **MSVC**
-    >= 2015. On Windows you can also use **MinGW-w64**.
--   **CMake** >= 3.1
+    >= 2015. On Windows you can also use **Clang-CL** or **MinGW-w64**.
+-   **CMake** >= 3.4
 -   **Corrade** --- Plugin management and utility library. See
     @ref building-corrade "Corrade download and installation guide" for more
     information.
@@ -52,6 +52,11 @@ information. Additional functionality is provided separately in
 @ref building-integration "Magnum Integration",
 @ref building-extras "Magnum Extras" and
 @ref building-examples "Magnum Examples".
+
+@section building-cmake-subproject Using Magnum as a CMake subproject
+
+Magnum can be bundled into your project with the @cb{.cmake} add_subdirectory() @ce
+CMake command. See @ref cmake-subproject for more information.
 
 @section building-packages Prepared packages
 
@@ -79,11 +84,11 @@ Various examples are provided by the @ref building-examples "Example repository"
 @subsection building-packages-hunter Hunter package
 
 Starting from version 2019.01, stable releases of Magnum are available in the
-[Hunter](https://hunter.sh) CMake-driven package manager. See the
-[magnum package documentation](https://docs.hunter.sh/en/latest/packages/pkg/magnum.html)
+[Hunter](https://hunter.readthedocs.io) CMake-driven package manager. See the
+[magnum package documentation](https://hunter.readthedocs.io/en/latest/packages/pkg/magnum.html)
 for details.
 
-@subsection building-packages-vcpkg Vcpkg packages on Windows
+@subsection building-packages-vcpkg Vcpkg package
 
 Magnum is available as a [Vcpkg](https://github.com/Microsoft/vcpkg) package.
 After setting up Vcpkg as described in their README, it is recommended to set
@@ -103,7 +108,7 @@ vcpkg install magnum
 
 @par Installing latest master
     The `master` is considered stable for production use and often you may want
-    to prefer it over an potentially outdated tagged release. To do so, use
+    to prefer it over a potentially outdated tagged release. To do so, use
     the `--head` option, on *both* `corrade` and `magnum`:
 @par
     @code{.bat}
@@ -337,7 +342,7 @@ compressed archive or use the command line:
 git clone git://github.com/mosra/magnum.git
 @endcode
 
-Relevant information about CMake usage was described in
+Relevant information about CMake usage is described in
 @ref building-corrade-cmake "Corrade download and installation guide", this
 guide is assuming you have at least basic knowledge of CMake.
 
@@ -366,10 +371,21 @@ Also, if you plan to install the library to non-standard location, you might
 want to set `CMAKE_INSTALL_RPATH` to `lib/` subdir of given prefix (e.g.
 `/home/xyz/projects/lib`), so the dynamic libraries can be found at runtime.
 
+@m_class{m-note m-default}
+
+@par
+    @parblock
+    @m_class{m-noindent}
+
+    See the @ref platforms-linux "Linux" and @ref platforms-macos "macOS"
+    platform docs for a troubleshooting guide and more information about
+    building your projects for Unix-like systems.
+    @endparblock
+
 @subsection building-windows Building on Windows
 
-On Windows you can use either MSVC or the MinGW-w64 compiler. It's then up to
-you whether you will use QtCreator, Visual Studio or another IDE or do the
+On Windows you can use MSVC, clang-cl or the MinGW-w64 compiler. It's then up
+to you whether you will use QtCreator, Visual Studio or another IDE or do the
 build from a command line. Note that for most convenient usage it's best use
 some dedicated directory (e.g. `C:/Sys`) for installing dependencies instead of
 putting each dependency to its own directory in `C:/Program Files` or
@@ -416,6 +432,17 @@ see @ref building-features "below" for more information.
 
 Installation to given prefix can be done from within QtCreator by adding a new
 `make install` build rule.
+
+@m_class{m-note m-default}
+
+@par
+    @parblock
+    @m_class{m-noindent}
+
+    See the @ref platforms-windows "Windows platform docs" for a
+    troubleshooting guide and more information about building your projects for
+    Windows.
+    @endparblock
 
 @subsection building-features Enabling or disabling features
 
@@ -509,12 +536,12 @@ information. See also @ref corrade-cmake and @ref Corrade/Corrade.h for
 related info for the Corrade library.
 
 By default the engine is built with nearly everything except the @ref Audio
-library, plugins, command-line utilities and application libraries (see below).
-Using the following `WITH_*` CMake options you can specify which parts will be
-built and which not:
+and @ref Vk libraries, plugins, command-line utilities and application
+libraries (see below). Using the following `WITH_*` CMake options you can
+specify which parts will be built and which not:
 
 -   `WITH_AUDIO` --- Build the @ref Audio library. Depends on
-    [OpenAL](https://www.openal.org/), not built by default.
+    [OpenAL](https://www.openal.org/), not enabled by default.
 -   `WITH_DEBUGTOOLS` --- Build the @ref DebugTools library.
 -   `WITH_GL` --- Build the @ref GL library. Enabled automatically if
     `WITH_SHADERS` is enabled.
@@ -530,7 +557,8 @@ built and which not:
 -   `WITH_TEXTURETOOLS` --- Build the @ref TextureTools library. Enabled
     automatically if `WITH_TEXT` or `WITH_DISTANCEFIELDCONVERTER` is enabled.
 -   `WITH_TRADE` --- Build the @ref Trade library.
--   `WITH_VK` --- Build the @ref Vk library
+-   `WITH_VK` --- Build the @ref Vk library. Depends on Vulkan, not enabled by
+    default.
 
 There are more involved component dependencies that are not described here (for
 example the @ref DebugTools has some functionality that gets built only when
@@ -685,9 +713,8 @@ using
 ctest --output-on-failure
 @endcode
 
-in the build directory. On Windows the tests require the library to be
-installed with DLLs accessible through @cb{.bat} %PATH% @ce. See the above
-@ref building-windows "Windows documentation" for more information.
+in the build directory. It's not needed to install anything anywhere to run the
+tests.
 
 The @ref Audio library has tests which require OpenAL to be able to create a
 context. That is the case on most platforms, so they are enabled by default.
@@ -763,15 +790,10 @@ See @ref platforms-gl-es-angle for more information about using ANGLE.
 
 @section building-cross Cross-compiling
 
-For cross-compiling you need to have *both* target and native version of
-Corrade installed, because Corrade needs to run `corrade-rc` utility on the
-host system as part of the build process. If native version of `corrade-rc` is
-not found on the system, cross-compilation will fail.
-
-You also need to have the toolchains submodule updated. Either run the
-following command, or, if you build from source archive, download a snapshot of
-the toolchains repository from https://github.com/mosra/toolchains and put the
-contents in the `toolchains/` subdirectory.
+For cross-compiling you need to have the toolchains submodule updated. Either
+run the following command, or, if you build from source archive, download a
+snapshot of the toolchains repository from https://github.com/mosra/toolchains
+and put the contents in the `toolchains/` subdirectory.
 
 @code{.sh}
 git submodule update --init
@@ -782,7 +804,21 @@ Note that CMake for some reason treats `CMAKE_PREFIX_PATH` and
 add dependency paths to both `CMAKE_PREFIX_PATH` and `CMAKE_FIND_ROOT_PATH` to
 make it able to find the dependencies.
 
-@subsection building-cross-winrt Cross-compiling for Windows RT
+@anchor building-cross-corrade-rc
+
+<b></b>
+
+@m_class{m-block m-primary}
+
+@par Native build of corrade-rc
+    For all cross-compilation except the UWP / Windows RT build, you need to
+    have a native version of Corrade installed, because Corrade needs to run
+    the `corrade-rc` utility on the host system as part of the build process.
+    If native version of `corrade-rc` is not found on the system,
+    cross-compilation will fail. If `corrade-rc` is not in `PATH`, point CMake
+    to it using `-DCORRADE_RC_EXECUTABLE=/path/to/corrade-rc`.
+
+@subsection building-cross-winrt Cross-compiling for UWP / Windows RT
 
 As said above, you need a native build of the `corrade-rc` executable and
 @ref building-corrade-cross-winrt "Corrade built for Windows RT". The below
@@ -798,14 +834,13 @@ SDL has support for WinRT applications --- download the source from
 https://www.libsdl.org/download-2.0.php and use project files from the
 `VisualC-WinRT` directory. Because WinRT applications run in a sandbox, it's
 recommended to build the library as static so you don't have to bundle all the
-DLLs. Example:
+DLLs. Example is below:
 
 @code{.bat}
 mkdir build-winrt && cd build-winrt
 cmake .. ^
     -DCMAKE_SYSTEM_NAME=WindowsStore ^
     -DCMAKE_SYSTEM_VERSION=10 ^
-    -DCORRADE_RC_EXECUTABLE="C:/Sys/bin/corrade-rc.exe" ^
     -DCMAKE_INSTALL_PREFIX="C:/Sys-winrt" ^
     -DBUILD_STATIC=ON ^
     -DWITH_SDL2APPLICATION=ON ^
@@ -818,8 +853,16 @@ instead. When done, you can install the package using
 @cb{.bat} cmake --build . --target install @ce to make it available to
 depending projects.
 
-See @ref platforms-windows for more information about building your projects
-for WinRT.
+@m_class{m-note m-default}
+
+@par
+    @parblock
+    @m_class{m-noindent}
+
+    See the @ref platforms-windows "Windows platform docs" for a
+    troubleshooting guide and more information about building your projects for
+    Windows.
+    @endparblock
 
 @subsection building-cross-win Cross-compiling for Windows using MinGW-w64
 
@@ -857,8 +900,16 @@ cmake --build .
 Then you can install the package using @cb{.sh} cmake --build . --target install @ce
 to make it available to depending projects.
 
-See @ref platforms-windows for more information about building your projects
-for Windows.
+@m_class{m-note m-default}
+
+@par
+    @parblock
+    @m_class{m-noindent}
+
+    See the @ref platforms-windows "Windows platform docs" for a
+    troubleshooting guide and more information about building your projects for
+    Windows.
+    @endparblock
 
 @subsection building-cross-emscripten Cross-compiling for Emscripten
 
@@ -878,7 +929,10 @@ pass it explicitly on command-line using `-DEMSCRIPTEN_PREFIX`. Default is
 porting and they are generally slower, thus `BUILD_STATIC` is implicitly
 enabled.
 
-Then create build directory and run `cmake` and the build command in it.
+Then create build directory and run `cmake` and the build command in it. You
+can omit specifying `CORRADE_RC_EXECUTABLE` if
+@ref building-cross-corrade-rc "natively-built corrade-rc" is accessible
+through `PATH`.
 
 WebGL 1.0 (GLES 2.0 equivalent) is enabled by default, switch to 2.0 (GLES 3.0
 equivalent) by disabling `TARGET_GLES2`. If you enable one of the
@@ -893,21 +947,11 @@ cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_PREFIX_PATH=/usr/lib/emscripten/system \
     -DCMAKE_INSTALL_PREFIX=/usr/lib/emscripten/system \
+    -DCORRADE_RC_EXECUTABLE=/path/to/corrade-rc \
     -DMAGNUM_DEPLOY_PREFIX=/srv/http/magnum \
     -DWITH_SDL2APPLICATION=ON
 cmake --build .
 @endcode
-
-@note
-    If you set `CMAKE_INSTALL_PREFIX` to a path contained in
-    `EMSCRIPTEN_TOOLCHAIN_PATH` and dependencies are installed there as well,
-    things should "just work". Otherwise you might get the following error:
-@note <pre>CMake Error at .../Modules/FindPackageHandleStandardArgs.cmake:138 (message):
-  Could NOT find Corrade (missing: CORRADE_INCLUDE_DIR
-  _CORRADE_CONFIGURE_FILE)</pre>
-@note
-    This can be solved by adding the location where Corrade is installed to
-    `CMAKE_PREFIX_PATH` or `CMAKE_FIND_ROOT_PATH`.
 
 Then you can install the library using @cb{.sh} cmake --build . --target install @ce
 to make it available to depending projects.
@@ -923,8 +967,16 @@ named `PKGBUILD-emscripten`, `PKGBUILD-emscripten-webgl2`,
 WebGL 1 / WebGL 2 optimized asm.js build (*slow* to compile), the second for
 unoptimized build (faster to compile) and the third for WebAssembly build.
 
-See @ref platforms-html5 for more information about building your projects for
-Emscripten.
+@m_class{m-note m-default}
+
+@par
+    @parblock
+    @m_class{m-noindent}
+
+    See the @ref platforms-html5 "Emscripten platform docs" for a
+    troubleshooting guide and more information about building your projects for
+    Emscripten.
+    @endparblock
 
 @subsection building-cross-ios Cross-compiling for iOS
 
@@ -934,12 +986,17 @@ Set `CMAKE_OSX_ROOT` to the SDK you want to target and enable all desired
 architectures in `CMAKE_OSX_ARCHITECTURES`. Be sure to set
 `CMAKE_INSTALL_PREFIX` to prefix where you store other iOS dependencies such as
 @ref building-corrade-cross-ios "Corrade built for iOS" or a SDL2 iOS build.
+You can omit specifying `CORRADE_RC_EXECUTABLE` if
+@ref building-cross-corrade-rc "natively-built corrade-rc" is accessible
+through `PATH`.
 
 As every application is in its own sandbox, it doesn't make sense to build
 shared libraries (although it is supported). Enable `BUILD_STATIC` to build
 static libraries. Dynamically loaded plugins are not supported on iOS at the
 moment, thus `BUILD_PLUGINS_STATIC` is implicitly enabled. OpenGL ES 2.0 is
 enabled by default, switch to 3.0 by disabling `TARGET_GLES2`.
+
+@m_class{m-console-wrap}
 
 @code{.sh}
 mkdir build-ios && cd build-ios
@@ -948,6 +1005,7 @@ cmake .. \
     -DCMAKE_OSX_SYSROOT=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk \
     -DCMAKE_OSX_ARCHITECTURES="arm64;armv7;armv7s" \
     -DCMAKE_INSTALL_PREFIX=~/ios-libs \
+    -DCORRADE_RC_EXECUTABLE=/path/to/corrade-rc \
     -DBUILD_STATIC=ON \
     -DBUILD_PLUGINS_STATIC=ON \
     -DTARGET_GLES2=OFF \
@@ -959,19 +1017,22 @@ cmake --build .
 Then you can install the library using @cb{.sh} cmake --build . --target install @ce
 to make it available to depending projects.
 
-See @ref platforms-ios documentation for more information about building your
-projects for iOS.
+@m_class{m-note m-default}
+
+@par
+    @parblock
+    @m_class{m-noindent}
+
+    See the @ref platforms-ios "iOS platform docs" for a troubleshooting guide
+    and more information about building your projects for iOS.
+    @endparblock
 
 @subsection building-cross-android Crosscompiling for Android
 
 You will need [Android NDK](https://developer.android.com/ndk/) installed and
 configured and @ref building-corrade-cross-android "Corrade built for Android".
-CMake 3.7 is required, as it has Android support builtin. The supported
-toolchain is now Clang with libc++, GCC is not supported anymore.
-
-@attention
-    You might want to grab at least CMake 3.9.2 instead of just 3.7, as it
-    [fixes an issue with the Clang toolchain](https://gitlab.kitware.com/cmake/cmake/issues/17253).
+At least CMake 3.7 is required, as it has Android support built-in. The
+supported toolchain is now Clang with libc++, GCC is not supported anymore.
 
 Create a build directory and run `cmake` and the build command in it. Set
 `CMAKE_SYSTEM_NAME` to `Android` to enable the crosscompilation,
@@ -979,11 +1040,13 @@ Create a build directory and run `cmake` and the build command in it. Set
 with libc++, `CMAKE_SYSTEM_VERSION` to minimal API version level you wish to
 use and `CMAKE_ANDROID_ARCH_ABI` to target platform ABI. Check the
 [CMake Android cross-compiling documentation](https://cmake.org/cmake/help/latest/manual/cmake-toolchains.7.html#cross-compiling-for-android)
-for further information.
+for further information. You can omit specifying `CORRADE_RC_EXECUTABLE` if
+@ref building-cross-corrade-rc "natively-built corrade-rc" is accessible
+through `PATH`.
 
 If you set `CMAKE_INSTALL_PREFIX` to `/usr` subdirectory of the particular
 Android platform sysroot, the package will get found automatically when
-compiling subprojects. Gradle and other Android buildsystems expect
+compiling depending projects. Gradle and other Android buildsystems expect
 platform-independent includes and other files to be stored in a central
 location, you can set `MAGNUM_INCLUDE_INSTALL_PREFIX` to `/usr` subdirectory of
 the global NDK sysroot. Another option is to explicitly set `CMAKE_PREFIX_PATH`
@@ -1003,6 +1066,7 @@ cmake .. \
     -DCMAKE_ANDROID_STL_TYPE=c++_static \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=/opt/android-ndk/platforms/android-22/arch-arm/usr \
+    -DCORRADE_RC_EXECUTABLE=/path/to/corrade-rc \
     -DMAGNUM_INCLUDE_INSTALL_PREFIX=/opt/android-ndk/sysroot/usr \
     -DTARGET_GLES2=OFF \
     -DWITH_ANDROIDAPPLICATION=ON
@@ -1016,21 +1080,16 @@ For ArchLinux there is also a prepared package file in `package/archlinux/`,
 named `PKGBUILD-android-arm64`; see @ref building-packages-arch "above" for
 more information.
 
-@attention
-    On Windows it's possible that you get the following CMake error when
-    configuring the project:
-@attention
-    <blockquote>
-    CMAKE_SYSTEM_NAME is 'Android' but 'NVIDIA Nsight Tegra Visual Studio
-    Edition' is not installed.
-    </blockquote>
-@attention
-    This is because MSVC as the default generator on Windows is not able to
-    build arbitrary Android projects. To fix it, use a different generator (for
-    example Ninja, by passing `-G Ninja` to CMake).
+@m_class{m-note m-default}
 
-See @ref platforms-android for more information about building your projects
-for Android.
+@par
+    @parblock
+    @m_class{m-noindent}
+
+    See the @ref platforms-android "Android platform docs" for a
+    troubleshooting guide and more information about building your projects for
+    Android.
+    @endparblock
 
 @section building-ci Continuous Integration
 

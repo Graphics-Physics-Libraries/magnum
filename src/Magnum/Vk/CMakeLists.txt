@@ -42,7 +42,9 @@ set(MagnumVk_HEADERS
 
     visibility.h)
 set(MagnumVk_PRIVATE_HEADERS
-    Implementation/FormatMapping.hpp)
+    Implementation/compressedPixelFormatMapping.hpp
+    Implementation/meshAttributeTypeMapping.hpp
+    Implementation/pixelFormatMapping.hpp)
 
 # Objects shared between main and test library
 # add_library(MagnumVkObjects OBJECT
@@ -103,15 +105,6 @@ if(BUILD_TESTS)
     target_link_libraries(MagnumVkTestLib PUBLIC
         Magnum
         Vulkan::Vulkan)
-
-    # On Windows we need to install first and then run the tests to avoid "DLL
-    # not found" hell, thus we need to install this too
-    if(CORRADE_TARGET_WINDOWS AND NOT CMAKE_CROSSCOMPILING AND NOT BUILD_STATIC)
-        install(TARGETS MagnumVkTestLib
-            RUNTIME DESTINATION ${MAGNUM_BINARY_INSTALL_DIR}
-            LIBRARY DESTINATION ${MAGNUM_LIBRARY_INSTALL_DIR}
-            ARCHIVE DESTINATION ${MAGNUM_LIBRARY_INSTALL_DIR})
-    endif()
 
     add_subdirectory(Test)
 endif()

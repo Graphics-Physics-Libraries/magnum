@@ -56,6 +56,9 @@ template<class T> constexpr typename std::enable_if<IsScalar<T>::value, T>::type
 template<class T> constexpr typename std::enable_if<IsScalar<T>::value, T>::type max(T value, T max) {
     return value < max ? max : value;
 }
+template<class T> constexpr typename std::enable_if<IsScalar<T>::value, T>::type clamp(T value, T min, T max) {
+    return Math::min(Math::max(value, min), max);
+}
 #endif
 
 namespace Implementation {
@@ -81,6 +84,10 @@ namespace Implementation {
 
     /* Used to make friends to speed up debug builds */
     template<std::size_t, class> struct MatrixDeterminant;
+    /* To make gather() / scatter() faster */
+    template<std::size_t, std::size_t> struct GatherComponentAt;
+    template<std::size_t, std::size_t, bool> struct ScatterComponentOr;
+    template<class T, std::size_t valueSize, char, char...> constexpr T scatterRecursive(const T&, const Vector<valueSize, typename T::Type>&, std::size_t);
 }
 
 /** @relatesalso Vector
@@ -105,6 +112,10 @@ Expects that both vectors are normalized. Enabled only for floating-point
 types. @f[
     \theta = \arccos \left( \frac{\boldsymbol a \cdot \boldsymbol b}{|\boldsymbol a| |\boldsymbol b|} \right) = \arccos (\boldsymbol a \cdot \boldsymbol b)
 @f]
+
+To avoid numerical issues when two vectors are very close to each other, the
+dot product is clamped to the @f$ [-1, +1] @f$ range before being passed to
+@f$ \arccos @f$.
 @see @ref Vector::isNormalized(),
     @ref angle(const Complex<T>&, const Complex<T>&),
     @ref angle(const Quaternion<T>&, const Quaternion<T>&)
@@ -118,7 +129,7 @@ typename std::enable_if<std::is_floating_point<FloatingPoint>::value, Rad<Floati
 angle(const Vector<size, FloatingPoint>& normalizedA, const Vector<size, FloatingPoint>& normalizedB) {
     CORRADE_ASSERT(normalizedA.isNormalized() && normalizedB.isNormalized(),
         "Math::angle(): vectors" << normalizedA << "and" << normalizedB << "are not normalized", {});
-    return Rad<FloatingPoint>(std::acos(dot(normalizedA, normalizedB)));
+    return Rad<FloatingPoint>(std::acos(clamp(dot(normalizedA, normalizedB), FloatingPoint(-1), FloatingPoint(1))));
 }
 
 /**
@@ -162,7 +173,7 @@ template<std::size_t size, class T> class Vector {
          * with @p value, otherwise it's cut.
          * @see @ref Vector4::pad(const Vector<otherSize, T>&, T, T)
          */
-        template<std::size_t otherSize> constexpr static Vector<size, T> pad(const Vector<otherSize, T>& a, T value = T(0)) {
+        template<std::size_t otherSize> constexpr static Vector<size, T> pad(const Vector<otherSize, T>& a, T value = T()) {
             return padInternal<otherSize>(typename Implementation::GenerateSequence<size>::Type(), a, value);
         }
 
@@ -313,12 +324,17 @@ template<std::size_t size, class T> class Vector {
         /**
          * @brief Negated vector
          *
-         * @f[
+         * Enabled only for signed types. @f[
          *      \boldsymbol b_i = -\boldsymbol a_i
          * @f]
          * @see @ref Vector2::perpendicular()
          */
-        Vector<size, T> operator-() const;
+        #ifdef DOXYGEN_GENERATING_OUTPUT
+        Vector<size, T>
+        #else
+        template<class U = T> typename std::enable_if<std::is_signed<U>::value, Vector<size, T>>::type
+        #endif
+        operator-() const;
 
         /**
          * @brief Add and assign a vector
@@ -492,11 +508,24 @@ template<std::size_t size, class T> class Vector {
          * other values. @f[
          *      |\boldsymbol a| = \sqrt{\boldsymbol a \cdot \boldsymbol a}
          * @f]
+         *
+         * For integral types the result may be imprecise, to get a
+         * floating-point value of desired precision, cast to a floating-point
+         * vector first:
+         *
+         * @snippet MagnumMath.cpp Vector-length-integer
+         *
+         * A [Manhattan length](https://en.wikipedia.org/wiki/Taxicab_geometry)
+         * might be more suitable than @ref length() in certain cases where the
+         * square root is undesirable --- it's a sum of absolute values:
+         *
+         * @snippet MagnumMath.cpp Vector-length-manhattan
+         *
          * @see @ref lengthInverted(), @ref Math::sqrt(), @ref normalized(),
          *      @ref resized()
          * @todo something like std::hypot() for possibly better precision?
          */
-        T length() const { return std::sqrt(dot()); }
+        T length() const { return T(std::sqrt(dot())); }
 
         /**
          * @brief Inverse vector length
@@ -597,7 +626,7 @@ template<std::size_t size, class T> class Vector {
         /**
          * @brief Sum of values in the vector
          *
-         * @see @ref operator+()
+         * @see @ref operator+(), @ref length()
          */
         T sum() const;
 
@@ -647,6 +676,10 @@ template<std::size_t size, class T> class Vector {
         template<std::size_t, std::size_t, class> friend class RectangularMatrix;
         template<std::size_t, class> friend class Matrix;
         template<std::size_t, class> friend struct Implementation::MatrixDeterminant;
+        /* To make gather() / scatter() faster */
+        template<std::size_t, std::size_t> friend struct Implementation::GatherComponentAt;
+        template<std::size_t, std::size_t, bool> friend struct Implementation::ScatterComponentOr;
+        template<class T_, std::size_t valueSize, char, char...> friend constexpr T_ Implementation::scatterRecursive(const T_&, const Vector<valueSize, typename T_::Type>&, std::size_t);
 
         /* So the out-of-class comparators can access data directly to avoid
            function call overhead */
@@ -670,6 +703,7 @@ template<std::size_t size, class T> class Vector {
 
 /** @relatesalso Vector
 @brief Component-wise equality comparison
+@m_since{2019,10}
 
 Unlike @ref Vector::operator==() returns a @ref BoolVector instead of a single
 value. Vector complement to @ref equal(T, T).
@@ -685,6 +719,7 @@ template<std::size_t size, class T> inline BoolVector<size> equal(const Vector<s
 
 /** @relatesalso Vector
 @brief Component-wise non-equality comparison
+@m_since{2019,10}
 
 Unlike @ref Vector::operator!=() returns a @ref BoolVector instead of a single
 value. Vector complement to @ref notEqual(T, T).
@@ -1220,11 +1255,12 @@ extern template MAGNUM_EXPORT Corrade::Utility::Debug& operator<<(Corrade::Utili
     static const Type<T>& from(const T* data) {                             \
         return *reinterpret_cast<const Type<T>*>(data);                     \
     }                                                                       \
-    template<std::size_t otherSize> constexpr static Type<T> pad(const Math::Vector<otherSize, T>& a, T value = T(0)) { \
+    template<std::size_t otherSize> constexpr static Type<T> pad(const Math::Vector<otherSize, T>& a, T value = T()) { \
         return Math::Vector<size, T>::pad(a, value);                        \
     }                                                                       \
                                                                             \
-    Type<T> operator-() const {                                             \
+    template<class U = T> typename std::enable_if<std::is_signed<U>::value, Type<T>>::type \
+    operator-() const {                                                     \
         return Math::Vector<size, T>::operator-();                          \
     }                                                                       \
     Type<T>& operator+=(const Math::Vector<size, T>& other) {               \
@@ -1420,7 +1456,13 @@ template<std::size_t size, class T> inline BoolVector<size> Vector<size, T>::ope
     return out;
 }
 
-template<std::size_t size, class T> inline Vector<size, T> Vector<size, T>::operator-() const {
+template<std::size_t size, class T>
+#ifdef DOXYGEN_GENERATING_OUTPUT
+inline Vector<size, T>
+#else
+template<class U> inline typename std::enable_if<std::is_signed<U>::value, Vector<size, T>>::type
+#endif
+Vector<size, T>::operator-() const {
     Vector<size, T> out;
 
     for(std::size_t i = 0; i != size; ++i)

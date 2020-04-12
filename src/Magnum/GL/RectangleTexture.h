@@ -133,6 +133,8 @@ class MAGNUM_GL_EXPORT RectangleTexture: public AbstractTexture {
          *
          * This function can be safely used for constructing (and later
          * destructing) objects even without any OpenGL context being active.
+         * However note that this is a low-level and a potentially dangerous
+         * API, see the documentation of @ref NoCreate for alternatives.
          * @see @ref RectangleTexture(), @ref wrap()
          */
         explicit RectangleTexture(NoCreateT) noexcept: AbstractTexture{NoCreate, GL_TEXTURE_RECTANGLE} {}
@@ -280,7 +282,7 @@ class MAGNUM_GL_EXPORT RectangleTexture: public AbstractTexture {
 
         #ifdef MAGNUM_BUILD_DEPRECATED
         /** @brief @copybrief setSrgbDecode()
-         * @deprecated Use @ref setSrgbDecode() instead.
+         * @m_deprecated_since{2018,10} Use @ref setSrgbDecode() instead.
          */
         CORRADE_DEPRECATED("use setSrgbDecode() instead") RectangleTexture& setSRGBDecode(bool decode) {
             return setSrgbDecode(decode);
@@ -371,6 +373,7 @@ class MAGNUM_GL_EXPORT RectangleTexture: public AbstractTexture {
 
         /**
          * @brief Read texture to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref image(Image2D&) the function reads the pixels into
          * the memory provided by @p image, expecting it's not @cpp nullptr @ce
@@ -420,6 +423,7 @@ class MAGNUM_GL_EXPORT RectangleTexture: public AbstractTexture {
 
         /**
          * @brief Read compressed texture to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref compressedImage(CompressedImage2D&) the function
          * reads the pixels into the memory provided by @p image, expecting
@@ -471,6 +475,7 @@ class MAGNUM_GL_EXPORT RectangleTexture: public AbstractTexture {
 
         /**
          * @brief Read a range of given texture mip level to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref subImage(const Range2Di&, Image2D&) the function
          * reads the pixels into the memory provided by @p image, expecting
@@ -526,6 +531,7 @@ class MAGNUM_GL_EXPORT RectangleTexture: public AbstractTexture {
 
         /**
          * @brief Read a compressed texture range to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref compressedSubImage(const Range2Di&, CompressedImage2D&)
          * the function reads the pixels into the memory provided by @p image,

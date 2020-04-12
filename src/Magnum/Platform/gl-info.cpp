@@ -26,6 +26,7 @@
 #include <Corrade/Utility/Arguments.h>
 #include <Corrade/Utility/Debug.h>
 #include <Corrade/Utility/DebugStl.h>
+#include <Corrade/Utility/String.h>
 
 #include "Magnum/GL/AbstractShaderProgram.h"
 #include "Magnum/GL/Buffer.h"
@@ -334,9 +335,7 @@ MagnumInfo::MagnumInfo(const Arguments& arguments): Platform::WindowlessApplicat
     Debug() << "Detected driver:" << c.detectedDriver();
 
     Debug() << "Supported GLSL versions:";
-    const std::vector<std::string> shadingLanguageVersions = c.shadingLanguageVersionStrings();
-    for(const auto& version: shadingLanguageVersions)
-        Debug() << "   " << version;
+    Debug() << "   " << Utility::String::joinWithoutEmptyParts(c.shadingLanguageVersionStrings(), ", ");
 
     if(args.isSet("extension-strings")) {
         Debug() << "Extension strings:" << Debug::newline
@@ -411,6 +410,7 @@ MagnumInfo::MagnumInfo(const Arguments& arguments): Platform::WindowlessApplicat
     _lvec(GL::AbstractFramebuffer::maxViewportSize())
     _l(GL::AbstractFramebuffer::maxDrawBuffers())
     _l(GL::Framebuffer::maxColorAttachments())
+    _l(GL::Mesh::maxVertexAttributeStride())
     #ifndef MAGNUM_TARGET_GLES2
     _l(GL::Mesh::maxElementIndex())
     _l(GL::Mesh::maxElementsIndices())
@@ -687,6 +687,7 @@ MagnumInfo::MagnumInfo(const Arguments& arguments): Platform::WindowlessApplicat
         _h(EXT::geometry_shader)
         #endif
 
+        _l(GL::AbstractShaderProgram::maxGeometryOutputVertices())
         _l(GL::Shader::maxGeometryInputComponents())
         _l(GL::Shader::maxGeometryOutputComponents())
         _l(GL::Shader::maxGeometryTotalOutputComponents())
@@ -711,6 +712,7 @@ MagnumInfo::MagnumInfo(const Arguments& arguments): Platform::WindowlessApplicat
         _l(GL::Shader::maxTessellationControlTotalOutputComponents())
         _l(GL::Shader::maxTessellationEvaluationInputComponents())
         _l(GL::Shader::maxTessellationEvaluationOutputComponents())
+        _l(GL::Renderer::maxPatchVertexCount())
     }
     #endif
 

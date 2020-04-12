@@ -27,15 +27,13 @@ corrade_add_test(ArrayTest ArrayTest.cpp LIBRARIES Magnum)
 corrade_add_test(FileCallbackTest FileCallbackTest.cpp LIBRARIES Magnum)
 corrade_add_test(ImageTest ImageTest.cpp LIBRARIES MagnumTestLib)
 corrade_add_test(ImageViewTest ImageViewTest.cpp LIBRARIES MagnumTestLib)
-corrade_add_test(MeshTest MeshTest.cpp LIBRARIES Magnum)
+corrade_add_test(MeshTest MeshTest.cpp LIBRARIES MagnumTestLib)
 corrade_add_test(PixelFormatTest PixelFormatTest.cpp LIBRARIES MagnumTestLib)
-target_compile_definitions(PixelFormatTest PRIVATE "CORRADE_GRACEFUL_ASSERT")
 corrade_add_test(PixelStorageTest PixelStorageTest.cpp LIBRARIES Magnum)
 corrade_add_test(ResourceManagerTest ResourceManagerTest.cpp LIBRARIES Magnum)
-target_compile_definitions(ResourceManagerTest PRIVATE "CORRADE_GRACEFUL_ASSERT")
 corrade_add_test(SamplerTest SamplerTest.cpp LIBRARIES MagnumTestLib)
-
 corrade_add_test(TagsTest TagsTest.cpp LIBRARIES Magnum)
+corrade_add_test(VertexFormatTest VertexFormatTest.cpp LIBRARIES MagnumTestLib)
 
 set_target_properties(
     ArrayTest
@@ -47,18 +45,12 @@ set_target_properties(
     ResourceManagerTest
     SamplerTest
     TagsTest
+    VertexFormatTest
     PROPERTIES FOLDER "Magnum/Test")
 
-if(MAGNUM_BUILD_DEPRECATED)
-    add_library(ResourceManagerLocalInstanceTestLib ${SHARED_OR_STATIC} ResourceManagerLocalInstanceTestLib.cpp)
-    target_link_libraries(ResourceManagerLocalInstanceTestLib Magnum)
-    if(NOT BUILD_STATIC)
-        target_compile_definitions(ResourceManagerLocalInstanceTestLib PRIVATE "ResourceManagerLocalInstanceTestLib_EXPORTS")
-    endif()
-    corrade_add_test(ResourceManagerLocalInstanceTest ResourceManagerLocalInstanceTest.cpp LIBRARIES Magnum ResourceManagerLocalInstanceTestLib)
-
-    set_target_properties(
-        ResourceManagerLocalInstanceTestLib
-        ResourceManagerLocalInstanceTest
-        PROPERTIES FOLDER "Magnum/Test")
-endif()
+set_property(TARGET
+    MeshTest
+    PixelFormatTest
+    ResourceManagerTest
+    VertexFormatTest
+    APPEND PROPERTY COMPILE_DEFINITIONS "CORRADE_GRACEFUL_ASSERT")

@@ -30,16 +30,16 @@
 #include "Magnum/Mesh.h"
 #include "Magnum/PixelFormat.h"
 #include "Magnum/Sampler.h"
+#include "Magnum/VertexFormat.h"
 #include "Magnum/Vk/Enums.h"
 
 namespace Magnum { namespace Vk { namespace Test { namespace {
-
-/* Tests MeshView as well */
 
 struct EnumsTest: TestSuite::Tester {
     explicit EnumsTest();
 
     void mapVkPrimitiveTopology();
+    void mapVkPrimitiveTopologyImplementationSpecific();
     void mapVkPrimitiveTopologyUnsupported();
     void mapVkPrimitiveTopologyInvalid();
 
@@ -47,15 +47,20 @@ struct EnumsTest: TestSuite::Tester {
     void mapVkIndexTypeUnsupported();
     void mapVkIndexTypeInvalid();
 
-    void mapVkFormat();
-    void mapVkFormatImplementationSpecific();
-    void mapVkFormatUnsupported();
-    void mapVkFormatInvalid();
+    void mapVkFormatVertexFormat();
+    void mapVkFormatVertexFormatImplementationSpecific();
+    void mapVkFormatVertexFormatUnsupported();
+    void mapVkFormatVertexFormatInvalid();
 
-    void mapVkFormatCompressed();
-    void mapVkFormatCompressedImplementationSpecific();
-    void mapVkFormatCompressedUnsupported();
-    void mapVkFormatCompressedInvalid();
+    void mapVkFormatPixelFormat();
+    void mapVkFormatPixelFormatImplementationSpecific();
+    void mapVkFormatPixelFormatUnsupported();
+    void mapVkFormatPixelFormatInvalid();
+
+    void mapVkFormatCompressedPixelFormat();
+    void mapVkFormatCompressedPixelFormatImplementationSpecific();
+    void mapVkFormatCompressedPixelFormatUnsupported();
+    void mapVkFormatCompressedPixelFormatInvalid();
 
     void mapVkFilter();
     void mapVkFilterInvalid();
@@ -71,6 +76,7 @@ struct EnumsTest: TestSuite::Tester {
 
 EnumsTest::EnumsTest() {
     addTests({&EnumsTest::mapVkPrimitiveTopology,
+              &EnumsTest::mapVkPrimitiveTopologyImplementationSpecific,
               &EnumsTest::mapVkPrimitiveTopologyUnsupported,
               &EnumsTest::mapVkPrimitiveTopologyInvalid,
 
@@ -78,15 +84,20 @@ EnumsTest::EnumsTest() {
               &EnumsTest::mapVkIndexTypeUnsupported,
               &EnumsTest::mapVkIndexTypeInvalid,
 
-              &EnumsTest::mapVkFormat,
-              &EnumsTest::mapVkFormatImplementationSpecific,
-              &EnumsTest::mapVkFormatUnsupported,
-              &EnumsTest::mapVkFormatInvalid,
+              &EnumsTest::mapVkFormatVertexFormat,
+              &EnumsTest::mapVkFormatVertexFormatImplementationSpecific,
+              &EnumsTest::mapVkFormatVertexFormatUnsupported,
+              &EnumsTest::mapVkFormatVertexFormatInvalid,
 
-              &EnumsTest::mapVkFormatCompressed,
-              &EnumsTest::mapVkFormatCompressedImplementationSpecific,
-              &EnumsTest::mapVkFormatCompressedUnsupported,
-              &EnumsTest::mapVkFormatCompressedInvalid,
+              &EnumsTest::mapVkFormatPixelFormat,
+              &EnumsTest::mapVkFormatPixelFormatImplementationSpecific,
+              &EnumsTest::mapVkFormatPixelFormatUnsupported,
+              &EnumsTest::mapVkFormatPixelFormatInvalid,
+
+              &EnumsTest::mapVkFormatCompressedPixelFormat,
+              &EnumsTest::mapVkFormatCompressedPixelFormatImplementationSpecific,
+              &EnumsTest::mapVkFormatCompressedPixelFormatUnsupported,
+              &EnumsTest::mapVkFormatCompressedPixelFormatInvalid,
 
               &EnumsTest::mapVkFilter,
               &EnumsTest::mapVkFilterInvalid,
@@ -118,6 +129,35 @@ void EnumsTest::mapVkPrimitiveTopology() {
 
     CORRADE_VERIFY(hasVkPrimitiveTopology(Magnum::MeshPrimitive::TriangleFan));
     CORRADE_COMPARE(vkPrimitiveTopology(Magnum::MeshPrimitive::TriangleFan), VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN);
+
+    /* Ensure all generic primitives are handled. This goes through the first
+       16 bits, which should be enough. Going through 32 bits takes 8 seconds,
+       too much. */
+    for(UnsignedInt i = 1; i <= 0xffff; ++i) {
+        const auto primitive = Magnum::MeshPrimitive(i);
+        #ifdef __GNUC__
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic error "-Wswitch"
+        #endif
+        switch(primitive) {
+            #define _c(primitive) \
+                case Magnum::MeshPrimitive::primitive: \
+                    if(hasVkPrimitiveTopology(Magnum::MeshPrimitive::primitive))  \
+                        CORRADE_VERIFY(UnsignedInt(vkPrimitiveTopology(Magnum::MeshPrimitive::primitive)) >= 0); \
+                    break;
+            #include "Magnum/Implementation/meshPrimitiveMapping.hpp"
+            #undef _c
+        }
+        #ifdef __GNUC__
+        #pragma GCC diagnostic pop
+        #endif
+    }
+}
+
+void EnumsTest::mapVkPrimitiveTopologyImplementationSpecific() {
+    CORRADE_VERIFY(hasVkPrimitiveTopology(meshPrimitiveWrap(VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY)));
+    CORRADE_COMPARE(vkPrimitiveTopology(meshPrimitiveWrap(VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY)),
+        VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY);
 }
 
 void EnumsTest::mapVkPrimitiveTopologyUnsupported() {
@@ -136,11 +176,15 @@ void EnumsTest::mapVkPrimitiveTopologyInvalid() {
     std::ostringstream out;
     Error redirectError{&out};
 
-    hasVkPrimitiveTopology(Magnum::MeshPrimitive(0x123));
-    vkPrimitiveTopology(Magnum::MeshPrimitive(0x123));
+    hasVkPrimitiveTopology(Magnum::MeshPrimitive{});
+    hasVkPrimitiveTopology(Magnum::MeshPrimitive(0x12));
+    vkPrimitiveTopology(Magnum::MeshPrimitive{});
+    vkPrimitiveTopology(Magnum::MeshPrimitive(0x12));
     CORRADE_COMPARE(out.str(),
-        "Vk::hasVkPrimitiveTopology(): invalid primitive MeshPrimitive(0x123)\n"
-        "Vk::vkPrimitiveTopology(): invalid primitive MeshPrimitive(0x123)\n");
+        "Vk::hasVkPrimitiveTopology(): invalid primitive MeshPrimitive(0x0)\n"
+        "Vk::hasVkPrimitiveTopology(): invalid primitive MeshPrimitive(0x12)\n"
+        "Vk::vkPrimitiveTopology(): invalid primitive MeshPrimitive(0x0)\n"
+        "Vk::vkPrimitiveTopology(): invalid primitive MeshPrimitive(0x12)\n");
 }
 
 void EnumsTest::mapVkIndexType() {
@@ -149,9 +193,34 @@ void EnumsTest::mapVkIndexType() {
 
     CORRADE_VERIFY(hasVkIndexType(Magnum::MeshIndexType::UnsignedInt));
     CORRADE_COMPARE(vkIndexType(Magnum::MeshIndexType::UnsignedInt), VK_INDEX_TYPE_UINT32);
+
+    /* Ensure all generic index types are handled. This goes through the first
+       16 bits, which should be enough. Going through 32 bits takes 8 seconds,
+       too much. */
+    for(UnsignedInt i = 1; i <= 0xffff; ++i) {
+        const auto type = Magnum::MeshIndexType(i);
+        #ifdef __GNUC__
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic error "-Wswitch"
+        #endif
+        switch(type) {
+            #define _c(type) \
+                case Magnum::MeshIndexType::type: \
+                    CORRADE_VERIFY(UnsignedInt(vkIndexType(Magnum::MeshIndexType::type)) >= 0); \
+                    break;
+            #include "Magnum/Implementation/meshIndexTypeMapping.hpp"
+            #undef _c
+        }
+        #ifdef __GNUC__
+        #pragma GCC diagnostic pop
+        #endif
+    }
 }
 
 void EnumsTest::mapVkIndexTypeUnsupported() {
+    #if 1
+    CORRADE_SKIP("All index formats are supported.");
+    #else
     CORRADE_VERIFY(!hasVkIndexType(Magnum::MeshIndexType::UnsignedByte));
     std::ostringstream out;
     {
@@ -160,20 +229,119 @@ void EnumsTest::mapVkIndexTypeUnsupported() {
     }
     CORRADE_COMPARE(out.str(),
         "Vk::vkIndexType(): unsupported type MeshIndexType::UnsignedByte\n");
+    #endif
 }
 
 void EnumsTest::mapVkIndexTypeInvalid() {
     std::ostringstream out;
     Error redirectError{&out};
 
-    hasVkIndexType(Magnum::MeshIndexType(0x123));
-    vkIndexType(Magnum::MeshIndexType(0x123));
+    hasVkIndexType(Magnum::MeshIndexType(0x0));
+    hasVkIndexType(Magnum::MeshIndexType(0x12));
+    vkIndexType(Magnum::MeshIndexType(0x0));
+    vkIndexType(Magnum::MeshIndexType(0x12));
     CORRADE_COMPARE(out.str(),
-        "Vk::hasVkIndexType(): invalid type MeshIndexType(0x123)\n"
-        "Vk::vkIndexType(): invalid type MeshIndexType(0x123)\n");
+        "Vk::hasVkIndexType(): invalid type MeshIndexType(0x0)\n"
+        "Vk::hasVkIndexType(): invalid type MeshIndexType(0x12)\n"
+        "Vk::vkIndexType(): invalid type MeshIndexType(0x0)\n"
+        "Vk::vkIndexType(): invalid type MeshIndexType(0x12)\n");
 }
 
-void EnumsTest::mapVkFormat() {
+void EnumsTest::mapVkFormatVertexFormat() {
+    /* Touchstone verification */
+    CORRADE_VERIFY(hasVkFormat(Magnum::VertexFormat::Vector3us));
+    CORRADE_COMPARE(vkFormat(Magnum::VertexFormat::Vector3us), VK_FORMAT_R16G16B16_UINT);
+    CORRADE_COMPARE(vkFormat(Magnum::VertexFormat::Matrix2x3bNormalizedAligned), VK_FORMAT_R8G8B8_SNORM);
+
+    /* This goes through the first 16 bits, which should be enough. Going
+       through 32 bits takes 8 seconds, too much. */
+    UnsignedInt firstUnhandled = 0xffff;
+    UnsignedInt nextHandled = 1; /* 0 is an invalid format */
+    for(UnsignedInt i = 1; i <= 0xffff; ++i) {
+        const auto format = Magnum::VertexFormat(i);
+        /* Each case verifies:
+           - that the entries are ordered by number by comparing a function to
+             expected result (so insertion here is done in proper place)
+           - that there was no gap (unhandled value inside the range)
+           - that a particular vertex format maps to a particular VkFormat */
+        #ifdef __GNUC__
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic error "-Wswitch"
+        #endif
+        switch(format) {
+            #define _c(format, expectedFormat) \
+                case Magnum::VertexFormat::format: \
+                    CORRADE_COMPARE(nextHandled, i); \
+                    CORRADE_COMPARE(firstUnhandled, 0xffff); \
+                    CORRADE_VERIFY(hasVkFormat(Magnum::VertexFormat::format)); \
+                    CORRADE_COMPARE(vkFormat(Magnum::VertexFormat::format), VK_FORMAT_ ## expectedFormat); \
+                    ++nextHandled; \
+                    continue;
+            #define _s(format) \
+                case Magnum::VertexFormat::format: { \
+                    CORRADE_COMPARE(nextHandled, i); \
+                    CORRADE_COMPARE(firstUnhandled, 0xffff); \
+                    CORRADE_VERIFY(!hasVkFormat(Magnum::VertexFormat::format)); \
+                    std::ostringstream out; \
+                    { /* Redirected otherwise graceful assert would abort */ \
+                        Error redirectError{&out}; \
+                        vkFormat(Magnum::VertexFormat::format); \
+                    } \
+                    Debug{Debug::Flag::NoNewlineAtTheEnd} << out.str(); \
+                    ++nextHandled; \
+                    continue; \
+                }
+            #include "Magnum/Vk/Implementation/vertexFormatMapping.hpp"
+            #undef _s
+            #undef _c
+        }
+        #ifdef __GNUC__
+        #pragma GCC diagnostic pop
+        #endif
+
+        /* Not handled by any value, remember -- we might either be at the end
+           of the enum range (which is okay) or some value might be unhandled
+           here */
+        firstUnhandled = i;
+    }
+
+    CORRADE_COMPARE(firstUnhandled, 0xffff);
+}
+
+void EnumsTest::mapVkFormatVertexFormatImplementationSpecific() {
+    CORRADE_VERIFY(hasVkFormat(Magnum::vertexFormatWrap(VK_FORMAT_A8B8G8R8_SINT_PACK32)));
+    CORRADE_COMPARE(vkFormat(Magnum::vertexFormatWrap(VK_FORMAT_A8B8G8R8_SINT_PACK32)),
+        VK_FORMAT_A8B8G8R8_SINT_PACK32);
+}
+
+void EnumsTest::mapVkFormatVertexFormatUnsupported() {
+    #if 1
+    CORRADE_SKIP("All vertex formats are supported.");
+    #else
+    std::ostringstream out;
+    Error redirectError{&out};
+
+    vkFormat(Magnum::VertexFormat::Vector3d);
+    CORRADE_COMPARE(out.str(), "Vk::vkFormat(): unsupported format VertexFormat::Vector3d\n");
+    #endif
+}
+
+void EnumsTest::mapVkFormatVertexFormatInvalid() {
+    std::ostringstream out;
+    Error redirectError{&out};
+
+    hasVkFormat(Magnum::VertexFormat{});
+    hasVkFormat(Magnum::VertexFormat(0x123));
+    vkFormat(Magnum::VertexFormat{});
+    vkFormat(Magnum::VertexFormat(0x123));
+    CORRADE_COMPARE(out.str(),
+        "Vk::hasVkFormat(): invalid format VertexFormat(0x0)\n"
+        "Vk::hasVkFormat(): invalid format VertexFormat(0x123)\n"
+        "Vk::vkFormat(): invalid format VertexFormat(0x0)\n"
+        "Vk::vkFormat(): invalid format VertexFormat(0x123)\n");
+}
+
+void EnumsTest::mapVkFormatPixelFormat() {
     /* Touchstone verification */
     CORRADE_VERIFY(hasVkFormat(Magnum::PixelFormat::RGBA8Unorm));
     CORRADE_COMPARE(vkFormat(Magnum::PixelFormat::RGBA8Unorm), VK_FORMAT_R8G8B8A8_UNORM);
@@ -181,15 +349,14 @@ void EnumsTest::mapVkFormat() {
     /* This goes through the first 16 bits, which should be enough. Going
        through 32 bits takes 8 seconds, too much. */
     UnsignedInt firstUnhandled = 0xffff;
-    UnsignedInt nextHandled = 0;
-    for(UnsignedInt i = 0; i <= 0xffff; ++i) {
+    UnsignedInt nextHandled = 1; /* 0 is an invalid format */
+    for(UnsignedInt i = 1; i <= 0xffff; ++i) {
         const auto format = Magnum::PixelFormat(i);
         /* Each case verifies:
-           - that the cases are ordered by number (so insertion here is done in
-             proper place)
+           - that the entries are ordered by number by comparing a function to
+             expected result (so insertion here is done in proper place)
            - that there was no gap (unhandled value inside the range)
-           - that a particular pixel format maps to a particular GL format
-           - that a particular pixel type maps to a particular GL type */
+           - that a particular pixel format maps to a particular vkFormat */
         #ifdef __GNUC__
         #pragma GCC diagnostic push
         #pragma GCC diagnostic error "-Wswitch"
@@ -204,14 +371,20 @@ void EnumsTest::mapVkFormat() {
                     ++nextHandled; \
                     continue;
             #define _s(format) \
-                case Magnum::PixelFormat::format: \
+                case Magnum::PixelFormat::format: { \
                     CORRADE_COMPARE(nextHandled, i); \
                     CORRADE_COMPARE(firstUnhandled, 0xffff); \
                     CORRADE_VERIFY(!hasVkFormat(Magnum::PixelFormat::format)); \
-                    vkFormat(Magnum::PixelFormat::format); \
+                    std::ostringstream out; \
+                    { /* Redirected otherwise graceful assert would abort */ \
+                        Error redirectError{&out}; \
+                        vkFormat(Magnum::PixelFormat::format); \
+                    } \
+                    Debug{Debug::Flag::NoNewlineAtTheEnd} << out.str(); \
                     ++nextHandled; \
-                    continue;
-            #include "Magnum/Vk/Implementation/formatMapping.hpp"
+                    continue; \
+                }
+            #include "Magnum/Vk/Implementation/pixelFormatMapping.hpp"
             #undef _s
             #undef _c
         }
@@ -228,13 +401,13 @@ void EnumsTest::mapVkFormat() {
     CORRADE_COMPARE(firstUnhandled, 0xffff);
 }
 
-void EnumsTest::mapVkFormatImplementationSpecific() {
+void EnumsTest::mapVkFormatPixelFormatImplementationSpecific() {
     CORRADE_VERIFY(hasVkFormat(Magnum::pixelFormatWrap(VK_FORMAT_A8B8G8R8_SINT_PACK32)));
     CORRADE_COMPARE(vkFormat(Magnum::pixelFormatWrap(VK_FORMAT_A8B8G8R8_SINT_PACK32)),
         VK_FORMAT_A8B8G8R8_SINT_PACK32);
 }
 
-void EnumsTest::mapVkFormatUnsupported() {
+void EnumsTest::mapVkFormatPixelFormatUnsupported() {
     #if 1
     CORRADE_SKIP("All pixel formats are supported.");
     #else
@@ -246,18 +419,22 @@ void EnumsTest::mapVkFormatUnsupported() {
     #endif
 }
 
-void EnumsTest::mapVkFormatInvalid() {
+void EnumsTest::mapVkFormatPixelFormatInvalid() {
     std::ostringstream out;
     Error redirectError{&out};
 
+    hasVkFormat(Magnum::PixelFormat{});
     hasVkFormat(Magnum::PixelFormat(0x123));
+    vkFormat(Magnum::PixelFormat{});
     vkFormat(Magnum::PixelFormat(0x123));
     CORRADE_COMPARE(out.str(),
+        "Vk::hasVkFormat(): invalid format PixelFormat(0x0)\n"
         "Vk::hasVkFormat(): invalid format PixelFormat(0x123)\n"
+        "Vk::vkFormat(): invalid format PixelFormat(0x0)\n"
         "Vk::vkFormat(): invalid format PixelFormat(0x123)\n");
 }
 
-void EnumsTest::mapVkFormatCompressed() {
+void EnumsTest::mapVkFormatCompressedPixelFormat() {
     /* Touchstone verification */
     CORRADE_VERIFY(hasVkFormat(Magnum::CompressedPixelFormat::Bc1RGBAUnorm));
     CORRADE_COMPARE(vkFormat(Magnum::CompressedPixelFormat::Bc1RGBAUnorm), VK_FORMAT_BC1_RGBA_UNORM_BLOCK);
@@ -265,15 +442,14 @@ void EnumsTest::mapVkFormatCompressed() {
     /* This goes through the first 16 bits, which should be enough. Going
        through 32 bits takes 8 seconds, too much. */
     UnsignedInt firstUnhandled = 0xffff;
-    UnsignedInt nextHandled = 0;
-    for(UnsignedInt i = 0; i <= 0xffff; ++i) {
+    UnsignedInt nextHandled = 1; /* 0 is an invalid format */
+    for(UnsignedInt i = 1; i <= 0xffff; ++i) {
         const auto format = Magnum::CompressedPixelFormat(i);
         /* Each case verifies:
-           - that the cases are ordered by number (so insertion here is done in
-             proper place)
+           - that the entries are ordered by number by comparing a function to
+             expected result (so insertion here is done in proper place)
            - that there was no gap (unhandled value inside the range)
-           - that a particular pixel format maps to a particular GL format
-           - that a particular pixel type maps to a particular GL type */
+           - that a particular pixel format maps to a particular VkFormat */
         #ifdef __GNUC__
         #pragma GCC diagnostic push
         #pragma GCC diagnostic error "-Wswitch"
@@ -288,14 +464,20 @@ void EnumsTest::mapVkFormatCompressed() {
                     ++nextHandled; \
                     continue;
             #define _s(format) \
-                case Magnum::CompressedPixelFormat::format: \
+                case Magnum::CompressedPixelFormat::format: { \
                     CORRADE_COMPARE(nextHandled, i); \
                     CORRADE_COMPARE(firstUnhandled, 0xffff); \
                     CORRADE_VERIFY(!hasVkFormat(Magnum::CompressedPixelFormat::format)); \
-                    vkFormat(Magnum::CompressedPixelFormat::format); \
+                    std::ostringstream out; \
+                    { /* Redirected otherwise graceful assert would abort */ \
+                        Error redirectError{&out}; \
+                        vkFormat(Magnum::CompressedPixelFormat::format); \
+                    } \
+                    Debug{Debug::Flag::NoNewlineAtTheEnd} << out.str(); \
                     ++nextHandled; \
-                    continue;
-            #include "Magnum/Vk/Implementation/compressedFormatMapping.hpp"
+                    continue; \
+                }
+            #include "Magnum/Vk/Implementation/compressedPixelFormatMapping.hpp"
             #undef _s
             #undef _c
         }
@@ -312,33 +494,33 @@ void EnumsTest::mapVkFormatCompressed() {
     CORRADE_COMPARE(firstUnhandled, 0xffff);
 }
 
-void EnumsTest::mapVkFormatCompressedImplementationSpecific() {
+void EnumsTest::mapVkFormatCompressedPixelFormatImplementationSpecific() {
     CORRADE_VERIFY(hasVkFormat(Magnum::compressedPixelFormatWrap(VK_FORMAT_ASTC_10x6_UNORM_BLOCK)));
     CORRADE_COMPARE(vkFormat(Magnum::compressedPixelFormatWrap(VK_FORMAT_ASTC_10x6_UNORM_BLOCK)),
         VK_FORMAT_ASTC_10x6_UNORM_BLOCK);
 }
 
-void EnumsTest::mapVkFormatCompressedUnsupported() {
-    #if 1
-    CORRADE_SKIP("All compressed pixel formats are currently supported.");
-    #else
-    CORRADE_VERIFY(!hasVkFormat(Magnum::CompressedPixelFormat::Bc1RGBAUnorm));
+void EnumsTest::mapVkFormatCompressedPixelFormatUnsupported() {
+    CORRADE_VERIFY(!hasVkFormat(Magnum::CompressedPixelFormat::Astc3x3x3RGBAUnorm));
 
     std::ostringstream out;
     Error redirectError{&out};
-    vkFormat(Magnum::CompressedPixelFormat::Bc1RGBAUnorm);
-    CORRADE_COMPARE(out.str(), "Vk::vkFormat(): unsupported format CompressedPixelFormat::Bc1RGBAUnorm\n");
-    #endif
+    vkFormat(Magnum::CompressedPixelFormat::Astc3x3x3RGBAUnorm);
+    CORRADE_COMPARE(out.str(), "Vk::vkFormat(): unsupported format CompressedPixelFormat::Astc3x3x3RGBAUnorm\n");
 }
 
-void EnumsTest::mapVkFormatCompressedInvalid() {
+void EnumsTest::mapVkFormatCompressedPixelFormatInvalid() {
     std::ostringstream out;
     Error redirectError{&out};
 
+    hasVkFormat(Magnum::CompressedPixelFormat{});
     hasVkFormat(Magnum::CompressedPixelFormat(0x123));
+    vkFormat(Magnum::CompressedPixelFormat{});
     vkFormat(Magnum::CompressedPixelFormat(0x123));
     CORRADE_COMPARE(out.str(),
+        "Vk::hasVkFormat(): invalid format CompressedPixelFormat(0x0)\n"
         "Vk::hasVkFormat(): invalid format CompressedPixelFormat(0x123)\n"
+        "Vk::vkFormat(): invalid format CompressedPixelFormat(0x0)\n"
         "Vk::vkFormat(): invalid format CompressedPixelFormat(0x123)\n");
 }
 

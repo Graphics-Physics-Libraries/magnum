@@ -65,6 +65,10 @@
 #include "Magnum/GL/Implementation/TransformFeedbackState.h"
 #endif
 
+#if defined(CORRADE_TARGET_WINDOWS) && defined(MAGNUM_BUILD_STATIC) && !defined(CORRADE_TARGET_WINDOWS_RT)
+#include "Magnum/Implementation/WindowsWeakSymbol.h"
+#endif
+
 namespace Magnum { namespace GL {
 
 namespace {
@@ -76,6 +80,7 @@ constexpr Extension ExtensionList[]{
     _extension(AMD,transform_feedback3_lines_triangles),
     _extension(AMD,vertex_shader_layer),
     _extension(AMD,shader_trinary_minmax),
+    _extension(AMD,shader_explicit_vertex_parameter),
     _extension(ARB,robustness),
     _extension(ARB,robustness_isolation),
     _extension(ARB,robustness_application_isolation),
@@ -86,6 +91,7 @@ constexpr Extension ExtensionList[]{
     _extension(ARB,sparse_texture),
     _extension(ARB,sparse_buffer),
     _extension(ARB,ES3_2_compatibility),
+    _extension(ARB,sample_locations),
     _extension(ATI,texture_mirror_once),
     _extension(EXT,texture_filter_anisotropic),
     _extension(EXT,texture_compression_s3tc),
@@ -101,7 +107,10 @@ constexpr Extension ExtensionList[]{
     _extension(KHR,texture_compression_astc_hdr),
     _extension(KHR,blend_equation_advanced),
     _extension(KHR,blend_equation_advanced_coherent),
-    _extension(KHR,texture_compression_astc_sliced_3d)};
+    _extension(KHR,texture_compression_astc_sliced_3d),
+    _extension(NV,fragment_shader_barycentric),
+    _extension(OVR,multiview),
+    _extension(OVR,multiview2)};
 constexpr Extension ExtensionList300[]{
     _extension(ARB,map_buffer_range),
     _extension(ARB,color_buffer_float),
@@ -247,13 +256,22 @@ constexpr Extension ExtensionList460[]{
 #elif defined(MAGNUM_TARGET_WEBGL)
 constexpr Extension ExtensionList[]{
     _extension(EXT,texture_filter_anisotropic),
+    #ifdef MAGNUM_TARGET_GLES2
     _extension(EXT,disjoint_timer_query),
+    #endif
     #ifndef MAGNUM_TARGET_GLES2
     _extension(EXT,color_buffer_float),
+    _extension(EXT,disjoint_timer_query_webgl2),
     #endif
     _extension(EXT,texture_compression_rgtc),
     _extension(EXT,texture_compression_bptc),
+    #ifndef MAGNUM_TARGET_GLES2
+    _extension(EXT,draw_buffers_indexed),
+    #endif
     _extension(OES,texture_float_linear),
+    #ifndef MAGNUM_TARGET_GLES2
+    _extension(OVR,multiview2),
+    #endif
     _extension(WEBGL,compressed_texture_s3tc),
     _extension(WEBGL,compressed_texture_pvrtc),
     _extension(WEBGL,compressed_texture_astc),
@@ -331,11 +349,20 @@ constexpr Extension ExtensionList[]{
     _extension(NV,shader_noperspective_interpolation),
     #endif
     _extension(NV,polygon_mode),
+    #ifndef MAGNUM_TARGET_GLES2
+    _extension(NV,fragment_shader_barycentric),
+    #endif
     _extension(OES,depth32),
     _extension(OES,mapbuffer),
     _extension(OES,stencil1),
     _extension(OES,stencil4),
-    _extension(OES,texture_float_linear)};
+    _extension(OES,texture_float_linear),
+    #ifndef MAGNUM_TARGET_GLES2
+    _extension(OES,texture_compression_astc),
+    _extension(OVR,multiview),
+    _extension(OVR,multiview2)
+    #endif
+    };
 constexpr Extension ExtensionListES300[]{
     #ifdef MAGNUM_TARGET_GLES2
     _extension(ANGLE,framebuffer_blit),
@@ -466,12 +493,69 @@ Containers::ArrayView<const Extension> Extension::extensions(Version version) {
     CORRADE_ASSERT_UNREACHABLE(); /* LCOV_EXCL_LINE */
 }
 
+#if !defined(MAGNUM_BUILD_STATIC) || defined(CORRADE_TARGET_WINDOWS)
+/* (Of course) can't be in an unnamed namespace in order to export it below
+   (except for Windows, where we do extern "C" so this doesn't matter) */
 namespace {
-    #ifdef CORRADE_BUILD_MULTITHREADED
-    CORRADE_THREAD_LOCAL
+#endif
+
+#ifdef CORRADE_BUILD_MULTITHREADED
+CORRADE_THREAD_LOCAL
+#endif
+#if defined(MAGNUM_BUILD_STATIC) && !defined(CORRADE_TARGET_WINDOWS)
+/* On static builds that get linked to multiple shared libraries and then used
+   in a single app we want to ensure there's just one global symbol. On Linux
+   it's apparently enough to just export, macOS needs the weak attribute.
+   Windows handled differently below. */
+CORRADE_VISIBILITY_EXPORT
+    #ifdef __GNUC__
+    __attribute__((weak))
+    #else
+    /* uh oh? the test will fail, probably */
     #endif
-    Context* currentContext = nullptr;
+#endif
+Context* currentContext = nullptr;
+
+#if !defined(MAGNUM_BUILD_STATIC) || defined(CORRADE_TARGET_WINDOWS)
 }
+#endif
+
+/* Windows can't have a symbol both thread-local and exported, moreover there
+   isn't any concept of weak symbols. Exporting thread-local symbols can be
+   worked around by exporting a function that then returns a reference to a
+   non-exported thread-local symbol; and finally GetProcAddress() on
+   GetModuleHandle(nullptr) "emulates" the weak linking as it's guaranteed to
+   pick up the same symbol of the final exe independently of the DLL it was
+   called from. To avoid #ifdef hell in code below, the currentContext is
+   redefined to return a value from this uniqueness-ensuring function. */
+#if defined(CORRADE_TARGET_WINDOWS) && defined(MAGNUM_BUILD_STATIC) && !defined(CORRADE_TARGET_WINDOWS_RT)
+/* Clang-CL complains that the function has a return type incompatible with C.
+   I don't care, I only need an unmangled name to look up later at runtime. */
+#ifdef CORRADE_TARGET_CLANG_CL
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
+#endif
+extern "C" CORRADE_VISIBILITY_EXPORT Context*& magnumGLUniqueCurrentContext();
+extern "C" CORRADE_VISIBILITY_EXPORT Context*& magnumGLUniqueCurrentContext() {
+    return currentContext;
+}
+#ifdef CORRADE_TARGET_CLANG_CL
+#pragma clang diagnostic pop
+#endif
+
+namespace {
+
+Context*& windowsCurrentContext() {
+    /* A function-local static to ensure it's only initialized once without any
+       race conditions among threads */
+    static Context*&(*const uniqueGlobals)() = reinterpret_cast<Context*&(*)()>(Magnum::Implementation::windowsWeakSymbol("magnumGLUniqueCurrentContext", reinterpret_cast<void*>(magnumGLUniqueCurrentContext)));
+    return uniqueGlobals();
+}
+
+}
+
+#define currentContext windowsCurrentContext()
+#endif
 
 bool Context::hasCurrent() { return currentContext; }
 
@@ -924,6 +1008,17 @@ Version Context::supportedVersion(std::initializer_list<Version> versions) const
 }
 
 void Context::resetState(const States states) {
+    #ifndef MAGNUM_TARGET_GLES2
+    /* Unbind a PBO (if any) to avoid confusing external GL code that is not
+       aware of those. Doing this before all buffer state is reset so we can
+       reuse the knowledge in our state tracker and unbind only if Magnum
+       actually bound a PBO before. */
+    if(states & State::UnbindPixelBuffer) {
+        Buffer::unbindInternal(Buffer::TargetHint::PixelPack);
+        Buffer::unbindInternal(Buffer::TargetHint::PixelUnpack);
+    }
+    #endif
+
     if(states & State::Buffers)
         _state->buffer->reset();
     if(states & State::Framebuffers)
@@ -970,9 +1065,11 @@ void Context::resetState(const States states) {
 #ifndef DOXYGEN_GENERATING_OUTPUT
 #ifndef MAGNUM_TARGET_WEBGL
 Debug& operator<<(Debug& debug, const Context::Flag value) {
+    debug << "GL::Context::Flag" << Debug::nospace;
+
     switch(value) {
         /* LCOV_EXCL_START */
-        #define _c(value) case Context::Flag::value: return debug << "GL::Context::Flag::" #value;
+        #define _c(value) case Context::Flag::value: return debug << "::" #value;
         _c(Debug)
         #ifndef MAGNUM_TARGET_GLES
         _c(ForwardCompatible)
@@ -985,7 +1082,7 @@ Debug& operator<<(Debug& debug, const Context::Flag value) {
         /* LCOV_EXCL_STOP */
     }
 
-    return debug << "GL::Context::Flag(" << Debug::nospace << reinterpret_cast<void*>(GLint(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(GLint(value)) << Debug::nospace << ")";
 }
 
 Debug& operator<<(Debug& debug, const Context::Flags value) {
@@ -1003,9 +1100,11 @@ Debug& operator<<(Debug& debug, const Context::Flags value) {
 #endif
 
 Debug& operator<<(Debug& debug, const Context::DetectedDriver value) {
+    debug << "GL::Context::DetectedDriver" << Debug::nospace;
+
     switch(value) {
         /* LCOV_EXCL_START */
-        #define _c(value) case Context::DetectedDriver::value: return debug << "GL::Context::DetectedDriver::" #value;
+        #define _c(value) case Context::DetectedDriver::value: return debug << "::" #value;
         #ifndef MAGNUM_TARGET_WEBGL
         _c(Amd)
         #endif
@@ -1028,7 +1127,7 @@ Debug& operator<<(Debug& debug, const Context::DetectedDriver value) {
         /* LCOV_EXCL_STOP */
     }
 
-    return debug << "GL::Context::DetectedDriver(" << Debug::nospace << reinterpret_cast<void*>(GLint(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(GLint(value)) << Debug::nospace << ")";
 }
 
 Debug& operator<<(Debug& debug, const Context::DetectedDrivers value) {

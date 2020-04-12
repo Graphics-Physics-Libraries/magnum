@@ -41,8 +41,15 @@
 /* undef Xlib nonsense to avoid conflicts */
 #undef Always
 #undef Complex
+#undef Convex
 #undef None
 #undef Status
+#undef Success
+#undef Button1
+#undef Button2
+#undef Button3
+#undef Button4
+#undef Button5
 
 #include "Magnum/Magnum.h"
 #include "Magnum/Tags.h"
@@ -103,13 +110,47 @@ class AbstractXApplication {
          * @brief Execute main loop
          * @return Value for returning from @cpp main() @ce
          *
-         * See @ref MAGNUM_GLXAPPLICATION_MAIN() or
+         * Calls @ref mainLoopIteration() in a loop until @ref exit() is
+         * called. See @ref MAGNUM_GLXAPPLICATION_MAIN() or
          * @ref MAGNUM_XEGLAPPLICATION_MAIN() for usage information.
          */
         int exec();
 
-        /** @brief Exit application main loop */
-        void exit() { _flags |= Flag::Exit; }
+        /**
+         * @brief Run one iteration of application main loop
+         * @return @cpp false @ce if @ref exit() was called and the application
+         *      should exit, @cpp true @ce otherwise
+         * @m_since_latest
+         *
+         * Called internally from @ref exec(). If you want to have better
+         * control over how the main loop behaves, you can call this function
+         * yourself from your own `main()` function instead of it being called
+         * automatically from @ref exec() / @ref MAGNUM_GLXAPPLICATION_MAIN()
+         * / @ref MAGNUM_XEGLAPPLICATION_MAIN().
+         */
+        bool mainLoopIteration();
+
+        /**
+         * @brief Exit application
+         * @param exitCode  The exit code the application should return
+         *
+         * When called from application constructor, it will cause the
+         * application to exit immediately after constructor ends, without any
+         * events being processed. Calling this function is recommended over
+         * @ref std::exit() or @ref Corrade::Utility::Fatal "Fatal", which exit
+         * without calling destructors on local scope. Note that, however, you
+         * need to explicitly @cpp return @ce after calling it, as it can't
+         * exit the constructor on its own:
+         *
+         * @snippet MagnumPlatform.cpp exit-from-constructor
+         *
+         * When called from the main loop, the application exits cleanly
+         * before next main loop iteration is executed.
+         */
+        void exit(int exitCode = 0) {
+            _flags |= Flag::Exit;
+            _exitCode = exitCode;
+        }
 
     protected:
         /* Nobody will need to have (and delete) AbstractXApplication*, thus
@@ -216,7 +257,11 @@ class AbstractXApplication {
         /** @copydoc Sdl2Application::drawEvent() */
         virtual void drawEvent() = 0;
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Keyboard handling */
 
@@ -226,7 +271,11 @@ class AbstractXApplication {
         /** @copydoc Sdl2Application::keyReleaseEvent() */
         virtual void keyReleaseEvent(KeyEvent& event);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Mouse handling */
 
@@ -239,7 +288,11 @@ class AbstractXApplication {
         /** @copydoc Sdl2Application::mouseMoveEvent() */
         virtual void mouseMoveEvent(MouseMoveEvent& event);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
     #ifdef DOXYGEN_GENERATING_OUTPUT
     private:
@@ -265,6 +318,7 @@ class AbstractXApplication {
 
         Containers::Pointer<Implementation::AbstractContextHandler<GLConfiguration, Display*, VisualID, Window>> _contextHandler;
         Containers::Pointer<Platform::GLContext> _context;
+        int _exitCode = 0;
 
         /** @todo Get this from the created window */
         Vector2i _windowSize;
@@ -587,11 +641,11 @@ class AbstractXApplication::MouseEvent: public AbstractXApplication::InputEvent 
          * @see @ref button()
          */
         enum class Button: unsigned int {
-            Left = Button1,         /**< Left button */
-            Middle = Button2,       /**< Middle button */
-            Right = Button3,        /**< Right button */
-            WheelUp = Button4,      /**< Wheel up */
-            WheelDown = Button5     /**< Wheel down */
+            Left      = 1 /*Button1*/,  /**< Left button */
+            Middle    = 2 /*Button2*/,  /**< Middle button */
+            Right     = 3 /*Button3*/,  /**< Right button */
+            WheelUp   = 4 /*Button4*/,  /**< Wheel up */
+            WheelDown = 5 /*Button5*/   /**< Wheel down */
         };
 
         /** @brief Button */

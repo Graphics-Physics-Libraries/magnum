@@ -183,7 +183,8 @@ template<class T> class Matrix4: public Matrix4x4<T> {
          * @cpp Matrix4::scaling(Vector3::yScale(-1.0f)) @ce. @f[
          *      \boldsymbol{A} = \boldsymbol{I} - 2 \boldsymbol{NN}^T ~~~~~ \boldsymbol{N} = \begin{pmatrix} n_x \\ n_y \\ n_z \end{pmatrix}
          * @f]
-         * @see @ref Matrix3::reflection(), @ref Vector::isNormalized()
+         * @see @ref Matrix3::reflection(), @ref Vector::isNormalized(),
+         *      @ref reflect()
          */
         static Matrix4<T> reflection(const Vector3<T>& normal);
 
@@ -366,6 +367,7 @@ template<class T> class Matrix4: public Matrix4x4<T> {
          *      ahead
          * @param far           Distance to far clipping plane, positive is
          *      ahead
+         * @m_since{2019,10}
          *
          * If @p far is finite, the result is: @f[
          *      \boldsymbol{A} = \begin{pmatrix}
@@ -706,6 +708,14 @@ template<class T> class Matrix4: public Matrix4x4<T> {
          *      \end{pmatrix}
          * @f]
          *
+         * Note that the returned vector is sign-less and the signs are instead
+         * contained in @ref rotation() const / @ref rotationShear() const in
+         * order to ensure @f$ \boldsymbol{R} \boldsymbol{S} = \boldsymbol{M} @f$
+         * for @f$ \boldsymbol{R} @f$ and @f$ \boldsymbol{S} @f$ extracted out
+         * of @f$ \boldsymbol{M} @f$. The signs can be extracted for example by
+         * applying @ref Math::sign() on a @ref diagonal(), but keep in mind
+         * that the signs can be negative even for pure rotation matrices.
+         *
          * @see @ref scalingSquared(), @ref uniformScaling(),
          *      @ref rotation() const, @ref Matrix3::scaling() const
          */
@@ -796,6 +806,30 @@ template<class T> class Matrix4: public Matrix4x4<T> {
          *      @ref Matrix3::uniformScaling()
          */
         T uniformScaling() const { return std::sqrt(uniformScalingSquared()); }
+
+        /**
+         * @brief Normal matrix
+         * @m_since{2019,10}
+         *
+         * Returns @ref comatrix() of the upper-left 3x3 part of the matrix.
+         * Compared to the classic transformation @f$ (\boldsymbol{M}^{-1})^T @f$,
+         * which is done in order to preserve correct normal orientation for
+         * non-uniform scale and skew, this preserves it also when reflection
+         * is involved. Moreover it's also faster to calculate since we need
+         * just the @m_class{m-success} @f$ \boldsymbol{C} @f$ part of the
+         * inverse transpose: @f[
+         *  (\boldsymbol{M}^{-1})^T = \frac{1}{\det \boldsymbol{A}} \color{m-success} \boldsymbol{C}
+         * @f]
+         *
+         * Based on the [Normals Revisited](https://github.com/graphitemaster/normals_revisited)
+         * article by Dale Weiler.
+         * @see @ref inverted()
+         */
+        Matrix3x3<T> normalMatrix() const {
+            return Matrix3x3<T>{(*this)[0].xyz(),
+                                (*this)[1].xyz(),
+                                (*this)[2].xyz()}.comatrix();
+        }
 
         /**
          * @brief Right-pointing 3D vector

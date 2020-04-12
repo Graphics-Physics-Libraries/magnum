@@ -29,6 +29,7 @@
 
 #include "Magnum/configure.h"
 #include "Magnum/GL/GL.h"
+#include "MagnumExternal/OpenGL/KHR/khrplatform.h"
 
 /* Defensive include guards */
 
@@ -118,7 +119,6 @@ void flextGLInit(Magnum::GL::Context& context);
 
 /* Data types */
 
-#include <KHR/khrplatform.h>
 typedef unsigned int GLenum;
 typedef unsigned char GLboolean;
 typedef unsigned int GLbitfield;
@@ -1666,6 +1666,17 @@ typedef void (APIENTRY *GLDEBUGPROC)(GLenum source,GLenum type,GLuint id,GLenum 
 #define GL_MULTISAMPLE_LINE_WIDTH_RANGE_ARB 0x9381
 #define GL_MULTISAMPLE_LINE_WIDTH_GRANULARITY_ARB 0x9382
 
+/* GL_ARB_sample_locations */
+
+#define GL_SAMPLE_LOCATION_SUBPIXEL_BITS_ARB 0x933D
+#define GL_SAMPLE_LOCATION_PIXEL_GRID_WIDTH_ARB 0x933E
+#define GL_SAMPLE_LOCATION_PIXEL_GRID_HEIGHT_ARB 0x933F
+#define GL_PROGRAMMABLE_SAMPLE_LOCATION_TABLE_SIZE_ARB 0x9340
+#define GL_SAMPLE_LOCATION_ARB 0x8E50
+#define GL_PROGRAMMABLE_SAMPLE_LOCATION_ARB 0x9341
+#define GL_FRAMEBUFFER_PROGRAMMABLE_SAMPLE_LOCATIONS_ARB 0x9342
+#define GL_FRAMEBUFFER_SAMPLE_LOCATION_PIXEL_GRID_ARB 0x9343
+
 /* GL_ATI_texture_mirror_once */
 
 #define GL_MIRROR_CLAMP_ATI 0x8742
@@ -1758,6 +1769,13 @@ typedef void (APIENTRY *GLDEBUGPROC)(GLenum source,GLenum type,GLuint id,GLenum 
 
 #define GL_BLEND_ADVANCED_COHERENT_KHR 0x9285
 
+/* GL_OVR_multiview */
+
+#define GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_NUM_VIEWS_OVR 0x9630
+#define GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_BASE_VIEW_INDEX_OVR 0x9632
+#define GL_MAX_VIEWS_OVR 0x9631
+#define GL_FRAMEBUFFER_INCOMPLETE_VIEW_TARGETS_OVR 0x9633
+
 /* Function prototypes */
 
 /* GL_ARB_ES3_2_compatibility */
@@ -1824,6 +1842,15 @@ GLAPI FLEXTGL_EXPORT void(APIENTRY *flextglGetnUniformuivARB)(GLuint, GLint, GLs
 GLAPI FLEXTGL_EXPORT void(APIENTRY *flextglReadnPixelsARB)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, GLsizei, void *);
 #define glReadnPixelsARB flextglReadnPixelsARB
 
+/* GL_ARB_sample_locations */
+
+GLAPI FLEXTGL_EXPORT void(APIENTRY *flextglEvaluateDepthValuesARB)(void);
+#define glEvaluateDepthValuesARB flextglEvaluateDepthValuesARB
+GLAPI FLEXTGL_EXPORT void(APIENTRY *flextglFramebufferSampleLocationsfvARB)(GLenum, GLuint, GLsizei, const GLfloat *);
+#define glFramebufferSampleLocationsfvARB flextglFramebufferSampleLocationsfvARB
+GLAPI FLEXTGL_EXPORT void(APIENTRY *flextglNamedFramebufferSampleLocationsfvARB)(GLuint, GLuint, GLsizei, const GLfloat *);
+#define glNamedFramebufferSampleLocationsfvARB flextglNamedFramebufferSampleLocationsfvARB
+
 /* GL_ARB_sparse_buffer */
 
 GLAPI FLEXTGL_EXPORT void(APIENTRY *flextglBufferPageCommitmentARB)(GLenum, GLintptr, GLsizeiptr, GLboolean);
@@ -1863,6 +1890,11 @@ GLAPI FLEXTGL_EXPORT void(APIENTRY *flextglStringMarkerGREMEDY)(GLsizei, const v
 
 GLAPI FLEXTGL_EXPORT void(APIENTRY *flextglBlendBarrierKHR)(void);
 #define glBlendBarrierKHR flextglBlendBarrierKHR
+
+/* GL_OVR_multiview */
+
+GLAPI FLEXTGL_EXPORT void(APIENTRY *flextglFramebufferTextureMultiviewOVR)(GLenum, GLenum, GLuint, GLint, GLint, GLsizei);
+#define glFramebufferTextureMultiviewOVR flextglFramebufferTextureMultiviewOVR
 
 /* GL_VERSION_1_0 */
 

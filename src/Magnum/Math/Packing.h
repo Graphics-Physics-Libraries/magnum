@@ -43,7 +43,7 @@ and @ref Magnum::Math::Rad "Rad".
 
 namespace Implementation {
 
-template<class T, UnsignedInt bits = sizeof(T)*8> inline constexpr T bitMax() {
+template<class T, UnsignedInt bits = sizeof(T)*8> constexpr T bitMax() {
     return T(typename std::make_unsigned<T>::type(~T{}) >> (sizeof(T)*8 - (std::is_signed<T>::value ? bits - 1 : bits)));
 }
 
@@ -67,7 +67,7 @@ value in range @f$ [0, 1] @f$ or from *signed* integral to range @f$ [-1, 1] @f$
 @attention
     @snippet MagnumMath.cpp unpack-template-explicit
 
-@see @ref pack()
+@see @ref pack(), @ref unpackInto()
 */
 template<class FloatingPoint, class Integral> inline FloatingPoint unpack(const Integral& value);
 
@@ -133,7 +133,7 @@ given *signed* integral type.
 @attention Return value for floating point numbers outside the normalized
     range is undefined.
 
-@see @ref unpack()
+@see @ref unpack(), @ref packInto()
 */
 #ifdef DOXYGEN_GENERATING_OUTPUT
 template<class Integral, class FloatingPoint> inline Integral pack(const FloatingPoint& value);
@@ -184,7 +184,7 @@ that rounding mode is unspecified in order to save some cycles.
 
 Implementation based on CC0 / public domain code by *Fabian Giesen*,
 https://fgiesen.wordpress.com/2012/03/28/half-to-float-done-quic/ .
-@see @ref unpackHalf(), @ref Half
+@see @ref unpackHalf(), @ref packHalfInto(), @ref Half
 */
 MAGNUM_EXPORT UnsignedShort packHalf(Float value);
 
@@ -205,7 +205,7 @@ infinities to infinities, though their exact bit pattern is not preserved.
 
 Implementation based on CC0 / public domain code by *Fabian Giesen*,
 https://fgiesen.wordpress.com/2012/03/28/half-to-float-done-quic/ .
-@see @ref packHalf()
+@see @ref packHalf(), @ref unpackHalfInto(), @ref Half
 */
 MAGNUM_EXPORT Float unpackHalf(UnsignedShort value);
 
@@ -217,7 +217,11 @@ template<std::size_t size> Vector<size, Float> unpackHalf(const Vector<size, Uns
     return out;
 }
 
-/*@}*/
+/* Since 1.8.17, the original short-hand group closing doesn't work anymore.
+   FFS. */
+/**
+ * @}
+ */
 
 }}
 

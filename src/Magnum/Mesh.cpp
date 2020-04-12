@@ -25,6 +25,8 @@
 
 #include "Mesh.h"
 
+#include <string>
+#include <Corrade/Containers/ArrayView.h>
 #include <Corrade/Utility/Assert.h>
 #include <Corrade/Utility/Debug.h>
 
@@ -37,40 +39,52 @@ UnsignedInt meshIndexTypeSize(MeshIndexType type) {
         case MeshIndexType::UnsignedInt: return 4;
     }
 
-    CORRADE_ASSERT_UNREACHABLE(); /* LCOV_EXCL_LINE */
+    CORRADE_ASSERT(false, "meshIndexTypeSize(): invalid type" << type, {});
 }
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
-Debug& operator<<(Debug& debug, MeshPrimitive value) {
-    switch(value) {
-        /* LCOV_EXCL_START */
-        #define _c(value) case MeshPrimitive::value: return debug << "MeshPrimitive::" #value;
-        _c(Points)
-        _c(Lines)
-        _c(LineLoop)
-        _c(LineStrip)
-        _c(Triangles)
-        _c(TriangleStrip)
-        _c(TriangleFan)
-        #undef _c
-        /* LCOV_EXCL_STOP */
-    }
+namespace {
 
-    return debug << "MeshPrimitive(" << Debug::nospace << reinterpret_cast<void*>(UnsignedInt(value)) << Debug::nospace << ")";
+constexpr const char* MeshPrimitiveNames[] {
+    #define _c(primitive) #primitive,
+    #include "Magnum/Implementation/meshPrimitiveMapping.hpp"
+    #undef _c
+};
+
 }
 
-Debug& operator<<(Debug& debug, MeshIndexType value) {
-    switch(value) {
-        /* LCOV_EXCL_START */
-        #define _c(value) case MeshIndexType::value: return debug << "MeshIndexType::" #value;
-        _c(UnsignedByte)
-        _c(UnsignedShort)
-        _c(UnsignedInt)
-        #undef _c
-        /* LCOV_EXCL_STOP */
+Debug& operator<<(Debug& debug, const MeshPrimitive value) {
+    debug << "MeshPrimitive" << Debug::nospace;
+
+    if(isMeshPrimitiveImplementationSpecific(value)) {
+        return debug << "::ImplementationSpecific(" << Debug::nospace << reinterpret_cast<void*>(meshPrimitiveUnwrap(value)) << Debug::nospace << ")";
     }
 
-    return debug << "MeshIndexType(" << Debug::nospace << reinterpret_cast<void*>(UnsignedInt(value)) << Debug::nospace << ")";
+    if(UnsignedInt(value) - 1 < Containers::arraySize(MeshPrimitiveNames)) {
+        return debug << "::" << Debug::nospace << MeshPrimitiveNames[UnsignedInt(value) - 1];
+    }
+
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(UnsignedInt(value)) << Debug::nospace << ")";
+}
+
+namespace {
+
+constexpr const char* MeshIndexTypeNames[] {
+    #define _c(type) #type,
+    #include "Magnum/Implementation/meshIndexTypeMapping.hpp"
+    #undef _c
+};
+
+}
+
+Debug& operator<<(Debug& debug, const MeshIndexType value) {
+    debug << "MeshIndexType" << Debug::nospace;
+
+    if(UnsignedInt(value) - 1 < Containers::arraySize(MeshIndexTypeNames)) {
+        return debug << "::" << Debug::nospace << MeshIndexTypeNames[UnsignedInt(value) - 1];
+    }
+
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(UnsignedInt(value)) << Debug::nospace << ")";
 }
 #endif
 
@@ -79,62 +93,31 @@ Debug& operator<<(Debug& debug, MeshIndexType value) {
 namespace Corrade { namespace Utility {
 
 std::string ConfigurationValue<Magnum::MeshPrimitive>::toString(Magnum::MeshPrimitive value, ConfigurationValueFlags) {
-    switch(value) {
-        /* LCOV_EXCL_START */
-        #define _c(value) case Magnum::MeshPrimitive::value: return #value;
-        _c(Points)
-        _c(Lines)
-        _c(LineLoop)
-        _c(LineStrip)
-        _c(Triangles)
-        _c(TriangleStrip)
-        _c(TriangleFan)
-        #undef _c
-        /* LCOV_EXCL_STOP */
-    }
+    if(Magnum::UnsignedInt(value) - 1 < Containers::arraySize(Magnum::MeshPrimitiveNames))
+        return Magnum::MeshPrimitiveNames[Magnum::UnsignedInt(value) - 1];
 
     return {};
 }
 
 Magnum::MeshPrimitive ConfigurationValue<Magnum::MeshPrimitive>::fromString(const std::string& stringValue, ConfigurationValueFlags) {
-    /* LCOV_EXCL_START */
-    #define _c(value) if(stringValue == #value) return Magnum::MeshPrimitive::value;
-    _c(LineStrip)
-    _c(LineLoop)
-    _c(Lines)
-    _c(Triangles)
-    _c(TriangleStrip)
-    _c(TriangleFan)
-    #undef _c
-    /* LCOV_EXCL_STOP */
+    for(std::size_t i = 0; i != Containers::arraySize(Magnum::MeshPrimitiveNames); ++i)
+        if(stringValue == Magnum::MeshPrimitiveNames[i]) return Magnum::MeshPrimitive(i + 1);
 
-    return Magnum::MeshPrimitive::Points;
+    return {};
 }
 
 std::string ConfigurationValue<Magnum::MeshIndexType>::toString(Magnum::MeshIndexType value, ConfigurationValueFlags) {
-    switch(value) {
-        /* LCOV_EXCL_START */
-        #define _c(value) case Magnum::MeshIndexType::value: return #value;
-        _c(UnsignedByte)
-        _c(UnsignedShort)
-        _c(UnsignedInt)
-        #undef _c
-        /* LCOV_EXCL_STOP */
-    }
+    if(Magnum::UnsignedInt(value) - 1 < Containers::arraySize(Magnum::MeshIndexTypeNames))
+        return Magnum::MeshIndexTypeNames[Magnum::UnsignedInt(value) - 1];
 
     return {};
 }
 
 Magnum::MeshIndexType ConfigurationValue<Magnum::MeshIndexType>::fromString(const std::string& stringValue, ConfigurationValueFlags) {
-    /* LCOV_EXCL_START */
-    #define _c(value) if(stringValue == #value) return Magnum::MeshIndexType::value;
-    _c(UnsignedByte)
-    _c(UnsignedShort)
-    _c(UnsignedInt)
-    #undef _c
-    /* LCOV_EXCL_STOP */
+    for(std::size_t i = 0; i != Containers::arraySize(Magnum::MeshIndexTypeNames); ++i)
+        if(stringValue == Magnum::MeshIndexTypeNames[i]) return Magnum::MeshIndexType(i + 1);
 
-    return Magnum::MeshIndexType::UnsignedInt;
+    return {};
 }
 
 }}

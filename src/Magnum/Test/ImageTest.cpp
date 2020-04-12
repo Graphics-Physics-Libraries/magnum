@@ -23,15 +23,19 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+/* Included as first to check that we *really* don't need the StridedArrayView
+   header for definition of pixels(). We actually need, but just for the
+   arrayCast() template, which is forward-declared. */
+#include "Magnum/Image.h"
+
 #include <sstream>
 #include <Corrade/Containers/StridedArrayView.h>
 #include <Corrade/TestSuite/Tester.h>
 #include <Corrade/Utility/DebugStl.h>
 
-#include "Magnum/Image.h"
 #include "Magnum/ImageView.h"
-#include "Magnum/Math/Color.h"
 #include "Magnum/PixelFormat.h"
+#include "Magnum/Math/Color.h"
 
 namespace Magnum { namespace Test { namespace {
 
@@ -416,7 +420,7 @@ void ImageTest::constructInvalidSize() {
 
     /* Doesn't consider alignment */
     Image2D{PixelFormat::RGB8Unorm, {1, 3}, Containers::Array<char>{3*3}};
-    CORRADE_COMPARE(out.str(), "Image::Image(): data too small, got 9 but expected at least 12 bytes\n");
+    CORRADE_COMPARE(out.str(), "Image: data too small, got 9 but expected at least 12 bytes\n");
 }
 
 void ImageTest::constructCompressedInvalidSize() {
@@ -427,14 +431,14 @@ void ImageTest::constructCompressedInvalidSize() {
         std::ostringstream out;
         Error redirectError{&out};
         CompressedImage2D{CompressedPixelFormat::Bc2RGBAUnorm, {4, 4}, Containers::Array<char>{2}};
-        CORRADE_COMPARE(out.str(), "CompressedImage::CompressedImage(): data too small, got 2 but expected at least 4 bytes\n");
+        CORRADE_COMPARE(out.str(), "CompressedImage: data too small, got 2 but expected at least 4 bytes\n");
 
     /* Size should be rounded up even if the image size is not full block */
     } {
         std::ostringstream out;
         Error redirectError{&out};
         CompressedImage2D{CompressedPixelFormat::Bc2RGBAUnorm, {2, 2}, Containers::Array<char>{2}};
-        CORRADE_COMPARE(out.str(), "CompressedImage::CompressedImage(): data too small, got 2 but expected at least 4 bytes\n");
+        CORRADE_COMPARE(out.str(), "CompressedImage: data too small, got 2 but expected at least 4 bytes\n");
     }
 }
 
@@ -479,6 +483,9 @@ void ImageTest::constructMoveGeneric() {
     CORRADE_COMPARE(c.size(), (Vector2i{1, 3}));
     CORRADE_COMPARE(c.data(), data);
     CORRADE_COMPARE(c.data().size(), 3*16);
+
+    CORRADE_VERIFY(std::is_nothrow_move_constructible<Image2D>::value);
+    CORRADE_VERIFY(std::is_nothrow_move_assignable<Image2D>::value);
 }
 
 void ImageTest::constructMoveImplementationSpecific() {
@@ -543,6 +550,9 @@ void ImageTest::constructMoveCompressedGeneric() {
     CORRADE_COMPARE(c.size(), (Vector2i{4, 4}));
     CORRADE_COMPARE(c.data(), data);
     CORRADE_COMPARE(c.data().size(), 8);
+
+    CORRADE_VERIFY(std::is_nothrow_move_constructible<CompressedImage2D>::value);
+    CORRADE_VERIFY(std::is_nothrow_move_assignable<CompressedImage2D>::value);
 }
 
 void ImageTest::constructMoveCompressedImplementationSpecific() {

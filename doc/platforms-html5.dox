@@ -75,10 +75,13 @@ of the toolchain files from above:
 @code{.sh}
 mkdir build-emscripten-wasm && cd build-emscripten-wasm
 cmake .. \
-    -DCMAKE_TOOLCHAIN_FILE="../toolchains/generic/Emscripten-wasm.cmake" \
+    -DCMAKE_TOOLCHAIN_FILE="path/to/toolchains/generic/Emscripten-wasm.cmake" \
     -DCMAKE_BUILD_TYPE=Release
 cmake --build .
 @endcode
+
+Note that the `CMAKE_TOOLCHAIN_FILE` path needs to be absolute --- otherwise
+CMake will silently ignore it and continue compiling natively.
 
 After that you can run the generated JavaScript file using Node.js. Note that
 it looks for the corresponding `*.wasm` file in the current directory, so you
@@ -332,6 +335,39 @@ need more advanced styling, check out [m.css](http://mcss.mosra.cz).
     using @ref Platform::EmscriptenApplication::setContainerCssClass() /
     @ref Platform::Sdl2Application::setContainerCssClass().
 
+@section platforms-html5-files Bundling files
+
+Emscripten applications don't have access to a filesystem, which means you need
+to bundle the files explicitly. One possibility is via
+@ref Corrade::Utility::Resource (basically the same way as you probably already
+bundle shader code etc., as shown in the @ref examples-textured-triangle
+example). In this case the file is compiled directly into the `*.wasm` binary,
+which is the most optimal way, but accessing the files needs extra effort
+compared to a desktop application. Another possibility is via the
+@cmake emscripten_embed_file() @ce CMake macro, which is implicitly available
+when you build for Emscripten, coming from the [UseEmscripten.cmake](https://github.com/mosra/toolchains/blob/master/modules/UseEmscripten.cmake)
+module:
+
+@code{.cmake}
+add_executable(MyApplication main.cpp)
+if(CORRADE_TARGET_EMSCRIPTEN)
+    emscripten_embed_file(MyApplication file.dat /path/in/virtual/fs/file.dat)
+endif()
+@endcode
+
+This approach will make the file available in Emscripten's virtual filesystem,
+meaning you can use the usual filesystem APIs to get it. However, the file will
+be Base64-encoded in the `*.js` file (and not the `*.wasm` binary), inflating
+the file size much more. This approach is thus most useful for quick demos or
+test executables where size doesn't matter that much. If you use
+@ref Corrade::TestSuite, files can be bundled this way also using the `FILES`
+option in the @ref corrade-cmake-add-test "corrade_add_test()" macro.
+
+Among other possibilities for bundling and accessing files is Emscripten's
+[file_packager.py](https://emscripten.org/docs/porting/files/packaging_files.html#packaging-using-the-file-packager-tool)
+or the various @m_class{m-doc-external} [emscripten_async_wget()](https://emscripten.org/docs/api_reference/emscripten.h.html#c.emscripten_async_wget)
+functions, retrieving files from a URL.
+
 @section platforms-html5-events Controlling event behavior
 
 @subsection platforms-html5-events-keyboard Keyboard events
@@ -438,6 +474,28 @@ WebGL specification provide even more detail:
 -   [Differences Between WebGL and OpenGL ES 2.0](http://www.khronos.org/registry/webgl/specs/latest/1.0/#6)
 -   [Differences Between WebGL and OpenGL ES 3.0](https://www.khronos.org/registry/webgl/specs/latest/2.0/#5)
 
+@subsection platforms-html5-webgl-timer-queries Timer queries not available in the browser
+
+Similarly to [Rowhammer](https://en.wikipedia.org/wiki/Row_hammer), GPU timer
+queries could be abused to do a bit-flip attack, which is the reason why
+@webgl_extension{EXT,disjoint_timer_query} / @webgl_extension{EXT,disjoint_timer_query_webgl2} might not be available in
+your browser. Recent versions of Chrome [expose it again](https://bugs.chromium.org/p/chromium/issues/detail?id=823863),
+and Firefox exposes it if you enable `webgl.enable-privileged-extensions` in
+`about:config` ([source](https://www.khronos.org/webgl/public-mailing-list/public_webgl/1803/msg00017.php)).
+[More details about the GLitch vulnerability.](https://www.vusec.net/wp-content/uploads/2018/05/glitch.pdf)
+
+@subsection platforms-html5-webgl-queries-zero Queries always report zero results
+
+Compared to OpenGL ES, WebGL [has an additional restriction](https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.12)
+where it's not guaranteed for a @ref GL::PrimitiveQuery, @ref GL::SampleQuery
+or @ref GL::TimeQuery to return a result in the same frame, which in practice
+means that the queries will return zero. This is particularly problematic in
+headless tests / benchmarks and currently there's no builtin way in Magnum to
+circumvent this limitation.
+
+If you're on Firefox, you can enable the `webgl.allow-immediate-queries` option
+in `about:flags`, which will make these working.
+
 @section platforms-html5-code-size Compilation time / code size tradeoffs
 
 By default, the toolchain configures the compiler and linker to use `-O3` in
@@ -508,6 +566,44 @@ location:
 export LLVM=/usr/local/opt/emscripten/libexec/llvm/bin
 @endcode
 
+@subsection platforms-html5-troubleshooting-windows-compiler CMake insists on using Visual C++ as a compiler
+
+On Windows, running CMake as-is without specifying a generator via `-G` will
+always use the Visual Studio compiler and seemingly ignore the Emscripten
+toolchain file altogether. With recent toolchain files, you may get this
+message instead:
+
+@code{.shell-session}
+CMake Error at toolchains/generic/Emscripten-wasm.cmake:19 (message):
+  Visual Studio project generator doesn't support cross-compiling to
+  Emscripten.  Please use -G Ninja or other generators instead.
+@endcode
+
+This is because Visual Studio Project Files as the default generator on Windows
+is not able to build for any other system than Windows itself. To fix it, use a
+different generator --- for example [Ninja](https://ninja-build.org/). Download
+the binary, put it somewhere on your `PATH` and pass `-G Ninja` to CMake.
+Alternatively, pass the path to it using
+`-DCMAKE_MAKE_PROGRAM=C:/path/to/ninja.exe`.
+
+@m_class{m-block m-success}
+
+@par Using Ninja that's bundled with Visual Studio
+    If you have Visual Studio with CMake support installed, instead of
+    downloading Ninja yourself, you can make use of the version that's bundled
+    with it. In version 2017 it's in the following location, adjust the path
+    for other versions:
+@par
+    @parblock
+    <!-- gotta love doxygen, making easy things hard and complex things such as
+         applying a class to a nested block element next-to-impossible -->
+    @m_class{m-console-wrap}
+
+    @code{.bat}
+    cmake -G Ninja -DCMAKE_MAKE_PROGRAM=C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe ...
+    @endcode
+    @endparblock
+
 @subsection platforms-html5-troubleshooting-bootstrap First Emscripten run takes long or fails
 
 Emscripten downloads and builds a lot of things on first startup or after
@@ -541,9 +637,11 @@ em++ -s WASM=1 main.cpp
 After this step it might be also needed to purge all CMake build directories
 and set them up again to ensure no bad state got cached.
 
-@subsection platforms-html5-troubleshooting-corrade-not-found CMake can't find _CORRADE_MODULE_DIR
+@subsection platforms-html5-troubleshooting-corrade-not-found CMake can't find CORRADE_INCLUDE_DIR, _CORRADE_CONFIGURE_FILE or _CORRADE_MODULE_DIR
 
-If initial CMake configuration fails with
+If you set `CMAKE_INSTALL_PREFIX` to a path contained in `EMSCRIPTEN_TOOLCHAIN_PATH` (which is specified in the toolchain file) and
+dependencies are installed there as well, things should "just work". In other
+cases you might end up with variants of the following error:
 
 @code{.shell-session}
   Could NOT find Corrade (missing: _CORRADE_MODULE_DIR)
@@ -559,7 +657,7 @@ cmake .. \
     -DCMAKE_TOOLCHAIN_FILE=../toolchains/generic/Emscripten-wasm.cmake \
     -DCMAKE_PREFIX_PATH=/your/emscripten/libs/ \
     -DCMAKE_FIND_ROOT_PATH=/your/emscripten/libs/ \
-    -G Ninja
+    ...
 @endcode
 
 @subsection platforms-html5-troubleshooting-loading-failed Application fails to load
@@ -623,8 +721,10 @@ JavaScript code. Using them in C++ sources triggers a warning from Clang:
 warning: '$' in identifier
 @endcode
 
-Solution is to disable the warning for the offending lines, here for example
-when modifying a title element contents through DOM:
+Solution is to disable the warning for the offending lines, below for example
+when modifying a title element contents through DOM. No @cpp #ifdef __clang__ @ce
+is necessary, as the code in question is only ever compiled by Emscripten's
+Clang anyway:
 
 @snippet platforms-html5.cpp emasm-dollar
 

@@ -171,7 +171,11 @@ class MAGNUM_AUDIO_EXPORT Source {
             return *this;
         }
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Source behavior */
 
@@ -474,7 +478,11 @@ class MAGNUM_AUDIO_EXPORT Source {
             return *this;
         }
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Buffer management */
 
@@ -491,6 +499,7 @@ class MAGNUM_AUDIO_EXPORT Source {
 
         /**
          * @brief Source type
+         * @m_since{2019,10}
          *
          * @see @ref setBuffer(), @fn_al_keyword{GetSourcei} with
          *      @def_al{SOURCE_TYPE}
@@ -513,6 +522,7 @@ class MAGNUM_AUDIO_EXPORT Source {
          * @brief Queue buffers
          * @param buffers       Buffers to queue
          * @return Reference to self (for method chaining)
+         * @m_since{2019,10}
          *
          * Changes source type to @ref Type::Streaming. The buffers must be
          * already filled with data.
@@ -524,6 +534,7 @@ class MAGNUM_AUDIO_EXPORT Source {
          * @brief Unqueue buffers
          * @param buffers       Buffers to unqueue
          * @return The number of unqueued buffers
+         * @m_since{2019,10}
          *
          * The unqueued buffers will be listed in the prefix of the array. Use
          * @ref Corrade::Containers::ArrayView::prefix() to get it.
@@ -531,7 +542,11 @@ class MAGNUM_AUDIO_EXPORT Source {
          */
         std::size_t unqueueBuffers(Containers::ArrayView<Containers::Reference<Buffer>> buffers);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name State management */
 
@@ -739,7 +754,11 @@ class MAGNUM_AUDIO_EXPORT Source {
             return *this;
         }
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
     private:
         ALuint _id;

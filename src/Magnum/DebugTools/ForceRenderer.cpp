@@ -55,13 +55,13 @@ constexpr UnsignedByte indices[]{
 
 }
 
-template<UnsignedInt dimensions> ForceRenderer<dimensions>::ForceRenderer(SceneGraph::AbstractObject<dimensions, Float>& object, const VectorTypeFor<dimensions, Float>& forcePosition, const VectorTypeFor<dimensions, Float>& force, ResourceKey options, SceneGraph::DrawableGroup<dimensions, Float>* drawables): SceneGraph::Drawable<dimensions, Float>(object, drawables), _forcePosition(forcePosition), _force(force), _options(ResourceManager::instance().get<ForceRendererOptions>(options)) {
+template<UnsignedInt dimensions> ForceRenderer<dimensions>::ForceRenderer(ResourceManager& manager, SceneGraph::AbstractObject<dimensions, Float>& object, const VectorTypeFor<dimensions, Float>& forcePosition, const VectorTypeFor<dimensions, Float>& force, ResourceKey options, SceneGraph::DrawableGroup<dimensions, Float>* drawables): SceneGraph::Drawable<dimensions, Float>(object, drawables), _forcePosition(forcePosition), _force(force), _options(manager.get<ForceRendererOptions>(options)) {
     /* Shader */
-    _shader = ResourceManager::instance().get<GL::AbstractShaderProgram, Shaders::Flat<dimensions>>(shaderKey<dimensions>());
-    if(!_shader) ResourceManager::instance().set<GL::AbstractShaderProgram>(_shader.key(), new Shaders::Flat<dimensions>);
+    _shader = manager.get<GL::AbstractShaderProgram, Shaders::Flat<dimensions>>(shaderKey<dimensions>());
+    if(!_shader) manager.set<GL::AbstractShaderProgram>(_shader.key(), new Shaders::Flat<dimensions>);
 
     /* Mesh and vertex buffer */
-    _mesh = ResourceManager::instance().get<GL::Mesh>("force");
+    _mesh = manager.get<GL::Mesh>("force");
     if(_mesh) return;
 
     /* Create the mesh */
@@ -74,7 +74,7 @@ template<UnsignedInt dimensions> ForceRenderer<dimensions>::ForceRenderer(SceneG
         .addVertexBuffer(std::move(vertexBuffer), 0,
             typename Shaders::Flat<dimensions>::Position(Shaders::Flat<dimensions>::Position::Components::Two))
         .setIndexBuffer(std::move(indexBuffer), 0, GL::MeshIndexType::UnsignedByte, 0, Containers::arraySize(positions));
-    ResourceManager::instance().set(_mesh.key(), std::move(mesh), ResourceDataState::Final, ResourcePolicy::Manual);
+    manager.set(_mesh.key(), std::move(mesh), ResourceDataState::Final, ResourcePolicy::Manual);
 }
 
 /* To avoid deleting pointers to incomplete type on destruction of Resource members */
@@ -82,11 +82,11 @@ template<UnsignedInt dimensions> ForceRenderer<dimensions>::~ForceRenderer() = d
 
 template<UnsignedInt dimensions> void ForceRenderer<dimensions>::draw(const MatrixTypeFor<dimensions, Float>& transformationMatrix, SceneGraph::Camera<dimensions, Float>& camera) {
     _shader->setTransformationProjectionMatrix(camera.projectionMatrix()*Implementation::forceRendererTransformation<dimensions>(transformationMatrix.transformPoint(_forcePosition), _force)*MatrixTypeFor<dimensions, Float>::scaling(VectorTypeFor<dimensions, Float>{_options->size()}))
-        .setColor(_options->color());
-    _mesh->draw(*_shader);
+        .setColor(_options->color())
+        .draw(*_mesh);
 }
 
-template class ForceRenderer<2>;
-template class ForceRenderer<3>;
+template class MAGNUM_DEBUGTOOLS_EXPORT ForceRenderer<2>;
+template class MAGNUM_DEBUGTOOLS_EXPORT ForceRenderer<3>;
 
 }}

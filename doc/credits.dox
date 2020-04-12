@@ -28,6 +28,8 @@ namespace Magnum {
 /** @page credits-third-party Third-party components
 @brief Third-party dependencies and their corresponding license information
 
+@m_keyword{3rd party components,,}
+
 This page lists libraries, data files and other components that some Magnum
 libraries, plugins, executables or tests depend on. See the
 @ref mainpage-license "main page" for license of Magnum itself. For easier
@@ -79,6 +81,8 @@ Big thanks to everyone involved!
 Are the below lists missing your name or something's wrong?
 [Let us know!](https://magnum.graphics/contact/)
 
+-   **Alan Jefferson** ([\@alanjfs](https://github.com/alanjfs)) --- extensive
+    usability and first-time-use feedback
 -   **[\@Alan-FGR](https://github.com/Alan-FGR)** --- documentation fixes
 -   **Alexander F Rødseth** ([\@xyproto](https://github.com/xyproto)) ---
     packages in the ArchLinux community repository
@@ -104,7 +108,7 @@ Are the below lists missing your name or something's wrong?
 -   **Daniel Bloor** ([\@Bluer01](https://github.com/Bluer01)) --- setting old
     code on fire
 -   **Daniel Guzman** ([\@roig](https://github.com/roig)) --- improvements to
-    @ref ResourceManager
+    @ref ResourceManager, warning fixes
 -   **Denis Igorevich Lobanov** ([\@denislobanov](https://github.com/denislobanov))
     --- math fixes
 -   **[\@dlardi](https://github.com/dlardi)** --- WGL-related bugfixes
@@ -114,6 +118,8 @@ Are the below lists missing your name or something's wrong?
     updates, algorithm bugfixes
 -   **Erik Wijmans** ([\@erikwijmans](https://github.com/erikwijmans)) ---
     NVidia-specific workarounds for headless EGL contexts
+-   **Florian Goujeon** ([\@fgoujeon](https://github.com/fgoujeon)) --- iOS
+    fixes in the @ref Shaders library
 -   **Gerhard de Clercq** --- Windows RT (Store/Phone) port
 -   **Guillaume Giraud** ([\@Guillaume227](https://github.com/Guillaume227)) ---
     algorithm bugfixes
@@ -125,6 +131,11 @@ Are the below lists missing your name or something's wrong?
     improvements to @cb{.cmake} android_create_apk() @ce
 -   **Ivan P.** ([\@uzername](https://github.com/uzername)) --- documentation
     improvements
+-   **Ivan Sanz Carasa** ([\@isc30](https://github.com/isc30)) --- buildsystem
+    improvements
+-   **Jackson Campolattaro** ([\@JacksonCampolattaro](https://github.com/JacksonCampolattaro))
+    --- documentation improvements, [base-gtkmm](https://github.com/mosra/magnum-bootstrap/tree/base-gtkmm)
+    bootstrap project
 -   **Jan Dupal** ([\@JanDupal](https://github.com/JanDupal)) --- Homebrew
     package for `magnum-bindings`
 -   **Jonathan Hale** ([\@Squareys](https://github.com/Squareys)) ---
@@ -134,13 +145,17 @@ Are the below lists missing your name or something's wrong?
     improvements and tons of other stuff
 -   **Joel Clay** ([\@jclay](https://github.com/jclay)) --- Vcpkg packages
 -   **Konstantinos Chatzilygeroudis** ([\@costashatz](https://github.com/costashatz))
-    --- Debian package
+    --- Debian package, improvements to @ref Platform::GlfwApplication and
+    @ref Platform::AbstractXApplication
 -   **Krzysztof Szenk** ([\@Crisspl](https://github.com/Crisspl)) --- math
     fixes
 -   **Leon Moctezuma** ([\@leonidax](https://github.com/leonidax)) ---
     bugreports, API design direction
 -   **Mandeep Singh Baines** ([\@msbaines](https://github.com/msbaines)) ---
     WebGL 2 build fixes
+-   **Marco Melorio** ([\@Melix19](https://github.com/Melix19)) --- iOS test
+    updates and fixes, cursor management in @ref Platform::Sdl2Application and
+    @ref Platform::GlfwApplication, Math library additions and doc fixes
 -   **Max Schwarz** ([\@xqms](https://github.com/xqms)) --- `Any*` plugin
     improvements, fixes in the @ref GL library
 -   **Michael Tao** ([\@mtao](https://github.com/mtao)) --- Gentoo build fixes
@@ -148,6 +163,8 @@ Are the below lists missing your name or something's wrong?
     --- initial macOS port, various other improvements
 -   **Nathan Ollerenshaw** ([\@matjam](https://github.com/matjam)) --- Ubuntu
     packages in a PPA repository
+-   **Nghia Truong** ([\@ttnghia](https://github.com/ttnghia) ---@ref Math
+    library additions
 -   **Nick Skelsey** ([\@NSkelsey](https://github.com/NSkelsey)) ---
     documentation copy-editing
 -   **Nicholas "LB" Branden** ([\@LB--](https://github.com/LB--)) --- warning
@@ -172,6 +189,8 @@ Are the below lists missing your name or something's wrong?
     buildsystem improvements
 -   **Stefan Wasilewski** ([\@smw](https://github.com/smw)) --- macOS port
     improvements
+-   **Stéphane Brard** ([\@aspioupiou](https://github.com/aspioupiou)) ---
+    shared context support in windowless applications
 -   **Thibault Jochem** ([\@Tryum](https://github.com/Tryum)) ---
     @ref Platform::GlfwApplication improvements
 -   **Thomas Tissot-Dupont** ([\@dolphineye](https://github.com/dolphineye))

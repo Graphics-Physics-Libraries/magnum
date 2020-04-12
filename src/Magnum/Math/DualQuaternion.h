@@ -200,6 +200,10 @@ template<class T> class DualQuaternion: public Dual<Quaternion<T>> {
          * Expects that the rotation axis is normalized. @f[
          *      \hat q = [\boldsymbol a \cdot \sin(\frac{\theta}{2}), \cos(\frac{\theta}{2})] + \epsilon [\boldsymbol 0, 0]
          * @f]
+         *
+         * For creating a dual quaternion from a rotation @ref Quaternion, use
+         * the implicit conversion provided by
+         * @ref DualQuaternion(const Quaternion<T>&, const Quaternion<T>&).
          * @see @ref rotation() const, @ref Quaternion::rotation(),
          *      @ref Matrix4::rotation(), @ref DualComplex::rotation(),
          *      @ref Vector3::xAxis(), @ref Vector3::yAxis(),
@@ -270,6 +274,9 @@ template<class T> class DualQuaternion: public Dual<Quaternion<T>> {
          * @f[
          *      \hat q = q_0 + \epsilon q_\epsilon
          * @f]
+         *
+         * This constructor can be also used to implicitly convert a rotation
+         * quaternion to a rotation dual quaternion.
          */
         constexpr /*implicit*/ DualQuaternion(const Quaternion<T>& real, const Quaternion<T>& dual = Quaternion<T>({}, T(0))) noexcept: Dual<Quaternion<T>>(real, dual) {}
 
@@ -468,6 +475,28 @@ template<class T> class DualQuaternion: public Dual<Quaternion<T>> {
         }
 
         /**
+         * @brief Rotate a vector with a dual quaternion
+         * @m_since_latest
+         *
+         * Calls @ref Quaternion::transformVector() on the @ref real() part,
+         * see its documentation for more information.
+         */
+        Vector3<T> transformVector(const Vector3<T>& vector) const {
+            return Dual<Quaternion<T>>::real().transformVector(vector);
+        }
+
+        /**
+         * @brief Rotate a vector with a normalized dual quaternion
+         * @m_since_latest
+         *
+         * Calls @ref Quaternion::transformVectorNormalized() on the
+         * @ref real() part, see its documentation for more information.
+         */
+        Vector3<T> transformVectorNormalized(const Vector3<T>& vector) const {
+            return Dual<Quaternion<T>>::real().transformVectorNormalized(vector);
+        }
+
+        /**
          * @brief Rotate and translate point with dual quaternion
          *
          * See @ref transformPointNormalized(), which is faster for normalized
@@ -476,7 +505,6 @@ template<class T> class DualQuaternion: public Dual<Quaternion<T>> {
          * @f]
          * @see @ref DualQuaternion(const Vector3<T>&), @ref dual(),
          *      @ref Matrix4::transformPoint(),
-         *      @ref Quaternion::transformVector(),
          *      @ref DualComplex::transformPoint()
          */
         Vector3<T> transformPoint(const Vector3<T>& vector) const {

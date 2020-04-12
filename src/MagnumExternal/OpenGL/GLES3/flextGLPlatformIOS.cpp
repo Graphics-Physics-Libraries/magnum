@@ -35,6 +35,7 @@
 #undef glDeleteQueriesEXT
 #undef glEndQueryEXT
 #undef glGenQueriesEXT
+#undef glGetInteger64vEXT
 #undef glGetQueryObjecti64vEXT
 #undef glGetQueryObjectivEXT
 #undef glGetQueryObjectui64vEXT
@@ -139,6 +140,7 @@
 #undef glUnmapBufferOES
 #undef glMinSampleShadingOES
 #undef glTexStorage3DMultisampleOES
+#undef glFramebufferTextureMultiviewOVR
 
 #include <OpenGLES/ES3/glext.h>
 
@@ -168,6 +170,7 @@ void flextGLInit(Magnum::GL::Context&) {
     flextglDeleteQueriesEXT = reinterpret_cast<void(APIENTRY*)(GLsizei, const GLuint *)>(glDeleteQueriesEXT);
     flextglEndQueryEXT = reinterpret_cast<void(APIENTRY*)(GLenum)>(glEndQueryEXT);
     flextglGenQueriesEXT = reinterpret_cast<void(APIENTRY*)(GLsizei, GLuint *)>(glGenQueriesEXT);
+    flextglGetInteger64vEXT = reinterpret_cast<void(APIENTRY*)(GLenum, GLint64 *)>(glGetInteger64vEXT);
     flextglGetQueryObjecti64vEXT = reinterpret_cast<void(APIENTRY*)(GLuint, GLenum, GLint64 *)>(glGetQueryObjecti64vEXT);
     flextglGetQueryObjectivEXT = reinterpret_cast<void(APIENTRY*)(GLuint, GLenum, GLint *)>(glGetQueryObjectivEXT);
     flextglGetQueryObjectui64vEXT = reinterpret_cast<void(APIENTRY*)(GLuint, GLenum, GLuint64 *)>(glGetQueryObjectui64vEXT);
@@ -344,5 +347,10 @@ void flextGLInit(Magnum::GL::Context&) {
     /* GL_OES_texture_storage_multisample_2d_array */
     #if GL_OES_texture_storage_multisample_2d_array
     flextglTexStorage3DMultisampleOES = reinterpret_cast<void(APIENTRY*)(GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLsizei, GLboolean)>(glTexStorage3DMultisampleOES);
+    #endif
+
+    /* GL_OVR_multiview */
+    #if GL_OVR_multiview
+    flextglFramebufferTextureMultiviewOVR = reinterpret_cast<void(APIENTRY*)(GLenum, GLenum, GLuint, GLint, GLint, GLsizei)>(glFramebufferTextureMultiviewOVR);
     #endif
 }

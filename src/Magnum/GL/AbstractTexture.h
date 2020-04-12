@@ -139,10 +139,6 @@ functions do nothing.
 @todo Query for immutable levels (@gl_extension{ARB,ES3_compatibility})
 */
 class MAGNUM_GL_EXPORT AbstractTexture: public AbstractObject {
-    friend Implementation::TextureState;
-    friend AbstractFramebuffer;
-    friend CubeMapTexture;
-
     public:
         #ifndef MAGNUM_TARGET_GLES2
         /**
@@ -232,6 +228,7 @@ class MAGNUM_GL_EXPORT AbstractTexture: public AbstractObject {
 
         /**
          * @brief Bind textures to given range of texture units
+         * @m_since_latest
          *
          * Binds first texture in the list to @p firstTextureUnit, second to
          * `firstTextureUnit + 1` etc. If any texture is @cpp nullptr @ce,
@@ -244,7 +241,12 @@ class MAGNUM_GL_EXPORT AbstractTexture: public AbstractObject {
          * @see @ref Shader::maxCombinedTextureImageUnits(),
          *      @fn_gl_keyword{BindTextures}
          */
-        static void bind(Int firstTextureUnit, std::initializer_list<AbstractTexture*> textures);
+        static void bind(Int firstTextureUnit, Containers::ArrayView<AbstractTexture* const> textures);
+
+        /** @overload */
+        static void bind(Int firstTextureUnit, std::initializer_list<AbstractTexture*> textures) {
+            AbstractTexture::bind(firstTextureUnit, Containers::arrayView(textures.begin(), textures.size()));
+        }
 
         #if !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
         /**
@@ -284,11 +286,12 @@ class MAGNUM_GL_EXPORT AbstractTexture: public AbstractObject {
          * @requires_gl Multi bind is not available in OpenGL ES and WebGL.
          */
         static void unbindImages(Int firstImageUnit, std::size_t count) {
-            bindImagesInternal(firstImageUnit, {nullptr, count});
+            bindImages(firstImageUnit, {nullptr, count});
         }
 
         /**
          * @brief Bind textures to given range of texture units
+         * @m_since_latest
          *
          * Binds first level of given texture in the list to @p firstImageUnit,
          * second to `firstTextureUnit + 1` etc. 3D, cube map and array
@@ -306,8 +309,11 @@ class MAGNUM_GL_EXPORT AbstractTexture: public AbstractObject {
          * @requires_gl44 Extension @gl_extension{ARB,multi_bind}
          * @requires_gl Multi bind is not available in OpenGL ES and WebGL.
          */
+        static void bindImages(Int firstImageUnit, Containers::ArrayView<AbstractTexture* const> textures);
+
+        /** @overload */
         static void bindImages(Int firstImageUnit, std::initializer_list<AbstractTexture*> textures) {
-            bindImagesInternal(firstImageUnit, {textures.begin(), textures.size()});
+            bindImages(firstImageUnit, Containers::arrayView(textures.begin(), textures.size()));
         }
         #endif
 
@@ -316,18 +322,6 @@ class MAGNUM_GL_EXPORT AbstractTexture: public AbstractObject {
 
         /** @brief Move constructor */
         AbstractTexture(AbstractTexture&& other) noexcept;
-
-        /**
-         * @brief Destructor
-         *
-         * Deletes associated OpenGL texture.
-         * @see @ref BufferTexture::wrap(), @ref CubeMapTexture::wrap(),
-         *      @ref CubeMapTextureArray::wrap(),
-         *      @ref MultisampleTexture::wrap(), @ref RectangleTexture::wrap(),
-         *      @ref Texture::wrap(), @ref TextureArray::wrap(),
-         *      @ref release(), @fn_gl_keyword{DeleteTextures}
-         */
-        ~AbstractTexture();
 
         /** @brief Copying is not allowed */
         AbstractTexture& operator=(const AbstractTexture&) = delete;
@@ -409,6 +403,25 @@ class MAGNUM_GL_EXPORT AbstractTexture: public AbstractObject {
          */
         void bind(Int textureUnit);
 
+    #if !defined(MAGNUM_BUILD_DEPRECATED) || defined(DOXYGEN_GENERATING_OUTPUT)
+    protected: /* Destructor was public before */
+    #endif
+        /**
+         * @brief Destructor
+         *
+         * Deletes associated OpenGL texture.
+         * @see @ref BufferTexture::wrap(), @ref CubeMapTexture::wrap(),
+         *      @ref CubeMapTextureArray::wrap(),
+         *      @ref MultisampleTexture::wrap(), @ref RectangleTexture::wrap(),
+         *      @ref Texture::wrap(), @ref TextureArray::wrap(),
+         *      @ref release(), @fn_gl_keyword{DeleteTextures}
+         */
+        /* Not virtual to avoid vtable overhead, however while subclasses are
+           all the same size (and thus no risk of memory leaks from additional
+           members) these might perform cleanup steps on destruction (driver
+           workarouds...), so we have to disallow deletion from base pointer */
+        ~AbstractTexture();
+
     #ifdef DOXYGEN_GENERATING_OUTPUT
     private:
     #else
@@ -418,10 +431,6 @@ class MAGNUM_GL_EXPORT AbstractTexture: public AbstractObject {
 
         #ifndef MAGNUM_TARGET_GLES
         static Int compressedBlockDataSize(GLenum target, TextureFormat format);
-        #endif
-
-        #if !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
-        static void bindImagesInternal(Int firstImageUnit, Containers::ArrayView<AbstractTexture* const> textures);
         #endif
 
         explicit AbstractTexture(GLenum target);
@@ -506,6 +515,10 @@ class MAGNUM_GL_EXPORT AbstractTexture: public AbstractObject {
         GLenum _target;
 
     private:
+        friend Implementation::TextureState;
+        friend AbstractFramebuffer;
+        friend CubeMapTexture;
+
         #ifndef MAGNUM_TARGET_GLES
         static Int MAGNUM_GL_LOCAL compressedBlockDataSizeImplementationDefault(GLenum target, TextureFormat format);
         static Int MAGNUM_GL_LOCAL compressedBlockDataSizeImplementationBitsWorkaround(GLenum target, TextureFormat format);
@@ -815,6 +828,21 @@ inline GLuint AbstractTexture::release() {
     _id = 0;
     return id;
 }
+
+#ifdef CORRADE_TARGET_CLANG_CL
+/* Otherwise Clang-CL complains these functions are not defined */
+#ifndef MAGNUM_TARGET_GLES
+extern template void AbstractTexture::subImageImplementationSvga3DSliceBySlice<&AbstractTexture::subImage2DImplementationDefault>(GLint, const Vector2i&, const Vector2i&, PixelFormat, PixelType, const GLvoid*, const PixelStorage&);
+extern template void AbstractTexture::subImageImplementationSvga3DSliceBySlice<&AbstractTexture::subImage2DImplementationDSA>(GLint, const Vector2i&, const Vector2i&, PixelFormat, PixelType, const GLvoid*, const PixelStorage&);
+#endif
+
+#ifndef MAGNUM_TARGET_WEBGL
+extern template void  AbstractTexture::subImageImplementationSvga3DSliceBySlice<&AbstractTexture::subImage3DImplementationDefault>(GLint, const Vector3i&, const Vector3i&, PixelFormat, PixelType, const GLvoid*, const PixelStorage&);
+#ifndef MAGNUM_TARGET_GLES
+extern template void AbstractTexture::subImageImplementationSvga3DSliceBySlice<&AbstractTexture::subImage3DImplementationDSA>(GLint, const Vector3i&, const Vector3i&, PixelFormat, PixelType, const GLvoid*, const PixelStorage&);
+#endif
+#endif
+#endif
 
 }}
 

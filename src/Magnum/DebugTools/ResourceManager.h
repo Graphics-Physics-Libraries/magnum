@@ -62,16 +62,9 @@ information.
     @ref MAGNUM_TARGET_GL "TARGET_GL" enabled (done by default). See
     @ref building-features for more information.
 */
-class MAGNUM_DEBUGTOOLS_EXPORT ResourceManager: public Magnum::ResourceManager<Magnum::Implementation::ResourceManagerLocalInstance, GL::AbstractShaderProgram, GL::Buffer, GL::Mesh, GL::MeshView, DebugTools::ForceRendererOptions, DebugTools::ObjectRendererOptions>
+class MAGNUM_DEBUGTOOLS_EXPORT ResourceManager: public Magnum::ResourceManager<GL::AbstractShaderProgram, GL::Buffer, GL::Mesh, GL::MeshView, DebugTools::ForceRendererOptions, DebugTools::ObjectRendererOptions>
 {
     public:
-        /**
-         * @brief Global instance
-         *
-         * Assumes that the instance exists.
-         */
-        static ResourceManager& instance();
-
         explicit ResourceManager();
         ~ResourceManager();
 };

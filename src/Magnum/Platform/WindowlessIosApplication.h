@@ -51,11 +51,10 @@ namespace Magnum { namespace Platform {
 /**
 @brief Windowless iOS context
 
-@m_keywords{WindowlessGLContext}
+@m_keywords{WindowlessGLContext EGL EAGL}
 
 GL context using EAGL on iOS, used in @ref WindowlessIosApplication. Does not
-have any default framebuffer. It is built if `WITH_WINDOWLESSIOSAPPLICATION` is
-enabled in CMake.
+have any default framebuffer.
 
 Meant to be used when there is a need to manage (multiple) GL contexts
 manually. See @ref platform-windowless-contexts for more information. If no
@@ -140,11 +139,10 @@ class WindowlessIosContext::Configuration {
 /**
 @brief Windowless iOS application
 
-@m_keywords{WindowlessApplication}
+@m_keywords{WindowlessApplication EGL EAGL}
 
 Application for offscreen rendering using @ref WindowlessIosContext. Does not
-have any default framebuffer. It is built if `WITH_WINDOWLESSIOSAPPLICATION` is
-enabled in CMake.
+have any default framebuffer.
 
 @section Platform-WindowlessIosApplication-bootstrap Bootstrap application
 
@@ -167,9 +165,9 @@ See @ref cmake for more information.
 
 @section Platform-WindowlessIosApplication-usage General usage
 
-In order to use this library from CMake, you need to copy `FindEGL.cmake` from
-the modules directory in Magnum source to the `modules/` dir in your project
-(so it is able to find the EGL library). Request the `WindowlessIosApplication`
+This application library is built if `WITH_WINDOWLESSIOSAPPLICATION` is
+enabled when building Magnum. To use this library from CMake, put [FindEGL.cmake](https://github.com/mosra/magnum/blob/master/modules/FindEGL.cmake)
+into your `modules/` directory, request the `WindowlessIosApplication`
 component of the `Magnum` package and link to the
 `Magnum::WindowlessIosApplication` target:
 
@@ -181,8 +179,17 @@ endif()
 
 # ...
 if(CORRADE_TARGET_IOS)
-    target_link_libraries(your-app Magnum::WindowlessIosApplication)
+    target_link_libraries(your-app PRIVATE Magnum::WindowlessIosApplication)
 endif()
+@endcode
+
+Additionally, if you're using Magnum as a CMake subproject, do the following
+* *before* calling @cmake find_package() @ce to ensure it's enabled, as the
+library is not built by default:
+
+@code{.cmake}
+set(WITH_WINDOWLESSIOSAPPLICATION ON CACHE BOOL "" FORCE)
+add_subdirectory(magnum EXCLUDE_FROM_ALL)
 @endcode
 
 If no other application is requested, you can also use the generic
@@ -314,6 +321,8 @@ class WindowlessIosApplication {
 /** @hideinitializer
 @brief Entry point for windowless EGL application
 @param className Class name
+
+@m_keywords{MAGNUM_WINDOWLESSAPPLICATION_MAIN()}
 
 See @ref Magnum::Platform::WindowlessIosApplication "Platform::WindowlessIosApplication"
 for usage information. This macro abstracts out platform-specific entry point

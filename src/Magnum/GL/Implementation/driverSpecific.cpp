@@ -38,12 +38,60 @@ namespace {
     /* Search the code for the following strings to see where they are implemented. */
     std::vector<std::string> KnownWorkarounds{
 /* [workarounds] */
+#if defined(CORRADE_TARGET_APPLE) && !defined(CORRADE_TARGET_IOS)
+/* Calling glBufferData(), glMapBuffer(), glMapBufferRange() or glUnmapBuffer()
+   on ANY buffer when ANY buffer is attached to a currently bound
+   GL_TEXTURE_BUFFER crashes in gleUpdateCtxDirtyStateForBufStampChange deep
+   inside Apple's GLengine. This can be worked around by unbinding all buffer
+   textures before attempting to do such operation.
+
+   A previous iteration of this workaround was to remember if a buffer is
+   attached to a buffer texture, temporarily detaching it, calling given
+   data-modifying API and then attaching it back with the same parameters.
+   Unfortunately we also had to cache the internal texture format, as
+   GL_TEXTURE_INTERNAL_FORMAT query is broken for buffer textures as well,
+   returning always GL_R8 (the spec-mandated default). "Fortunately" macOS
+   doesn't support ARB_texture_buffer_range so we didn't need to store also
+   offset/size, only texture ID and its internal format, wasting 8 bytes per
+   Buffer instance. HOWEVER, then we discovered this is not enough and also
+   completely unrelated buffers suffer from the same crash. Fixing that
+   properly in a similar manner would mean going through all live buffer
+   texture instances and temporarily detaching their buffer when doing *any*
+   data modification on *any* buffer, which would have extreme perf
+   implications. So FORTUNATELY unbinding the textures worked around this too,
+   and is a much nicer workaround after all. */
+"apple-buffer-texture-unbind-on-buffer-modify",
+#endif
+
 #if defined(CORRADE_TARGET_ANDROID) && defined(MAGNUM_TARGET_GLES)
 /* glBeginQuery() with GL_TIME_ELAPSED causes a GL_OUT_OF_MEMORY error when
    running from the Android shell (through ADB). No such error happens in an
    APK. Detecting using the $SHELL environment variable and disabling
    GL_EXT_disjoint_timer_query in that case. */
 "arm-mali-timer-queries-oom-in-shell",
+#endif
+
+#if !defined(MAGNUM_TARGET_GLES) && defined(CORRADE_TARGET_WINDOWS)
+/* ARB_direct_state_access on AMD Windows drivers has broken
+   glTextureSubImage3D() / glGetTextureImage() on cube map textures (but not
+   cube map arrays), always failing with erros like
+   `glTextureSubImage3D has generated an error (GL_INVALID_VALUE)` if Z size or
+   offset is larger than 1. Working around that by up/downloading
+   slice-by-slice using non-DSA APIs, similarly to the
+   svga3d-texture-upload-slice-by-slice workaround. The compressed image up/
+   download is affected as well, but we lack APIs for easy format-dependent
+   slicing and offset calculation, so those currently still fail. */
+"amd-windows-cubemap-image3d-slice-by-slice",
+
+/* AMD Windows drivers have broken the DSA glCopyTextureSubImage3D(), returning
+   GL_INVALID_VALUE. The non-DSA code path works. */
+"amd-windows-broken-dsa-cubemap-copy",
+
+/* AMD Windows glCreateQueries() works for everything except
+   GL_TRANSFORM_FEEDBACK_[STREAM_]OVERFLOW, probably they just forgot to adapt
+   it to this new GL 4.6 addition. Calling the non-DSA code path in that case
+   instead. */
+"amd-windows-dsa-createquery-except-xfb-overflow",
 #endif
 
 #if !defined(MAGNUM_TARGET_GLES) && !defined(CORRADE_TARGET_APPLE)
@@ -105,12 +153,6 @@ namespace {
    possible to get driver version through EGL, so enabling this unconditionally
    on all EGL NV contexts. */
 "nv-egl-incorrect-gl11-function-pointers",
-
-/* NVidia is unhappy when EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE_BIT_KHR is
-   present among attributes passed to eglCreateContext(), blowing up with
-   EGL_BAD_MATCH. This flag is enabled by default, wiping it away to make the
-   context creation work. */
-"nv-egl-forward-compatible-context-unhappy",
 #endif
 
 #ifndef MAGNUM_TARGET_GLES
@@ -214,18 +256,42 @@ namespace {
 /* Intel drivers on Windows have some synchronization / memory alignment bug in
    the DSA glNamedBufferData() when the same buffer is set as an index buffer
    to a mesh right after or repeatedly. Calling glBindBuffer() right before or
-   after the data upload fixes the issue. Note that this workaround is done
-   only for buffers with TargetHint::ElementArray, as the issue was not
-   observed elsewhere. Reproducible with the 2019.01 ImGui example,
-   unfortunately I was not able to create a standalone minimal repro case. */
-"intel-windows-buggy-dsa-bufferdata-for-index-buffers",
+   after the data upload fixes the issue. The above is reproducible with the
+   2019.01 ImGui example, and used to be worked around in a more hopeful way.
+   However, the reports about things going *bad* in heavier ImGui-based apps
+   didn't stop with that and none of my tests were able to reproduce anything.
+   Since I lost patience already, I'm disabling the DSA code paths for
+   everything related to buffers. (Two weeks pass.) But wait! while that fixed
+   all issues for *some* users, it made things completely broken elsewhere,
+   causing an app to render just a clear color and nothing else. The cancer
+   apparently spread further, so I'm disabling all VAO-related DSA code paths
+   as well now. Workarounds listed separately, in case someone might want to
+   dig further or experience the misery of only one of them being active.
+
+   To save you time experimenting:
+
+   - (Epilepsy warning!) With the former disabled and no matter whether the
+     second is disabled or not, the ImGui example (or any other ImGui-based
+     app, really), the screen will start flickering heavily under *some*
+     circumstances. This is known since drivers 24 at least.
+   - With the former enabled and the second disabled, you might either
+     experience a total doom, where just the framebuffer clear color is
+     visible, or your app is totally fine. This is reproducible with drivers 25
+     or 26 at least. Note that modifying the code to enable this workaround on
+     other drivers (AMD on Windows, e.g.) doesn't break anything, so it's not
+     like the workaround would be incomplete with some code paths still relying
+     on DSA that's not there. It's clearly Intel drivers fault.
+   - With both enabled, things seem to be fine, and I hope it stays that way
+     also for future driver updates. */
+"intel-windows-crazy-broken-buffer-dsa",
+"intel-windows-crazy-broken-vao-dsa",
 
 /* ARB_direct_state_access implementation on Intel Windows drivers has broken
    *everything* related to cube map textures (but not cube map arrays) -- data
    upload, data queries, framebuffer attachment, framebuffer copies, all
    complaining about "Wrong <func> 6 provided for <target> 34067" and similar
-   (GL_TEXTURE_CUBE_MAP is 34067). Using the non-DSA code path as a
-   workaround. */
+   (GL_TEXTURE_CUBE_MAP is 34067). Using the non-DSA code paths as a
+   workaround (for the 3D image up/download as well). */
 "intel-windows-broken-dsa-for-cubemaps",
 
 /* DSA glBindTextureUnit() on Intel Windows drivers simply doesn't work when
@@ -253,6 +319,18 @@ namespace {
    glVertexAttribIFormat() works or not. A test that triggers this issue is in
    MeshGLTest::addVertexBufferIntWithShort(). */
 "intel-windows-broken-dsa-integer-vertex-attributes",
+
+/* When using more than just a vertex and fragment shader (geometry shader,
+   e.g.), ARB_explicit_uniform_location on Intel silently uses wrong
+   locations, blowing up with either a non-descript
+    Error has been generated. GL error GL_INVALID_OPERATION in ProgramUniformMatrix4fv: (ID: 2052228270) Generic error
+   or, if you are lucky, a highly-cryptic-but-still-better-than-nothing
+    Error has been generated. GL error GL_INVALID_OPERATION in ProgramUniform4fv: (ID: 1725519030) GL error GL_INVALID_OPERATION: mismatched type setting uniform of location "3" in program 1, "" using shaders, 2, "", 3, "", 8, ""
+   *unless* you have vertex uniform locations first, fragment locations second
+   and geometry locations last. Not sure about the other stages. Note that this
+   workaround doesn't actually do anything, it's just printed as a heads-up
+   for the sleepless nights debugging issues that happen only on Intel. */
+"intel-windows-explicit-uniform-location-is-less-explicit-than-you-hoped",
 #endif
 
 #ifndef MAGNUM_TARGET_GLES
@@ -267,6 +345,19 @@ namespace {
 /* ApiTrace needs an explicit initial glViewport() call to initialize its
    framebuffer size, otherwise it assumes it's zero-sized. */
 "apitrace-zero-initial-viewport",
+#endif
+
+#if defined(MAGNUM_TARGET_WEBGL) && !defined(MAGNUM_TARGET_GLES2)
+/* While the EXT_disjoint_timer_query extension should be only on WebGL 1 and
+   EXT_disjoint_timer_query_webgl2 only on WebGL 2, Firefox reports
+   EXT_disjoint_timer_query on both. The entry points work correctly however,
+   so this workaround makes Magnum pretend EXT_disjoint_timer_query_webgl2 is
+   available when it detects EXT_disjoint_timer_query on WebGL 2 builds on
+   Firefox. See also https://bugzilla.mozilla.org/show_bug.cgi?id=1328882,
+   https://www.khronos.org/webgl/public-mailing-list/public_webgl/1705/msg00015.php
+   and https://github.com/emscripten-core/emscripten/pull/9652 for the
+   Emscripten-side part of this workaround. */
+"firefox-fake-disjoint-timer-query-webgl2",
 #endif
 /* [workarounds] */
     };
@@ -396,16 +487,22 @@ void Context::setupDriverWorkarounds() {
             _extensionRequiredVersion[Extensions::extension::Index] = Version::version
 
     #ifndef MAGNUM_TARGET_GLES
-    #ifdef CORRADE_TARGET_WINDOWS
-    if((detectedDriver() & DetectedDriver::IntelWindows) && !isExtensionSupported<Extensions::ARB::shading_language_420pack>() && !isDriverWorkaroundDisabled("intel-windows-glsl-exposes-unsupported-shading-language-420pack"))
-        _setRequiredVersion(ARB::shading_language_420pack, None);
-    #endif
-
     if(!isDriverWorkaroundDisabled("no-layout-qualifiers-on-old-glsl")) {
         _setRequiredVersion(ARB::explicit_attrib_location, GL320);
         _setRequiredVersion(ARB::explicit_uniform_location, GL320);
         _setRequiredVersion(ARB::shading_language_420pack, GL320);
     }
+
+    #ifdef CORRADE_TARGET_WINDOWS
+    if((detectedDriver() & DetectedDriver::IntelWindows) && !isExtensionSupported<Extensions::ARB::shading_language_420pack>() && !isDriverWorkaroundDisabled("intel-windows-glsl-exposes-unsupported-shading-language-420pack"))
+        _setRequiredVersion(ARB::shading_language_420pack, None);
+
+    if((detectedDriver() & DetectedDriver::IntelWindows) && isExtensionSupported<Extensions::ARB::explicit_uniform_location>() && !isDriverWorkaroundDisabled("intel-windows-explicit-uniform-location-is-less-explicit-than-you-hoped")) {
+        /* Just to have it printed in the log. Ideal would be to have this
+           covered with a minimal repro case but I have better things to do
+           in my life. */
+    }
+    #endif
     #endif
 
     #ifndef MAGNUM_TARGET_GLES
@@ -450,6 +547,16 @@ void Context::setupDriverWorkarounds() {
         GLint viewport[4];
         glGetIntegerv(GL_VIEWPORT, viewport);
         glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+    }
+    #endif
+
+    #if defined(MAGNUM_TARGET_WEBGL) && !defined(MAGNUM_TARGET_GLES2)
+    if(rendererString() == "Mozilla") {
+        for(const auto& extension: extensionStrings()) {
+            if(extension == "GL_EXT_disjoint_timer_query" && !isDriverWorkaroundDisabled("firefox-fake-disjoint-timer-query-webgl2")) {
+                _extensionStatus.set(Extensions::EXT::disjoint_timer_query_webgl2::Index, true);
+            }
+        }
     }
     #endif
 }

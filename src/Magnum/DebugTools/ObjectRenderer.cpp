@@ -31,8 +31,7 @@
 #include "Magnum/Primitives/Axis.h"
 #include "Magnum/SceneGraph/Camera.h"
 #include "Magnum/Shaders/VertexColor.h"
-#include "Magnum/Trade/MeshData2D.h"
-#include "Magnum/Trade/MeshData3D.h"
+#include "Magnum/Trade/MeshData.h"
 
 namespace Magnum { namespace DebugTools {
 
@@ -43,37 +42,37 @@ template<UnsignedInt> struct Renderer;
 template<> struct Renderer<2> {
     static ResourceKey shader() { return {"VertexColorShader2D"}; }
     static ResourceKey mesh() { return {"object2d"}; }
-    static Trade::MeshData2D meshData() { return Primitives::axis2D(); }
+    static Trade::MeshData meshData() { return Primitives::axis2D(); }
 };
 
 template<> struct Renderer<3> {
     static ResourceKey shader() { return {"VertexColorShader3D"}; }
     static ResourceKey mesh() { return {"object3d"}; }
-    static Trade::MeshData3D meshData() { return Primitives::axis3D(); }
+    static Trade::MeshData meshData() { return Primitives::axis3D(); }
 };
 
 }
 
 /* Doxygen gets confused when using {} to initialize parent object */
-template<UnsignedInt dimensions> ObjectRenderer<dimensions>::ObjectRenderer(SceneGraph::AbstractObject<dimensions, Float>& object, ResourceKey options, SceneGraph::DrawableGroup<dimensions, Float>* drawables): SceneGraph::Drawable<dimensions, Float>(object, drawables), _options{ResourceManager::instance().get<ObjectRendererOptions>(options)} {
+template<UnsignedInt dimensions> ObjectRenderer<dimensions>::ObjectRenderer(ResourceManager& manager, SceneGraph::AbstractObject<dimensions, Float>& object, ResourceKey options, SceneGraph::DrawableGroup<dimensions, Float>* drawables): SceneGraph::Drawable<dimensions, Float>(object, drawables), _options{manager.get<ObjectRendererOptions>(options)} {
     /* Shader */
-    _shader = ResourceManager::instance().get<GL::AbstractShaderProgram, Shaders::VertexColor<dimensions>>(Renderer<dimensions>::shader());
-    if(!_shader) ResourceManager::instance().set<GL::AbstractShaderProgram>(_shader.key(), new Shaders::VertexColor<dimensions>);
+    _shader = manager.get<GL::AbstractShaderProgram, Shaders::VertexColor<dimensions>>(Renderer<dimensions>::shader());
+    if(!_shader) manager.set<GL::AbstractShaderProgram>(_shader.key(), new Shaders::VertexColor<dimensions>);
 
     /* Mesh */
-    _mesh = ResourceManager::instance().get<GL::Mesh>(Renderer<dimensions>::mesh());
-    if(!_mesh) ResourceManager::instance().set<GL::Mesh>(_mesh.key(), MeshTools::compile(Renderer<dimensions>::meshData()));
+    _mesh = manager.get<GL::Mesh>(Renderer<dimensions>::mesh());
+    if(!_mesh) manager.set<GL::Mesh>(_mesh.key(), MeshTools::compile(Renderer<dimensions>::meshData()));
 }
 
 /* To avoid deleting pointers to incomplete type on destruction of Resource members */
 template<UnsignedInt dimensions> ObjectRenderer<dimensions>::~ObjectRenderer() = default;
 
 template<UnsignedInt dimensions> void ObjectRenderer<dimensions>::draw(const MatrixTypeFor<dimensions, Float>& transformationMatrix, SceneGraph::Camera<dimensions, Float>& camera) {
-    _shader->setTransformationProjectionMatrix(camera.projectionMatrix()*transformationMatrix*MatrixTypeFor<dimensions, Float>::scaling(VectorTypeFor<dimensions, Float>{_options->size()}));
-    _mesh->draw(*_shader);
+    _shader->setTransformationProjectionMatrix(camera.projectionMatrix()*transformationMatrix*MatrixTypeFor<dimensions, Float>::scaling(VectorTypeFor<dimensions, Float>{_options->size()}))
+        .draw(*_mesh);
 }
 
-template class ObjectRenderer<2>;
-template class ObjectRenderer<3>;
+template class MAGNUM_DEBUGTOOLS_EXPORT ObjectRenderer<2>;
+template class MAGNUM_DEBUGTOOLS_EXPORT ObjectRenderer<3>;
 
 }}

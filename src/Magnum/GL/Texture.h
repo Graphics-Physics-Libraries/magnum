@@ -185,6 +185,8 @@ template<UnsignedInt dimensions> class Texture: public AbstractTexture {
          *
          * This function can be safely used for constructing (and later
          * destructing) objects even without any OpenGL context being active.
+         * However note that this is a low-level and a potentially dangerous
+         * API, see the documentation of @ref NoCreate for alternatives.
          * @see @ref Texture(), @ref wrap()
          */
         explicit Texture(NoCreateT) noexcept: AbstractTexture{NoCreate, Implementation::textureTarget<dimensions>()} {}
@@ -388,7 +390,7 @@ template<UnsignedInt dimensions> class Texture: public AbstractTexture {
 
         #ifndef MAGNUM_TARGET_GLES2
         /**
-         * @brief Set minimum level-of-detail parameter
+         * @brief Set the minimum level-of-detail
          * @return Reference to self (for method chaining)
          *
          * Limits selection of highest resolution mipmap. If
@@ -409,7 +411,7 @@ template<UnsignedInt dimensions> class Texture: public AbstractTexture {
         }
 
         /**
-         * @brief Set maximum level-of-detail parameter
+         * @brief Set the maximum level-of-detail
          * @return Reference to self (for method chaining)
          *
          * Limits selection of lowest resolution mipmap. If
@@ -583,7 +585,7 @@ template<UnsignedInt dimensions> class Texture: public AbstractTexture {
 
         #ifdef MAGNUM_BUILD_DEPRECATED
         /** @brief @copybrief setSrgbDecode()
-         * @deprecated Use @ref setSrgbDecode() instead.
+         * @m_deprecated_since{2018,10} Use @ref setSrgbDecode() instead.
          */
         CORRADE_DEPRECATED("use setSrgbDecode() instead") Texture<dimensions>& setSRGBDecode(bool decode) {
             return setSrgbDecode(decode);
@@ -599,7 +601,7 @@ template<UnsignedInt dimensions> class Texture: public AbstractTexture {
          * You can use letters @cpp 'r' @ce, @cpp 'g' @ce, @cpp 'b' @ce,
          * @cpp 'a' @ce for addressing components or letters @cpp '0' @ce and
          * @cpp '1' @ce for zero and one, similarly as in the
-         * @ref Math::swizzle() function. Example usage:
+         * @ref Math::gather() function. Example usage:
          *
          * @snippet MagnumGL.cpp Texture-setSwizzle
          *
@@ -789,6 +791,7 @@ template<UnsignedInt dimensions> class Texture: public AbstractTexture {
 
         /**
          * @brief Read given texture mip level to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref image(Int, Image<dimensions>&) the function reads
          * the pixels into the memory provided by @p image, expecting it's not
@@ -871,6 +874,7 @@ template<UnsignedInt dimensions> class Texture: public AbstractTexture {
 
         /**
          * @brief Read given compressed texture mip level to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref compressedImage(Int, CompressedImage<dimensions>&)
          * the function reads the pixels into the memory provided by @p image,
@@ -943,6 +947,7 @@ template<UnsignedInt dimensions> class Texture: public AbstractTexture {
 
         /**
          * @brief Read a range of given texture mip level to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref subImage(Int, const RangeTypeFor<dimensions, Int>&, Image<dimensions>&)
          * the function reads the pixels into the memory provided by @p image,
@@ -1024,6 +1029,7 @@ template<UnsignedInt dimensions> class Texture: public AbstractTexture {
 
         /**
          * @brief Read a range of given compressed texture mip level to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref compressedSubImage(Int, const RangeTypeFor<dimensions, Int>&, CompressedImage<dimensions>&)
          * the function reads the pixels into the memory provided by @p image,

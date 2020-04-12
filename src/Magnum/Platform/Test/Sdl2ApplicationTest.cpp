@@ -23,30 +23,39 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+#include <Corrade/Containers/Optional.h>
+#include <Corrade/PluginManager/Manager.h>
+#include <Corrade/Utility/Arguments.h>
 #include <Corrade/Utility/DebugStl.h>
+#include <Corrade/Utility/Resource.h>
 
+#include "Magnum/ImageView.h"
+#include "Magnum/Math/ConfigurationValue.h"
 #include "Magnum/Platform/Sdl2Application.h"
+#include "Magnum/Trade/AbstractImporter.h"
+#include "Magnum/Trade/ImageData.h"
 
+#ifdef CORRADE_TARGET_CLANG_CL
+/* SDL does #pragma pack(push,8) and #pragma pack(pop,8) in different headers
+   (begin_code.h and end_code.h) and clang-cl doesn't like that, even though it
+   is completely fine. Silence the warning. */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpragma-pack"
+#endif
 #include <SDL_events.h>
+#ifdef CORRADE_TARGET_CLANG_CL
+#pragma clang diagnostic pop
+#endif
 
 namespace Magnum { namespace Platform { namespace Test { namespace {
 
 struct Sdl2ApplicationTest: Platform::Application {
-    /* For testing resize events */
-    explicit Sdl2ApplicationTest(const Arguments& arguments): Platform::Application{arguments, Configuration{}.setWindowFlags(Configuration::WindowFlag::Resizable)} {
-        Debug{} << "window size" << windowSize()
-            #ifdef MAGNUM_TARGET_GL
-            << framebufferSize()
-            #endif
-            << dpiScaling();
-    }
+    explicit Sdl2ApplicationTest(const Arguments& arguments);
 
     void exitEvent(ExitEvent& event) override {
         Debug{} << "application exiting";
         event.setAccepted(); /* Comment-out to test app exit suppression */
     }
-
-    void drawEvent() override {}
 
     /* For testing HiDPI resize events */
     void viewportEvent(ViewportEvent& event) override {
@@ -55,6 +64,11 @@ struct Sdl2ApplicationTest: Platform::Application {
             << event.framebufferSize()
             #endif
             << event.dpiScaling();
+    }
+
+    void drawEvent() override {
+        Debug{} << "draw event";
+        swapBuffers();
     }
 
     /* For testing event coordinates */
@@ -87,7 +101,25 @@ struct Sdl2ApplicationTest: Platform::Application {
             Debug{} << "setting window title";
             setWindowTitle("This is a UTF-8 Window Title™!");
         }
-        #ifdef CORRADE_TARGET_EMSCRIPTEN
+        #ifndef CORRADE_TARGET_EMSCRIPTEN
+        else if(event.key() == KeyEvent::Key::S) {
+            Debug{} << "setting window size, which should trigger a viewport event";
+            setWindowSize(Vector2i{300, 200});
+        } else if(event.key() == KeyEvent::Key::W) {
+            Debug{} << "setting max window size, which should trigger a viewport event";
+            setMaxWindowSize(Vector2i{700, 500});
+        }
+        #endif
+        else if(event.key() == KeyEvent::Key::H) {
+            Debug{} << "toggling hand cursor";
+            setCursor(cursor() == Cursor::Arrow ? Cursor::Hand : Cursor::Arrow);
+        }
+        #ifndef CORRADE_TARGET_EMSCRIPTEN
+        else if(event.key() == KeyEvent::Key::L) {
+            Debug{} << "toggling locked mouse";
+            setCursor(cursor() == Cursor::Arrow ? Cursor::HiddenLocked : Cursor::Arrow);
+        }
+        #else
         else if(event.key() == KeyEvent::Key::F) {
             Debug{} << "toggling fullscreen";
             setContainerCssClass((_fullscreen ^= true) ? "fullsize" : "");
@@ -113,6 +145,47 @@ struct Sdl2ApplicationTest: Platform::Application {
         bool _fullscreen = false;
     #endif
 };
+
+Sdl2ApplicationTest::Sdl2ApplicationTest(const Arguments& arguments): Platform::Application{arguments, NoCreate} {
+    Utility::Arguments args;
+    args.addOption("dpi-scaling").setHelp("dpi-scaling", "DPI scaled passed via Configuration instead of --magnum-dpi-scaling, to test app overrides")
+        .addSkippedPrefix("magnum", "engine-specific options")
+        .addBooleanOption("exit-immediately").setHelp("exit-immediately", "exit the application immediately from the constructor, to test that the app doesn't run any event handlers after")
+        .parse(arguments.argc, arguments.argv);
+
+    if(args.isSet("exit-immediately")) {
+        exit();
+        return;
+    }
+
+    Configuration conf;
+    conf.setWindowFlags(Configuration::WindowFlag::Resizable);
+    if(!args.value("dpi-scaling").empty())
+        conf.setSize({800, 600}, args.value<Vector2>("dpi-scaling"));
+    create(conf);
+
+    /* For testing resize events */
+    Debug{} << "window size" << windowSize()
+        #ifdef MAGNUM_TARGET_GL
+        << framebufferSize()
+        #endif
+        << dpiScaling();
+
+    #ifndef CORRADE_TARGET_EMSCRIPTEN
+    #if SDL_MAJOR_VERSION*1000 + SDL_MINOR_VERSION*100 + SDL_PATCHLEVEL >= 2005
+    Utility::Resource rs{"icons"};
+    PluginManager::Manager<Trade::AbstractImporter> manager;
+    Containers::Pointer<Trade::AbstractImporter> importer;
+    Containers::Optional<Trade::ImageData2D> image;
+    if((importer = manager.loadAndInstantiate("AnyImageImporter")) &&
+       importer->openData(rs.getRaw("icon-64.tga")) &&
+       (image = importer->image2D(0))) setWindowIcon(*image);
+    else Warning{} << "Can't load the plugin / file, not setting window icon";
+    #else
+    Debug{} << "SDL too old, can't set window icon";
+    #endif
+    #endif
+}
 
 }}}}
 

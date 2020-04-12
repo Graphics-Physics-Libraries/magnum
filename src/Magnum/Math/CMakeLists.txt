@@ -48,6 +48,7 @@ set(MagnumMath_HEADERS
     Matrix4.h
     Quaternion.h
     Packing.h
+    PackingBatch.h
     Range.h
     RectangularMatrix.h
     StrictWeakOrdering.h
@@ -59,8 +60,13 @@ set(MagnumMath_HEADERS
     Vector3.h
     Vector4.h)
 
+set(MagnumMath_INTERNAL_HEADERS
+    Implementation/halfTables.hpp)
+
 # Force IDEs to display all header files in project view
-add_custom_target(MagnumMath SOURCES ${MagnumMath_HEADERS})
+add_custom_target(MagnumMath SOURCES
+    ${MagnumMath_HEADERS}
+    ${MagnumMath_INTERNAL_HEADERS})
 set_target_properties(MagnumMath PROPERTIES FOLDER "Magnum/Math")
 
 install(FILES ${MagnumMath_HEADERS} DESTINATION ${MAGNUM_INCLUDE_INSTALL_DIR}/Math)

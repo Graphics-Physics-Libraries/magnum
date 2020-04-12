@@ -25,11 +25,9 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-#if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
 /** @file
  * @brief Class @ref Magnum::GL::AbstractQuery
  */
-#endif
 
 #include <Corrade/Containers/ArrayView.h>
 #include <Corrade/Utility/Assert.h>
@@ -39,7 +37,6 @@
 
 #include "Magnum/configure.h"
 
-#if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
 namespace Magnum { namespace GL {
 
 namespace Implementation { struct QueryState; }
@@ -49,7 +46,6 @@ namespace Implementation { struct QueryState; }
 
 See @ref PrimitiveQuery, @ref SampleQuery and @ref TimeQuery documentation for
 more information.
-@requires_webgl20 Queries are not available in WebGL 1.0.
 @todo `QUERY_COUNTER_BITS` (not sure since when this is supported)
 */
 class MAGNUM_GL_EXPORT AbstractQuery: public AbstractObject {
@@ -194,6 +190,7 @@ class MAGNUM_GL_EXPORT AbstractQuery: public AbstractObject {
         void MAGNUM_GL_LOCAL createImplementationDefault();
         #ifndef MAGNUM_TARGET_GLES
         void MAGNUM_GL_LOCAL createImplementationDSA();
+        void MAGNUM_GL_LOCAL createImplementationDSAExceptXfbOverflow();
         #endif
 
         ObjectFlags _flags;
@@ -203,10 +200,8 @@ class MAGNUM_GL_EXPORT AbstractQuery: public AbstractObject {
 template<> bool MAGNUM_GL_EXPORT AbstractQuery::result<bool>();
 template<> UnsignedInt MAGNUM_GL_EXPORT AbstractQuery::result<UnsignedInt>();
 template<> Int MAGNUM_GL_EXPORT AbstractQuery::result<Int>();
-#ifndef MAGNUM_TARGET_WEBGL
 template<> UnsignedLong MAGNUM_GL_EXPORT AbstractQuery::result<UnsignedLong>();
 template<> Long MAGNUM_GL_EXPORT AbstractQuery::result<Long>();
-#endif
 #endif
 
 inline AbstractQuery::AbstractQuery(AbstractQuery&& other) noexcept: _id(other._id), _target(other._target) {
@@ -227,8 +222,5 @@ inline GLuint AbstractQuery::release() {
 }
 
 }}
-#else
-#error this header is not available in WebGL 1.0 build
-#endif
 
 #endif

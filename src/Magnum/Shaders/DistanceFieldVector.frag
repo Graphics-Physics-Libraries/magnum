@@ -30,7 +30,7 @@
 #endif
 
 #ifdef EXPLICIT_UNIFORM_LOCATION
-layout(location = 1)
+layout(location = 2)
 #endif
 uniform lowp vec4 color
     #ifndef GL_ES
@@ -39,12 +39,12 @@ uniform lowp vec4 color
     ;
 
 #ifdef EXPLICIT_UNIFORM_LOCATION
-layout(location = 2)
+layout(location = 3)
 #endif
 uniform lowp vec4 outlineColor; /* defaults to zero */
 
 #ifdef EXPLICIT_UNIFORM_LOCATION
-layout(location = 3)
+layout(location = 4)
 #endif
 uniform lowp vec2 outlineRange
     #ifndef GL_ES
@@ -53,7 +53,7 @@ uniform lowp vec2 outlineRange
     ;
 
 #ifdef EXPLICIT_UNIFORM_LOCATION
-layout(location = 4)
+layout(location = 5)
 #endif
 uniform lowp float smoothness
     #ifndef GL_ES
@@ -62,11 +62,12 @@ uniform lowp float smoothness
     ;
 
 #ifdef EXPLICIT_TEXTURE_LAYER
-layout(binding = 15)
+/* See AbstractVector.h for details about the ID */
+layout(binding = 6)
 #endif
 uniform lowp sampler2D vectorTexture;
 
-in mediump vec2 fragmentTextureCoordinates;
+in mediump vec2 interpolatedTextureCoordinates;
 
 #ifdef NEW_GLSL
 #ifdef EXPLICIT_ATTRIB_LOCATION
@@ -76,15 +77,18 @@ out lowp vec4 fragmentColor;
 #endif
 
 void main() {
-    lowp float intensity = texture(vectorTexture, fragmentTextureCoordinates).r;
+    lowp float intensity = texture(vectorTexture, interpolatedTextureCoordinates).r;
 
     /* Fill color */
     fragmentColor = smoothstep(outlineRange.x-smoothness, outlineRange.x+smoothness, intensity)*color;
 
     /* Outline */
     if(outlineRange.x > outlineRange.y) {
-        lowp float mid = (outlineRange.x + outlineRange.y)/2.0;
-        lowp float halfRange = (outlineRange.x - outlineRange.y)/2.0;
+        /* Doing *0.5 instead of /2.0 because the latter causes iOS / WebGL to
+           complain that "Overflow in implicit constant conversion, minimum
+           range for lowp float is (-2,2)" */
+        lowp float mid = (outlineRange.x + outlineRange.y)*0.5;
+        lowp float halfRange = (outlineRange.x - outlineRange.y)*0.5;
         fragmentColor += smoothstep(halfRange+smoothness, halfRange-smoothness, distance(mid, intensity))*outlineColor;
     }
 }

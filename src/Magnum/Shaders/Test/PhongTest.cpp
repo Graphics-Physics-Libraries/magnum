@@ -39,6 +39,7 @@ struct PhongTest: TestSuite::Tester {
 
     void debugFlag();
     void debugFlags();
+    void debugFlagsSupersets();
 };
 
 PhongTest::PhongTest() {
@@ -46,7 +47,8 @@ PhongTest::PhongTest() {
               &PhongTest::constructCopy,
 
               &PhongTest::debugFlag,
-              &PhongTest::debugFlags});
+              &PhongTest::debugFlags,
+              &PhongTest::debugFlagsSupersets});
 }
 
 void PhongTest::constructNoCreate() {
@@ -75,6 +77,24 @@ void PhongTest::debugFlags() {
 
     Debug{&out} << (Phong::Flag::DiffuseTexture|Phong::Flag::SpecularTexture) << Phong::Flags{};
     CORRADE_COMPARE(out.str(), "Shaders::Phong::Flag::DiffuseTexture|Shaders::Phong::Flag::SpecularTexture Shaders::Phong::Flags{}\n");
+}
+
+void PhongTest::debugFlagsSupersets() {
+    #ifndef MAGNUM_TARGET_GLES2
+    /* InstancedObjectId is a superset of ObjectId so only one should be
+       printed */
+    {
+        std::ostringstream out;
+        Debug{&out} << (Phong::Flag::ObjectId|Phong::Flag::InstancedObjectId);
+        CORRADE_COMPARE(out.str(), "Shaders::Phong::Flag::InstancedObjectId\n");
+    }
+    #endif
+
+    /* InstancedTextureOffset is a superset of TextureTransformation so only
+       one should be printed */
+    std::ostringstream out;
+    Debug{&out} << (Phong::Flag::InstancedTextureOffset|Phong::Flag::TextureTransformation);
+    CORRADE_COMPARE(out.str(), "Shaders::Phong::Flag::InstancedTextureOffset\n");
 }
 
 }}}}

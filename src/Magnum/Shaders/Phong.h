@@ -30,8 +30,6 @@
  */
 
 #include "Magnum/GL/AbstractShaderProgram.h"
-#include "Magnum/Math/Color.h"
-#include "Magnum/Math/Matrix4.h"
 #include "Magnum/Shaders/Generic.h"
 #include "Magnum/Shaders/visibility.h"
 
@@ -47,19 +45,9 @@ transformation. Use @ref setTransformationMatrix(), @ref setNormalMatrix(),
 @ref setProjectionMatrix(), @ref setLightPosition() and others to configure
 the shader.
 
-If you want to use textures, you need to provide also the
-@ref TextureCoordinates attribute. Pass appropriate @ref Flag combination to
-the constructor and then at render time don't forget to also call appropriate
-subset of @ref bindAmbientTexture(), @ref bindDiffuseTexture() and
-@ref bindSpecularTexture() (or the combined @ref bindTextures()). The texture
-is multipled by the color, which is by default set to fully opaque white for
-enabled textures.
-
 @image html shaders-phong.png width=256px
 
-@section Shaders-Phong-usage Example usage
-
-@subsection Shaders-Phong-usage-colored Colored mesh
+@section Shaders-Phong-colored Colored rendering
 
 Common mesh setup:
 
@@ -69,9 +57,15 @@ Common rendering setup:
 
 @snippet MagnumShaders.cpp Phong-usage-colored2
 
-@subsection Shaders-Phong-usage-texture Diffuse and specular texture
+@section Shaders-Phong-texture Textured rendering
 
-Common mesh setup:
+If you want to use textures, you need to provide also the
+@ref TextureCoordinates attribute. Pass appropriate @ref Flag combination to
+the constructor and then at render time don't forget to also call appropriate
+subset of @ref bindAmbientTexture(), @ref bindDiffuseTexture() and
+@ref bindSpecularTexture() (or the combined @ref bindTextures()). The texture
+is multipled by the color, which is by default set to fully opaque white for
+enabled textures. Mesh setup with a diffuse and a specular texture:
 
 @snippet MagnumShaders.cpp Phong-usage-texture1
 
@@ -79,7 +73,7 @@ Common rendering setup:
 
 @snippet MagnumShaders.cpp Phong-usage-texture2
 
-@subsection Shaders-Phong-usage-alpha Alpha blending and masking
+@section Shaders-Phong-alpha Alpha blending and masking
 
 Enable @ref Flag::AlphaMask and tune @ref setAlphaMask() for simple
 binary alpha-masked drawing that doesn't require depth sorting or blending
@@ -96,17 +90,45 @@ diffuse part and then separate the alpha like this:
 
 @snippet MagnumShaders.cpp Phong-usage-alpha
 
-@subsection Shaders-Phong-usage-object-id Object ID output
+@section Shaders-Phong-object-id Object ID output
 
 The shader supports writing object ID to the framebuffer for object picking or
 other annotation purposes. Enable it using @ref Flag::ObjectId and set up an
-integer buffer attached to the @ref ObjectIdOutput attachment. The
-functionality is practically the same as in the @ref Flat shader, see its
-@ref Shaders-Flat-usage-object-id documentation for more information and usage
+integer buffer attached to the @ref ObjectIdOutput attachment. If you have a
+batch of meshes with different object IDs, enable @ref Flag::InstancedObjectId
+and supply per-vertex IDs to the @ref ObjectId attribute. The output will
+contain a sum of the per-vertex ID and ID coming from @ref setObjectId().
+
+The functionality is practically the same as in the @ref Flat shader, see
+@ref Shaders-Flat-object-id "its documentation" for more information and usage
 example.
 
 @requires_gles30 Object ID output requires integer buffer attachments, which
     are not available in OpenGL ES 2.0 or WebGL 1.0.
+
+@section Shaders-Phong-instancing Instanced rendering
+
+Enabling @ref Flag::InstancedTransformation will turn the shader into an
+instanced one. It'll take per-instance transformation and normal matrix from
+the @ref TransformationMatrix and @ref NormalMatrix attributes, applying those
+before the matrix set by @ref setTransformationMatrix() and
+@ref setNormalMatrix(). Besides that, @ref Flag::VertexColor (and the
+@ref Color3 / @ref Color4) attributes can work as both per-vertex and
+per-instance, and for texturing it's possible to have per-instance texture
+offset taken from @ref TextureOffset when @ref Flag::InstancedTextureOffset is
+enabled (similarly to transformation, applied before @ref setTextureMatrix()).
+The snippet below shows adding a buffer with per-instance transformation to a
+mesh --- note how a normal matrix attribute has to be populated and supplied as
+well to ensure lighting works:
+
+@snippet MagnumShaders.cpp Phong-usage-instancing
+
+@requires_gl33 Extension @gl_extension{ARB,instanced_arrays}
+@requires_gles30 Extension @gl_extension{ANGLE,instanced_arrays},
+    @gl_extension{EXT,instanced_arrays} or @gl_extension{NV,instanced_arrays}
+    in OpenGL ES 2.0.
+@requires_webgl20 Extension @webgl_extension{ANGLE,instanced_arrays} in WebGL
+    1.0.
 
 @section Shaders-Phong-zero-lights Zero lights
 
@@ -115,7 +137,10 @@ Creating this shader with zero lights makes its output equivalent to the
 (if @ref Flag::AmbientTexture is enabled) are taken into account, which
 correspond to @ref Flat::setColor() and @ref Flat::bindTexture(). This is
 useful to reduce complexity in apps that render models with pre-baked lights.
-In addition, enabling @ref Flag::VertexColor and using a default ambient color with no texturing makes this shader equivalent to @ref VertexColor.
+For instanced workflows using zero lights means the @ref NormalMatrix instance
+attribute doesn't need to be supplied either. In addition, enabling
+@ref Flag::VertexColor and using a default ambient color with no texturing
+makes this shader equivalent to @ref VertexColor.
 
 @see @ref shaders
 */
@@ -139,6 +164,7 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
 
         /**
          * @brief Tangent direction
+         * @m_since{2019,10}
          *
          * @ref shaders-generic "Generic attribute",
          * @ref Magnum::Vector3 "Vector3", used only if
@@ -158,6 +184,7 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
 
         /**
          * @brief Three-component vertex color
+         * @m_since{2019,10}
          *
          * @ref shaders-generic "Generic attribute", @ref Magnum::Color3. Use
          * either this or the @ref Color4 attribute. Used only if
@@ -167,6 +194,7 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
 
         /**
          * @brief Four-component vertex color
+         * @m_since{2019,10}
          *
          * @ref shaders-generic "Generic attribute", @ref Magnum::Color4. Use
          * either this or the @ref Color3 attribute. Used only if
@@ -174,11 +202,71 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
          */
         typedef Generic3D::Color4 Color4;
 
+        #ifndef MAGNUM_TARGET_GLES2
+        /**
+         * @brief (Instanced) object ID
+         * @m_since_latest
+         *
+         * @ref shaders-generic "Generic attribute", @ref Magnum::UnsignedInt.
+         * Used only if @ref Flag::InstancedObjectId is set.
+         * @requires_gles30 Object ID output requires integer buffer
+         *      attachments, which are not available in OpenGL ES 2.0 or WebGL
+         *      1.0.
+         */
+        typedef Generic3D::ObjectId ObjectId;
+        #endif
+
+        /**
+         * @brief (Instanced) transformation matrix
+         * @m_since_latest
+         *
+         * @ref shaders-generic "Generic attribute", @ref Magnum::Matrix4.
+         * Used only if @ref Flag::InstancedTransformation is set.
+         * @requires_gl33 Extension @gl_extension{ARB,instanced_arrays}
+         * @requires_gles30 Extension @gl_extension{ANGLE,instanced_arrays},
+         *      @gl_extension{EXT,instanced_arrays} or
+         *      @gl_extension{NV,instanced_arrays} in OpenGL ES 2.0.
+         * @requires_webgl20 Extension @webgl_extension{ANGLE,instanced_arrays}
+         *      in WebGL 1.0.
+         */
+        typedef Generic3D::TransformationMatrix TransformationMatrix;
+
+        /**
+         * @brief (Instanced) normal matrix
+         * @m_since_latest
+         *
+         * @ref shaders-generic "Generic attribute", @ref Magnum::Matrix3x3.
+         * Used only if @ref Flag::InstancedTransformation is set.
+         * @requires_gl33 Extension @gl_extension{ARB,instanced_arrays}
+         * @requires_gles30 Extension @gl_extension{ANGLE,instanced_arrays},
+         *      @gl_extension{EXT,instanced_arrays} or
+         *      @gl_extension{NV,instanced_arrays} in OpenGL ES 2.0.
+         * @requires_webgl20 Extension @webgl_extension{ANGLE,instanced_arrays}
+         *      in WebGL 1.0.
+         */
+        typedef Generic3D::NormalMatrix NormalMatrix;
+
+        /**
+         * @brief (Instanced) texture offset
+         * @m_since_latest
+         *
+         * @ref shaders-generic "Generic attribute", @ref Magnum::Vector2. Used
+         * only if @ref Flag::InstancedTextureOffset is set.
+         * @requires_gl33 Extension @gl_extension{ARB,instanced_arrays}
+         * @requires_gles30 Extension @gl_extension{ANGLE,instanced_arrays},
+         *      @gl_extension{EXT,instanced_arrays} or
+         *      @gl_extension{NV,instanced_arrays} in OpenGL ES 2.0.
+         * @requires_webgl20 Extension @webgl_extension{ANGLE,instanced_arrays}
+         *      in WebGL 1.0.
+         */
+        typedef typename Generic3D::TextureOffset TextureOffset;
+
         enum: UnsignedInt {
             /**
              * Color shader output. @ref shaders-generic "Generic output",
              * present always. Expects three- or four-component floating-point
              * or normalized buffer attachment.
+             * @m_since{2019,10}
              */
             ColorOutput = Generic3D::ColorOutput,
 
@@ -188,10 +276,11 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
              * present only if @ref Flag::ObjectId is set. Expects a
              * single-component unsigned integral attachment. Writes the value
              * set in @ref setObjectId() there, see
-             * @ref Shaders-Phong-usage-object-id for more information.
+             * @ref Shaders-Phong-object-id for more information.
              * @requires_gles30 Object ID output requires integer buffer
              *      attachments, which are not available in OpenGL ES 2.0 or
              *      WebGL 1.0.
+             * @m_since{2019,10}
              */
             ObjectIdOutput = Generic3D::ObjectIdOutput
             #endif
@@ -202,28 +291,29 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
          *
          * @see @ref Flags, @ref flags()
          */
-        enum class Flag: UnsignedByte {
+        enum class Flag: UnsignedShort {
             /**
              * Multiply ambient color with a texture.
-             * @see @ref setAmbientColor(), @ref setAmbientTexture()
+             * @see @ref setAmbientColor(), @ref bindAmbientTexture()
              */
             AmbientTexture = 1 << 0,
 
             /**
              * Multiply diffuse color with a texture.
-             * @see @ref setDiffuseColor(), @ref setDiffuseTexture()
+             * @see @ref setDiffuseColor(), @ref bindDiffuseTexture()
              */
             DiffuseTexture = 1 << 1,
 
             /**
              * Multiply specular color with a texture.
-             * @see @ref setSpecularColor(), @ref setSpecularTexture()
+             * @see @ref setSpecularColor(), @ref bindSpecularTexture()
              */
             SpecularTexture = 1 << 2,
 
             /**
              * Modify normals according to a texture. Requires the
              * @ref Tangent attribute to be present.
+             * @m_since{2019,10}
              */
             NormalTexture = 1 << 4,
 
@@ -243,19 +333,82 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
             /**
              * Multiply diffuse color with a vertex color. Requires either
              * the @ref Color3 or @ref Color4 attribute to be present.
+             * @m_since{2019,10}
              */
             VertexColor = 1 << 5,
 
+            /**
+             * Enable texture coordinate transformation. If this flag is set,
+             * the shader expects that at least one of
+             * @ref Flag::AmbientTexture, @ref Flag::DiffuseTexture,
+             * @ref Flag::SpecularTexture or @ref Flag::NormalTexture is
+             * enabled as well.
+             * @see @ref setTextureMatrix()
+             * @m_since_latest
+             */
+            TextureTransformation = 1 << 6,
+
             #ifndef MAGNUM_TARGET_GLES2
             /**
-             * Enable object ID output. See @ref Shaders-Phong-usage-object-id
+             * Enable object ID output. See @ref Shaders-Phong-object-id
              * for more information.
              * @requires_gles30 Object ID output requires integer buffer
              *      attachments, which are not available in OpenGL ES 2.0 or
              *      WebGL 1.0.
+             * @m_since{2019,10}
              */
-            ObjectId = 1 << 6
+            ObjectId = 1 << 7,
+
+            /**
+             * Instanced object ID. Retrieves a per-instance / per-vertex
+             * object ID from the @ref ObjectId attribute, outputting a sum of
+             * the per-vertex ID and ID coming from @ref setObjectId().
+             * Implicitly enables @ref Flag::ObjectId. See
+             * @ref Shaders-Phong-object-id for more information.
+             * @requires_gles30 Object ID output requires integer buffer
+             *      attachments, which are not available in OpenGL ES 2.0 or
+             *      WebGL 1.0.
+             * @m_since_latest
+             */
+            InstancedObjectId = (1 << 8)|ObjectId,
             #endif
+
+            /**
+             * Instanced transformation. Retrieves a per-instance
+             * transformation and normal matrix from the
+             * @ref TransformationMatrix / @ref NormalMatrix attributes and
+             * uses them together with matrices coming from
+             * @ref setTransformationMatrix() and @ref setNormalMatrix() (first
+             * the per-instance, then the uniform matrix). See
+             * @ref Shaders-Phong-instancing for more information.
+             * @requires_gl33 Extension @gl_extension{ARB,instanced_arrays}
+             * @requires_gles30 Extension @gl_extension{ANGLE,instanced_arrays},
+             *      @gl_extension{EXT,instanced_arrays} or
+             *      @gl_extension{NV,instanced_arrays} in OpenGL ES 2.0.
+             * @requires_webgl20 Extension @webgl_extension{ANGLE,instanced_arrays}
+             *      in WebGL 1.0.
+             * @m_since_latest
+             */
+            InstancedTransformation = 1 << 9,
+
+            /**
+             * Instanced texture offset. Retrieves a per-instance offset vector
+             * from the @ref TextureOffset attribute and uses it together with
+             * the matrix coming from @ref setTextureMatrix() (first the
+             * per-instance vector, then the uniform matrix). Instanced texture
+             * scaling and rotation is not supported at the moment, you can
+             * specify that only via the uniform @ref setTextureMatrix().
+             * Implicitly enables @ref Flag::TextureTransformation. See
+             * @ref Shaders-Phong-instancing for more information.
+             * @requires_gl33 Extension @gl_extension{ARB,instanced_arrays}
+             * @requires_gles30 Extension @gl_extension{ANGLE,instanced_arrays},
+             *      @gl_extension{EXT,instanced_arrays} or
+             *      @gl_extension{NV,instanced_arrays} in OpenGL ES 2.0.
+             * @requires_webgl20 Extension @webgl_extension{ANGLE,instanced_arrays}
+             *      in WebGL 1.0.
+             * @m_since_latest
+             */
+            InstancedTextureOffset = (1 << 10)|TextureTransformation
         };
 
         /**
@@ -281,6 +434,8 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
          *
          * This function can be safely used for constructing (and later
          * destructing) objects even without any OpenGL context being active.
+         * However note that this is a low-level and a potentially dangerous
+         * API, see the documentation of @ref NoCreate for alternatives.
          */
         explicit Phong(NoCreateT) noexcept: GL::AbstractShaderProgram{NoCreate} {}
 
@@ -311,10 +466,7 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
          * ambient texture, otherwise default value is @cpp 0x00000000_rgbaf @ce.
          * @see @ref bindAmbientTexture()
          */
-        Phong& setAmbientColor(const Magnum::Color4& color) {
-            setUniform(_ambientColorUniform, color);
-            return *this;
-        }
+        Phong& setAmbientColor(const Magnum::Color4& color);
 
         /**
          * @brief Bind an ambient texture
@@ -326,15 +478,6 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
          */
         Phong& bindAmbientTexture(GL::Texture2D& texture);
 
-        #ifdef MAGNUM_BUILD_DEPRECATED
-        /** @brief @copybrief bindAmbientTexture()
-         * @deprecated Use @ref bindAmbientTexture() instead.
-         */
-        CORRADE_DEPRECATED("use bindAmbientTexture() instead") Phong& setAmbientTexture(GL::Texture2D& texture) {
-            return bindAmbientTexture(texture);
-        }
-        #endif
-
         /**
          * @brief Set diffuse color
          * @return Reference to self (for method chaining)
@@ -344,10 +487,7 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
          * to the output in that case.
          * @see @ref bindDiffuseTexture()
          */
-        Phong& setDiffuseColor(const Magnum::Color4& color) {
-            if(_lightCount) setUniform(_diffuseColorUniform, color);
-            return *this;
-        }
+        Phong& setDiffuseColor(const Magnum::Color4& color);
 
         /**
          * @brief Bind a diffuse texture
@@ -360,18 +500,10 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
          */
         Phong& bindDiffuseTexture(GL::Texture2D& texture);
 
-        #ifdef MAGNUM_BUILD_DEPRECATED
-        /** @brief @copybrief bindDiffuseTexture()
-         * @deprecated Use @ref bindDiffuseTexture() instead.
-         */
-        CORRADE_DEPRECATED("use bindDiffuseTexture() instead") Phong& setDiffuseTexture(GL::Texture2D& texture) {
-            return bindDiffuseTexture(texture);
-        }
-        #endif
-
         /**
          * @brief Bind a normal texture
          * @return Reference to self (for method chaining)
+         * @m_since{2019,10}
          *
          * Expects that the shader was created with @ref Flag::NormalTexture
          * enabled and the @ref Tangent attribute was supplied. If
@@ -393,10 +525,7 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
          * output in that case.
          * @see @ref bindSpecularTexture()
          */
-        Phong& setSpecularColor(const Magnum::Color4& color) {
-            if(_lightCount) setUniform(_specularColorUniform, color);
-            return *this;
-        }
+        Phong& setSpecularColor(const Magnum::Color4& color);
 
         /**
          * @brief Bind a specular texture
@@ -408,15 +537,6 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
          * @see @ref bindTextures(), @ref setSpecularColor()
          */
         Phong& bindSpecularTexture(GL::Texture2D& texture);
-
-        #ifdef MAGNUM_BUILD_DEPRECATED
-        /** @brief @copybrief bindSpecularTexture()
-         * @deprecated Use @ref bindSpecularTexture() instead.
-         */
-        CORRADE_DEPRECATED("use bindSpecularTexture() instead") Phong& setSpecularTexture(GL::Texture2D& texture) {
-            return bindSpecularTexture(texture);
-        }
-        #endif
 
         /**
          * @brief Bind textures
@@ -437,15 +557,6 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
             #endif
         );
 
-        #ifdef MAGNUM_BUILD_DEPRECATED
-        /** @brief @copybrief bindTextures()
-         * @deprecated Use @ref bindTextures() instead.
-         */
-        CORRADE_DEPRECATED("use bindTextures() instead") Phong& setTextures(GL::Texture2D* ambient, GL::Texture2D* diffuse, GL::Texture2D* specular) {
-            return bindTextures(ambient, diffuse, specular);
-        }
-        #endif
-
         /**
          * @brief Set shininess
          * @return Reference to self (for method chaining)
@@ -455,10 +566,7 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
          * function is a no-op, as specular color doesn't contribute to the
          * output in that case.
          */
-        Phong& setShininess(Float shininess) {
-            if(_lightCount) setUniform(_shininessUniform, shininess);
-            return *this;
-        }
+        Phong& setShininess(Float shininess);
 
         /**
          * @brief Set alpha mask value
@@ -478,7 +586,7 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
          *
          * Expects that the shader was created with @ref Flag::ObjectId
          * enabled. Value set here is written to the @ref ObjectIdOutput, see
-         * @ref Shaders-Phong-usage-object-id for more information. Default is
+         * @ref Shaders-Phong-object-id for more information. Default is
          * @cpp 0 @ce.
          * @requires_gles30 Object ID output requires integer buffer
          *      attachments, which are not available in OpenGL ES 2.0 or WebGL
@@ -494,26 +602,21 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
          * You need to set also @ref setNormalMatrix() with a corresponding
          * value. Initial value is an identity matrix.
          */
-        Phong& setTransformationMatrix(const Matrix4& matrix) {
-            setUniform(_transformationMatrixUniform, matrix);
-            return *this;
-        }
+        Phong& setTransformationMatrix(const Matrix4& matrix);
 
         /**
          * @brief Set normal matrix
          * @return Reference to self (for method chaining)
          *
-         * The matrix doesn't need to be normalized, as the renormalization
-         * must be done in the shader anyway. You need to set also
+         * The matrix doesn't need to be normalized, as renormalization is done
+         * per-fragment anyway. You need to set also
          * @ref setTransformationMatrix() with a corresponding value. Initial
          * value is an identity matrix. If @ref lightCount() is zero, this
          * function is a no-op, as normals don't contribute to the output in
          * that case.
+         * @see @ref Math::Matrix4::normalMatrix()
          */
-        Phong& setNormalMatrix(const Matrix3x3& matrix) {
-            if(_lightCount) setUniform(_normalMatrixUniform, matrix);
-            return *this;
-        }
+        Phong& setNormalMatrix(const Matrix3x3& matrix);
 
         /**
          * @brief Set projection matrix
@@ -523,10 +626,18 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
          * projection of the default @f$ [ -\boldsymbol{1} ; \boldsymbol{1} ] @f$
          * cube).
          */
-        Phong& setProjectionMatrix(const Matrix4& matrix) {
-            setUniform(_projectionMatrixUniform, matrix);
-            return *this;
-        }
+        Phong& setProjectionMatrix(const Matrix4& matrix);
+
+        /**
+         * @brief Set texture coordinate transformation matrix
+         * @return Reference to self (for method chaining)
+         * @m_since_latest
+         *
+         * Expects that the shader was created with
+         * @ref Flag::TextureTransformation enabled. Initial value is an
+         * identity matrix.
+         */
+        Phong& setTextureMatrix(const Matrix3& matrix);
 
         /**
          * @brief Set light positions
@@ -542,9 +653,7 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
         Phong& setLightPositions(Containers::ArrayView<const Vector3> lights);
 
         /** @overload */
-        Phong& setLightPositions(std::initializer_list<Vector3> lights) {
-            return setLightPositions({lights.begin(), lights.size()});
-        }
+        Phong& setLightPositions(std::initializer_list<Vector3> lights);
 
         /**
          * @brief Set position for given light
@@ -578,9 +687,7 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
         Phong& setLightColors(Containers::ArrayView<const Magnum::Color4> colors);
 
         /** @overload */
-        Phong& setLightColors(std::initializer_list<Magnum::Color4> colors) {
-            return setLightColors({colors.begin(), colors.size()});
-        }
+        Phong& setLightColors(std::initializer_list<Magnum::Color4> colors);
 
         /**
          * @brief Set position for given light
@@ -605,11 +712,20 @@ class MAGNUM_SHADERS_EXPORT Phong: public GL::AbstractShaderProgram {
         }
 
     private:
+        /* Prevent accidentally calling irrelevant functions */
+        #ifndef MAGNUM_TARGET_GLES
+        using GL::AbstractShaderProgram::drawTransformFeedback;
+        #endif
+        #if !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
+        using GL::AbstractShaderProgram::dispatchCompute;
+        #endif
+
         Flags _flags;
         UnsignedInt _lightCount;
         Int _transformationMatrixUniform{0},
             _projectionMatrixUniform{1},
             _normalMatrixUniform{2},
+            _textureMatrixUniform{3},
             _ambientColorUniform{4},
             _diffuseColorUniform{5},
             _specularColorUniform{6},

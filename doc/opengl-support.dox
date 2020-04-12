@@ -76,7 +76,7 @@ GLSL 1.30                                   | done
 @gl_extension{EXT,texture_array}            | done
 @gl_extension{EXT,texture_compression_rgtc} | done
 @gl_extension{EXT,texture_shared_exponent}  | done
-@gl_extension{EXT,draw_buffers2}            | |
+@gl_extension{EXT,draw_buffers2}            | done (GL 3.0 subset)
 @gl_extension{EXT,texture_integer}          | done (GL 3.0 subset)
 @gl_extension{EXT,transform_feedback}       | done
 `MAGNUM_shader_vertex_id` \n @m_span{m-text m-dim} Pseudo-extension denoting support for the @glsl gl_VertexID @ce GLSL builtin. @m_endspan | done
@@ -140,7 +140,7 @@ GLSL 3.30                                   | done
 Extension                                   | Status
 ------------------------------------------- | ------
 GLSL 4.00                                   | done
-@gl_extension{ARB,draw_buffers_blend}       | |
+@gl_extension{ARB,draw_buffers_blend}       | done
 @gl_extension{ARB,sample_shading}           | done
 @gl_extension{ARB,texture_cube_map_array}   | done
 @gl_extension{ARB,texture_gather}           | missing limit queries
@@ -149,7 +149,7 @@ GLSL 4.00                                   | done
 @gl_extension{ARB,gpu_shader5}              | missing limit queries
 @gl_extension{ARB,gpu_shader_fp64}          | done
 @gl_extension{ARB,shader_subroutine}        | |
-@gl_extension{ARB,tessellation_shader}      | missing some limit queries and patch parameter specification function
+@gl_extension{ARB,tessellation_shader}      | done except for `MAX_TESS_GEN_LEVEL` and `MAX_TESS_PATCH_COMPONENTS` queries
 @gl_extension{ARB,texture_buffer_object_rgb32} | done
 @gl_extension{ARB,transform_feedback2}      | done
 @gl_extension{ARB,transform_feedback3}      | missing indexed properties query
@@ -291,6 +291,7 @@ Extension                                   | Status
 @gl_extension{ARB,sparse_texture}           | |
 @gl_extension{ARB,sparse_buffer}            | |
 @gl_extension{ARB,ES3_2_compatibility}      | |
+@gl_extension{ARB,sample_locations}         | |
 @gl_extension2{KHR,texture_compression_astc_ldr,KHR_texture_compression_astc_hdr} | done
 @gl_extension{KHR,robust_buffer_access_behavior} | done (nothing to do)
 @gl_extension{KHR,blend_equation_advanced}  | done
@@ -310,6 +311,7 @@ Extension                                   | Status
 @gl_extension{AMD,transform_feedback3_lines_triangles} | done (nothing to do)
 @gl_extension{AMD,vertex_shader_layer}      | done (shading language only)
 @gl_extension{AMD,shader_trinary_minmax}    | done (shading language only)
+@gl_extension{AMD,shader_explicit_vertex_parameter} | done (shading language only)
 @gl_extension{ATI,texture_mirror_once}      | done (GL 4.4 subset)
 @gl_extension{EXT,texture_filter_anisotropic} | done
 @gl_extension{EXT,texture_compression_s3tc} | done
@@ -321,6 +323,9 @@ Extension                                   | Status
 @gl_extension{EXT,debug_marker}             | done
 @gl_extension{EXT,sRGB_R8}                  | done
 @gl_extension{GREMEDY,string_marker}        | done
+@gl_extension{NV,fragment_shader_barycentric} | done (shading language only)
+@gl_extension{OVR,multiview}                | |
+@gl_extension{OVR,multiview2}               | |
 
 @subsection opengl-support-es20 OpenGL ES 2.0
 
@@ -349,11 +354,11 @@ Extension                                   | Status
 @gl_extension{EXT,color_buffer_half_float}  | |
 @gl_extension{EXT,color_buffer_float}       | |
 @gl_extension{EXT,copy_image}               | |
-@gl_extension{EXT,draw_buffers_indexed}     | |
+@gl_extension{EXT,draw_buffers_indexed}     | done
 @gl_extension{EXT,geometry_shader}          | missing some ES-specific limit queries
 @gl_extension{EXT,gpu_shader5}              | done (shading language only)
 @gl_extension{EXT,shader_io_blocks}         | done (shading language only)
-@gl_extension{EXT,tessellation_shader}      | see above
+@gl_extension{EXT,tessellation_shader}      | done except for `MAX_TESS_GEN_LEVEL` and `MAX_TESS_PATCH_COMPONENTS` queries
 @gl_extension{EXT,texture_border_clamp}     | done
 @gl_extension{EXT,texture_buffer}           | done
 @gl_extension{EXT,texture_cube_map_array}   | done
@@ -486,6 +491,8 @@ Extension                                   | Status
 @gl_extension{OES,stencil1}                 | done
 @gl_extension{OES,stencil4}                 | done
 @gl_extension{OES,texture_float_linear}     | done
+@gl_extension{OVR,multiview}                | |
+@gl_extension{OVR,multiview2}               | |
 
 @subsection opengl-support-webgl10 WebGL 1.0
 
@@ -537,9 +544,11 @@ Extension                                   | Status
 @webgl_extension{EXT,sRGB}                  | done
 @webgl_extension{EXT,disjoint_timer_query}  | only time elapsed query
 @webgl_extension{EXT,color_buffer_float}    | |
-@gl_extension{EXT,texture_compression_rgtc} | done
-@gl_extension{EXT,texture_compression_bptc} | done
+@webgl_extension{EXT,texture_compression_rgtc} | done
+@webgl_extension{EXT,texture_compression_bptc} | done
+@webgl_extension{EXT,draw_buffers_indexed}  | done
 @webgl_extension{OES,texture_float_linear}  | done
+@webgl_extension{OVR,multiview2}            | |
 @webgl_extension{WEBGL,compressed_texture_s3tc} | done
 @webgl_extension{WEBGL,compressed_texture_pvrtc} | done
 @webgl_extension{WEBGL,compressed_texture_astc} | done

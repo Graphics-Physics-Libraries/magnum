@@ -52,10 +52,9 @@ namespace Magnum { namespace Platform {
 /**
 @brief Windowless Windows/EGL context
 
-@m_keywords{WindowlessGLContext}
+@m_keywords{WindowlessGLContext EGL}
 
 GL context using pure WINAPI and EGL, used in @ref WindowlessWindowsEglApplication.
-It is built if `WITH_WINDOWLESSWINDOWSEGLAPPLICATION` is enabled in CMake.
 
 Meant to be used when there is a need to manage (multiple) GL contexts
 manually. See @ref platform-windowless-contexts for more information. If no
@@ -119,6 +118,17 @@ class WindowlessWindowsEglContext {
          * otherwise returns @cpp true @ce.
          */
         bool makeCurrent();
+
+        /**
+         * @brief Underlying OpenGL context
+         * @m_since_latest
+         *
+         * Use in case you need to call EGL functionality directly or in order
+         * to create a shared context. Returns @cpp nullptr @ce in case the
+         * context was not created yet.
+         * @see @ref Configuration::setSharedContext()
+         */
+        EGLContext glContext() { return _context; }
 
     private:
         HWND _window{};
@@ -204,8 +214,33 @@ class WindowlessWindowsEglContext::Configuration {
             return *this;
         }
 
+        /**
+         * @brief Create a shared context
+         * @return Reference to self (for method chaining)
+         * @m_since_latest
+         *
+         * When set, the created context will share a subset of OpenGL objects
+         * with @p context, instead of being independent. Many caveats and
+         * limitations apply to shared OpenGL contexts, please consult the
+         * OpenGL specification for details. Default is `EGL_NO_CONTEXT`, i.e.
+         * no sharing.
+         * @see @ref WindowlessWindowsEglContext::glContext(),
+         *      @ref WindowlessWindowsEglApplication::glContext()
+         */
+        Configuration& setSharedContext(EGLContext context) {
+            _sharedContext = context;
+            return *this;
+        }
+
+        /**
+         * @brief Shared context
+         * @m_since_latest
+         */
+        EGLContext sharedContext() const { return _sharedContext; }
+
     private:
         Flags _flags;
+        EGLContext _sharedContext = EGL_NO_CONTEXT;
 };
 
 CORRADE_ENUMSET_OPERATORS(WindowlessWindowsEglContext::Configuration::Flags)
@@ -213,11 +248,10 @@ CORRADE_ENUMSET_OPERATORS(WindowlessWindowsEglContext::Configuration::Flags)
 /**
 @brief Windowless Windows/EGL application
 
-@m_keywords{WindowlessApplication}
+@m_keywords{WindowlessApplication EGL}
 
 Application for offscreen rendering using @ref WindowlessWindowsEglContext.
-This application library is available on OpenGL ES (also ANGLE) on Windows. It
-is built if `WITH_WINDOWLESSWINDOWSEGLAPPLICATION` is enabled in CMake.
+This application library is available on OpenGL ES (also ANGLE) on Windows.
 
 @section Platform-WindowlessWindowsEglApplication-bootstrap Bootstrap application
 
@@ -240,11 +274,11 @@ See @ref cmake for more information.
 
 @section Platform-WindowlessWindowsEglApplication-usage General usage
 
-In order to use this library from CMake, you need to copy `FindEGL.cmake` from
-the modules directory in Magnum source to the `modules/` dir in your project
-(so it is able to find the EGL library). Request the
-`WindowlessWindowsEglApplication` component of the `Magnum` package and link to
-the `Magnum::WindowlessGlxApplication` target:
+This application library is built if `WITH_WINDOWLESSWINDOWSEGLAPPLICATION` is
+enabled when building Magnum. To use this library from CMake, put [FindEGL.cmake](https://github.com/mosra/magnum/blob/master/modules/FindEGL.cmake)
+into your `modules/` directory, request the `WindowlessWindowsEglApplication`
+component of the `Magnum` package and link to the
+`Magnum::WindowlessWindowsEglApplication` target:
 
 @code{.cmake}
 find_package(Magnum REQUIRED)
@@ -254,8 +288,17 @@ endif()
 
 # ...
 if(CORRADE_TARGET_WINDOWS)
-    target_link_libraries(your-app Magnum::WindowlessWindowsEglApplication)
+    target_link_libraries(your-app PRIVATE Magnum::WindowlessWindowsEglApplication)
 endif()
+@endcode
+
+Additionally, if you're using Magnum as a CMake subproject, do the following
+* *before* calling @cmake find_package() @ce to ensure it's enabled, as the
+library is not built by default:
+
+@code{.cmake}
+set(WITH_WINDOWLESSWINDOWSEGLAPPLICATION ON CACHE BOOL "" FORCE)
+add_subdirectory(magnum EXCLUDE_FROM_ALL)
 @endcode
 
 If no other application is requested, you can also use the generic
@@ -348,6 +391,17 @@ class WindowlessWindowsEglApplication {
          */
         virtual int exec() = 0;
 
+        /**
+         * @brief Underlying OpenGL context
+         * @m_since_latest
+         *
+         * Use in case you need to call EGL functionality directly or in order
+         * to create a shared context. Returns @cpp nullptr @ce in case the
+         * context was not created yet.
+         * @see @ref Configuration::setSharedContext()
+         */
+        EGLContext glContext() { return _glContext.glContext(); }
+
     protected:
         /* Nobody will need to have (and delete) WindowlessWindowsEglApplication*,
            thus this is faster than public pure virtual destructor */
@@ -385,6 +439,8 @@ class WindowlessWindowsEglApplication {
 /** @hideinitializer
 @brief Entry point for windowless Windows/EGL application
 @param className Class name
+
+@m_keywords{MAGNUM_WINDOWLESSAPPLICATION_MAIN()}
 
 See @ref Magnum::Platform::WindowlessWindowsEglApplication "Platform::WindowlessWindowsEglApplication"
 for usage information.This macro abstracts out platform-specific entry point

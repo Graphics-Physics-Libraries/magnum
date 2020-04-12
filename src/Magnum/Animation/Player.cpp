@@ -28,9 +28,11 @@
 namespace Magnum { namespace Animation {
 
 Debug& operator<<(Debug& debug, const State value) {
+    debug << "Animation::State" << Debug::nospace;
+
     switch(value) {
         /* LCOV_EXCL_START */
-        #define _c(value) case State::value: return debug << "Animation::State::" #value;
+        #define _c(value) case State::value: return debug << "::" #value;
         _c(Stopped)
         _c(Playing)
         _c(Paused)
@@ -38,12 +40,13 @@ Debug& operator<<(Debug& debug, const State value) {
         /* LCOV_EXCL_STOP */
     }
 
-    return debug << "Animation::State(" << Debug::nospace << reinterpret_cast<void*>(UnsignedByte(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(UnsignedByte(value)) << Debug::nospace << ")";
 }
 
 /* On non-MinGW Windows the instantiations are already marked with extern
-   template */
-#if !defined(CORRADE_TARGET_WINDOWS) || defined(__MINGW32__)
+   template. However Clang-CL doesn't propagate the export from the extern
+   template, it seems. */
+#if !defined(CORRADE_TARGET_WINDOWS) || defined(CORRADE_TARGET_MINGW) || defined(CORRADE_TARGET_CLANG_CL)
 #define MAGNUM_EXPORT_HPP MAGNUM_EXPORT
 #else
 #define MAGNUM_EXPORT_HPP

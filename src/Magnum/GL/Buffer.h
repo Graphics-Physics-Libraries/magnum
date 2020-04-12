@@ -108,7 +108,7 @@ enum class BufferUsage: GLenum {
 
     /**
      * Updated frequently by the application and used frequently for drawing or
-     * copying to other images.
+     * copying to other buffers.
      */
     DynamicDraw = GL_DYNAMIC_DRAW,
 
@@ -145,9 +145,10 @@ data updates.
 
 @section GL-Buffer-data-updating Data updating
 
-Default way to set or update buffer data with @ref setData() or @ref setSubData()
-is to use @ref Corrade::Containers::ArrayView. See its documentation for
-more information about automatic conversions etc.
+Default way to set or update buffer data with @ref setData(), @ref setSubData()
+or the shorthand @ref Buffer() constructor is to use
+@ref Corrade::Containers::ArrayView. See its documentation for more information
+about automatic conversions etc.
 
 @snippet MagnumGL.cpp Buffer-setdata
 
@@ -778,9 +779,47 @@ class MAGNUM_GL_EXPORT Buffer: public AbstractObject {
          *
          * This function can be safely used for constructing (and later
          * destructing) objects even without any OpenGL context being active.
+         * However note that this is a low-level and a potentially dangerous
+         * API, see the documentation of @ref NoCreate for alternatives.
          * @see @ref Buffer(TargetHint), @ref wrap()
          */
         explicit Buffer(NoCreateT) noexcept;
+
+        /**
+         * @brief Construct and directly fill with data
+         * @param targetHint    Target hint, see @ref setTargetHint() for more
+         *      information
+         * @param data          Data
+         * @param usage         Buffer usage
+         * @m_since_latest
+         *
+         * Equivalent to constructing via @ref Buffer(TargetHint) and then
+         * calling @ref setData().
+         */
+        explicit Buffer(TargetHint targetHint, Containers::ArrayView<const void> data, BufferUsage usage = BufferUsage::StaticDraw): Buffer{targetHint} {
+            setData(data, usage);
+        }
+
+        /**
+         * @overload
+         * @m_since_latest
+         */
+        template<class T> explicit Buffer(TargetHint targetHint, std::initializer_list<T> data, BufferUsage usage = BufferUsage::StaticDraw): Buffer{targetHint, Containers::arrayView(data), usage} {}
+
+        /**
+         * @overload
+         * @m_since_latest
+         *
+         * Equivalent to calling @ref Buffer(TargetHint, Containers::ArrayView<const void>, BufferUsage)
+         * with @ref TargetHint::Array. Unlike with
+         * @ref Buffer(TargetHint, std::initializer_list<T>, BufferUsage) an
+         * @ref std::initializer_list overload isn't provided in this case as
+         * it would cause a lot of undesired implicit conversions when using
+         * the `{}`-style construction. Use the above overload or the
+         * @ref Corrade::Containers::arrayView(std::initializer_list<T>) helper
+         * instead.
+         */
+        explicit Buffer(Containers::ArrayView<const void> data, BufferUsage usage = BufferUsage::StaticDraw): Buffer{TargetHint::Array, data, usage} {}
 
         /** @brief Copying is not allowed */
         Buffer(const Buffer&) = delete;
@@ -991,7 +1030,10 @@ class MAGNUM_GL_EXPORT Buffer: public AbstractObject {
          */
         Buffer& setData(Containers::ArrayView<const void> data, BufferUsage usage = BufferUsage::StaticDraw);
 
-        /** @overload */
+        /**
+         * @overload
+         * @m_since{2019,10}
+         */
         template<class T> Buffer& setData(std::initializer_list<T> data, BufferUsage usage = BufferUsage::StaticDraw) {
             return setData({data.begin(), data.size()}, usage);
         }
@@ -1010,7 +1052,10 @@ class MAGNUM_GL_EXPORT Buffer: public AbstractObject {
          */
         Buffer& setSubData(GLintptr offset, Containers::ArrayView<const void> data);
 
-        /** @overload */
+        /**
+         * @overload
+         * @m_since{2019,10}
+         */
         template<class T> Buffer& setSubData(GLintptr offset, std::initializer_list<T> data) {
             return setSubData(offset, {data.begin(), data.size()});
         }
@@ -1206,44 +1251,69 @@ class MAGNUM_GL_EXPORT Buffer: public AbstractObject {
         void MAGNUM_GL_LOCAL getSubDataImplementationDSA(GLintptr offset, GLsizeiptr size, GLvoid* data);
         #endif
 
+        #if defined(CORRADE_TARGET_APPLE) && !defined(CORRADE_TARGET_IOS)
+        void MAGNUM_GL_LOCAL textureWorkaroundAppleBefore();
+        void MAGNUM_GL_LOCAL textureWorkaroundAppleAfter();
+        #endif
+
         void MAGNUM_GL_LOCAL dataImplementationDefault(GLsizeiptr size, const GLvoid* data, BufferUsage usage);
+        #if defined(CORRADE_TARGET_APPLE) && !defined(CORRADE_TARGET_IOS)
+        void MAGNUM_GL_LOCAL dataImplementationApple(GLsizeiptr size, const GLvoid* data, BufferUsage usage);
+        #endif
         #ifndef MAGNUM_TARGET_GLES
-        void MAGNUM_GL_LOCAL dataImplementationDSAIntelWindows(GLsizeiptr size, const GLvoid* data, BufferUsage usage);
         void MAGNUM_GL_LOCAL dataImplementationDSA(GLsizeiptr size, const GLvoid* data, BufferUsage usage);
         #endif
 
         void MAGNUM_GL_LOCAL subDataImplementationDefault(GLintptr offset, GLsizeiptr size, const GLvoid* data);
+        #if defined(CORRADE_TARGET_APPLE) && !defined(CORRADE_TARGET_IOS)
+        void MAGNUM_GL_LOCAL subDataImplementationApple(GLintptr offset, GLsizeiptr size, const GLvoid* data);
+        #endif
         #ifndef MAGNUM_TARGET_GLES
         void MAGNUM_GL_LOCAL subDataImplementationDSA(GLintptr offset, GLsizeiptr size, const GLvoid* data);
         #endif
 
         void MAGNUM_GL_LOCAL invalidateImplementationNoOp();
+        /* No need for Apple-specific invalidateImplementation, as
+           GL_ARB_invalidate_subdata isn't supported */
         #ifndef MAGNUM_TARGET_GLES
         void MAGNUM_GL_LOCAL invalidateImplementationARB();
         #endif
 
         void MAGNUM_GL_LOCAL invalidateSubImplementationNoOp(GLintptr offset, GLsizeiptr length);
+        /* No need for Apple-specific invalidateSubImplementation, as
+           GL_ARB_invalidate_subdata isn't supported */
         #ifndef MAGNUM_TARGET_GLES
         void MAGNUM_GL_LOCAL invalidateSubImplementationARB(GLintptr offset, GLsizeiptr length);
         #endif
 
         #ifndef MAGNUM_TARGET_WEBGL
         void MAGNUM_GL_LOCAL * mapImplementationDefault(MapAccess access);
+        #if defined(CORRADE_TARGET_APPLE) && !defined(CORRADE_TARGET_IOS)
+        void MAGNUM_GL_LOCAL * mapImplementationApple(MapAccess access);
+        #endif
         #ifndef MAGNUM_TARGET_GLES
         void MAGNUM_GL_LOCAL * mapImplementationDSA(MapAccess access);
         #endif
 
         void MAGNUM_GL_LOCAL * mapRangeImplementationDefault(GLintptr offset, GLsizeiptr length, MapFlags access);
+        #if defined(CORRADE_TARGET_APPLE) && !defined(CORRADE_TARGET_IOS)
+        void MAGNUM_GL_LOCAL * mapRangeImplementationApple(GLintptr offset, GLsizeiptr length, MapFlags access);
+        #endif
         #ifndef MAGNUM_TARGET_GLES
         void MAGNUM_GL_LOCAL * mapRangeImplementationDSA(GLintptr offset, GLsizeiptr length, MapFlags access);
         #endif
 
         void MAGNUM_GL_LOCAL flushMappedRangeImplementationDefault(GLintptr offset, GLsizeiptr length);
+        /* No need for Apple-specific flushMappedRangeImplementation, as this
+           doesn't seem to hit the crashy code path */
         #ifndef MAGNUM_TARGET_GLES
         void MAGNUM_GL_LOCAL flushMappedRangeImplementationDSA(GLintptr offset, GLsizeiptr length);
         #endif
 
         bool MAGNUM_GL_LOCAL unmapImplementationDefault();
+        #if defined(CORRADE_TARGET_APPLE) && !defined(CORRADE_TARGET_IOS)
+        bool MAGNUM_GL_LOCAL unmapImplementationApple();
+        #endif
         #ifndef MAGNUM_TARGET_GLES
         bool MAGNUM_GL_LOCAL unmapImplementationDSA();
         #endif

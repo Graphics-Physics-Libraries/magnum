@@ -42,23 +42,11 @@
 #include "Magnum/Audio/Audio.h"
 #include "Magnum/Audio/visibility.h"
 
-#ifdef MAGNUM_BUILD_DEPRECATED
-#include <Corrade/Utility/Macros.h>
-#include "Magnum/Audio/BufferFormat.h"
-#endif
-
 namespace Magnum { namespace Audio {
 
 /** @brief Sample buffer */
 class MAGNUM_AUDIO_EXPORT Buffer {
     public:
-        #ifdef MAGNUM_BUILD_DEPRECATED
-        /** @brief @copybrief BufferFormat
-         * @deprecated Use @ref BufferFormat instead.
-         */
-        typedef CORRADE_DEPRECATED("use BufferFormat instead") BufferFormat Format;
-        #endif
-
         /**
          * @brief Constructor
          *
@@ -106,8 +94,10 @@ class MAGNUM_AUDIO_EXPORT Buffer {
 
         /**
          * @brief Buffer size in bytes
+         * @m_since{2019,10}
          *
-         * @see @ref channels(), @ref bitDepth(), @ref sampleCount()
+         * @see @ref channels(), @ref frequency(), @ref bitDepth(),
+         *      @ref sampleCount()
          */
         Int size() const {
             Int size;
@@ -117,8 +107,10 @@ class MAGNUM_AUDIO_EXPORT Buffer {
 
         /**
          * @brief Buffer channel count
+         * @m_since{2019,10}
          *
-         * @see @ref size(), @ref bitDepth(), @ref sampleCount()
+         * @see @ref size(), @ref frequency(), @ref bitDepth(),
+         *      @ref sampleCount()
          */
         Int channels() const {
             ALint channels;
@@ -127,9 +119,24 @@ class MAGNUM_AUDIO_EXPORT Buffer {
         }
 
         /**
-         * @brief Buffer bit depth
+         * @brief Buffer frequency
+         * @m_since_latest
          *
-         * @see @ref size(), @ref channels(), @ref sampleCount()
+         * @see @ref size(), @ref channels(), @ref bitDepth(),
+         *      @ref sampleCount()
+         */
+        Int frequency() const {
+            ALsizei frequency;
+            alGetBufferi(_id, AL_FREQUENCY, &frequency);
+            return frequency;
+        }
+
+        /**
+         * @brief Buffer bit depth
+         * @m_since{2019,10}
+         *
+         * @see @ref size(), @ref channels(), @ref frequency(),
+         *      @ref sampleCount()
          */
         Int bitDepth() const {
             ALint bitDepth;
@@ -139,6 +146,7 @@ class MAGNUM_AUDIO_EXPORT Buffer {
 
         /**
          * @brief Buffer sample count
+         * @m_since{2019,10}
          *
          * Calculated from @ref size(), @ref channels() and @ref bitDepth().
          */
@@ -147,6 +155,7 @@ class MAGNUM_AUDIO_EXPORT Buffer {
         /**
          * @brief Get buffer loop points
          * @return A @ref std::pair containing the start and end loop points
+         * @m_since{2019,10}
          *
          * @requires_al_extension Extension @al_extension{SOFT,loop_points}
          */
@@ -161,6 +170,7 @@ class MAGNUM_AUDIO_EXPORT Buffer {
          * @param loopStart The loop's start point in samples
          * @param loopEnd   The loop's end point in samples
          * @return Reference to self (for method chaining)
+         * @m_since{2019,10}
          *
          * The buffer needs to not be attached to a source for this operation
          * to succeed.
@@ -172,6 +182,7 @@ class MAGNUM_AUDIO_EXPORT Buffer {
          * @brief Set buffer to loop from the beginning until a certain point
          * @param loopEnd   The loop's end point in samples
          * @return Reference to self (for method chaining)
+         * @m_since{2019,10}
          *
          * Equivalent to calling @ref setLoopPoints() with @p loopStart equal
          * to @cpp 0 @ce.
@@ -185,6 +196,7 @@ class MAGNUM_AUDIO_EXPORT Buffer {
          * @brief Set buffer to loop from the a certain point until the end
          * @param loopStart The loop's start point in samples
          * @return Reference to self (for method chaining)
+         * @m_since{2019,10}
          *
          * Equivalent to calling @ref setLoopPoints() with @p loopEnd equal to
          * @cpp INT_MAX @ce.
@@ -197,6 +209,7 @@ class MAGNUM_AUDIO_EXPORT Buffer {
         /**
          * @brief Resets the loop points
          * @return Reference to self (for method chaining)
+         * @m_since{2019,10}
          *
          * Equivalent to calling @ref setLoopPoints() with @p loopStart equal
          * to @cpp 0 @ce, and @p loopEnd equal to @cpp INT_MAX @ce.

@@ -34,7 +34,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/configure.h.cmake
                ${CMAKE_CURRENT_BINARY_DIR}/configure.h)
 
 corrade_add_test(AudioAbstractImporterTest AbstractImporterTest.cpp
-    LIBRARIES MagnumAudio
+    LIBRARIES MagnumAudioTestLib
     FILES file.bin)
 target_include_directories(AudioAbstractImporterTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 corrade_add_test(AudioBufferFormatTest BufferFormatTest.cpp LIBRARIES MagnumAudio)
@@ -70,6 +70,20 @@ if(BUILD_AL_TESTS)
         set_target_properties(
             AudioListenerALTest
             AudioPlayableALTest
+            PROPERTIES FOLDER "Magnum/Audio/Test")
+    endif()
+
+    if(MAGNUM_BUILD_STATIC AND NOT CORRADE_TARGET_EMSCRIPTEN AND NOT CORRADE_TARGET_IOS AND NOT CORRADE_TARGET_ANDROID AND NOT CORRADE_TARGET_WINDOWS_RT)
+        add_library(AudioGlobalStateAcrossLibrariesLibrary SHARED
+            GlobalStateAcrossLibrariesLibrary.cpp)
+        target_link_libraries(AudioGlobalStateAcrossLibrariesLibrary PUBLIC MagnumAudio)
+
+        corrade_add_test(AudioGlobalStateAcrossLibra___ALTest
+            GlobalStateAcrossLibrariesALTest.cpp
+            LIBRARIES AudioGlobalStateAcrossLibrariesLibrary)
+        set_target_properties(
+            AudioGlobalStateAcrossLibrariesLibrary
+            AudioGlobalStateAcrossLibra___ALTest
             PROPERTIES FOLDER "Magnum/Audio/Test")
     endif()
 endif()

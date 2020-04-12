@@ -83,7 +83,7 @@ template<class T> class BasicDualComplexTransformation: public AbstractBasicTran
         }
 
         /**
-         * @brief Transform object
+         * @brief Transform the object
          * @return Reference to self (for method chaining)
          *
          * Expects that the dual complex number is normalized.
@@ -97,7 +97,7 @@ template<class T> class BasicDualComplexTransformation: public AbstractBasicTran
         }
 
         /**
-         * @brief Transform object as a local transformation
+         * @brief Transform the object as a local transformation
          *
          * Similar to the above, except that the transformation is applied
          * before all others.
@@ -110,7 +110,7 @@ template<class T> class BasicDualComplexTransformation: public AbstractBasicTran
         }
 
         /**
-         * @brief Translate object
+         * @brief Translate the object
          * @return Reference to self (for method chaining)
          *
          * Same as calling @ref transform() with @ref Math::DualComplex::translation().
@@ -122,7 +122,7 @@ template<class T> class BasicDualComplexTransformation: public AbstractBasicTran
         }
 
         /**
-         * @brief Translate object as a local transformation
+         * @brief Translate the object as a local transformation
          *
          * Similar to the above, except that the transformation is applied
          * before all others. Same as calling @ref transformLocal() with
@@ -133,19 +133,46 @@ template<class T> class BasicDualComplexTransformation: public AbstractBasicTran
         }
 
         /**
-         * @brief Rotate object
+         * @brief Rotate the object using a complex number
+         * @param complex       Normalized complex number
+         * @return Reference to self (for method chaining)
+         * @m_since_latest
+         *
+         * Same as calling @ref transform() with @p complex. Expects that the
+         * complex number is normalized.
+         * @see @ref rotate(Math::Rad<T>),
+         *      @ref rotateLocal(const Math::Complex<T>&)
+         */
+        Object<BasicDualComplexTransformation<T>>& rotate(const Math::Complex<T>& complex) {
+            return transformInternal(complex);
+        }
+
+        /**
+         * @brief Rotate the object using a complex number as a local transformation
+         * @m_since_latest
+         *
+         * Similar to the above, except that the transformation is applied
+         * before all others.
+         */
+        Object<BasicDualComplexTransformation<T>>& rotateLocal(const Math::Complex<T>& complex) {
+            return transformLocalInternal(complex);
+        }
+
+        /**
+         * @brief Rotate the object
          * @param angle     Angle (counterclockwise)
          * @return Reference to self (for method chaining)
          *
          * Same as calling @ref transform() with @ref Math::DualComplex::rotation().
-         * @see @ref rotateLocal(), @ref normalizeRotation()
+         * @see @ref rotate(const Math::Complex<T>&), @ref rotateLocal(),
+         *      @ref normalizeRotation()
          */
         Object<BasicDualComplexTransformation<T>>& rotate(Math::Rad<T> angle) {
             return transformInternal(Math::DualComplex<T>::rotation(angle));
         }
 
         /**
-         * @brief Rotate object as a local transformation
+         * @brief Rotate the object as a local transformation
          *
          * Similar to the above, except that the transformation is applied
          * before all others.
@@ -166,6 +193,13 @@ template<class T> class BasicDualComplexTransformation: public AbstractBasicTran
         }
         void doTranslateLocal(const Math::Vector2<T>& vector) override final {
             translateLocal(vector);
+        }
+
+        void doRotate(const Math::Complex<T>& complex) override final {
+            rotate(complex);
+        }
+        void doRotateLocal(const Math::Complex<T>& complex) override final {
+            rotateLocal(complex);
         }
 
         void doRotate(Math::Rad<T> angle) override final { rotate(angle); }

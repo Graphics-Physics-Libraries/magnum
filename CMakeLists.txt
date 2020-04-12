@@ -23,21 +23,14 @@
 #   DEALINGS IN THE SOFTWARE.
 #
 
-cmake_minimum_required(VERSION 3.1)
-
-# Configuration fails on < 3.4 if only C++ is enabled (CheckFunctionExists
-# macro called from FindX11). Also, Android needs C for compiling some glue
-# code.
-if(NOT CMAKE_VERSION VERSION_LESS 3.4.0 AND NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
-    set(LANG CXX)
-endif()
+cmake_minimum_required(VERSION 3.4)
 
 option(HUNTER_ENABLED "Get dependencies (Corrade, GLFW, SDL2, ...) via Hunter" OFF)
 if(HUNTER_ENABLED)
     include(${CMAKE_CURRENT_LIST_DIR}/package/hunter/HunterInit.cmake)
 endif()
 
-project(Magnum ${LANG})
+project(Magnum CXX)
 
 if(HUNTER_ENABLED)
     include(${CMAKE_CURRENT_LIST_DIR}/package/hunter/HunterAddPackages.cmake)
@@ -78,6 +71,7 @@ endif()
 
 # API-independent utilities
 option(WITH_IMAGECONVERTER "Build magnum-imageconverter utility" OFF)
+option(WITH_SCENECONVERTER "Build magnum-sceneconverter utility" OFF)
 
 # Magnum AL Info
 option(WITH_AL_INFO "Build magnum-al-info utility" OFF)
@@ -207,8 +201,7 @@ if(BUILD_TESTS)
     # that has builtin Android support -- Gradle uses 3.6 so this will nicely
     # work in both cases.
     if(CORRADE_TARGET_ANDROID AND CMAKE_ANDROID_NDK)
-        list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/toolchains/modules/")
-        include(UseAndroid)
+        include(${PROJECT_SOURCE_DIR}/toolchains/modules/UseAndroid.cmake)
     endif()
 endif()
 
@@ -412,8 +405,39 @@ set(MAGNUM_PLUGINS_AUDIOIMPORTER_DEBUG_DIR ${MAGNUM_PLUGINS_DEBUG_DIR}/audioimpo
 set(MAGNUM_PLUGINS_AUDIOIMPORTER_RELEASE_DIR ${MAGNUM_PLUGINS_RELEASE_DIR}/audioimporters)
 
 # Library version
-set(MAGNUM_LIBRARY_VERSION 2.2)
+set(MAGNUM_LIBRARY_VERSION 2.3)
 set(MAGNUM_LIBRARY_SOVERSION 2)
+
+# A single output location. After a decade of saying NO THIS IS A NON-SOLUTION
+# TO A NON-PROBLEM I reconsidered my views and enabled this, because:
+#
+# - On Windows (which don't have RPATH), this makes test execution finally
+#   possible without having to install all the stuff first (including the
+#   test-only libs, which is ugh).
+# - With CMake subprojects, this makes it finally possible to use dynamic
+#   plugins directly from the build dir (again without installing anything) ---
+#   all plugins are put into the same place, so PluginManager has a single
+#   place to look into; and thanks to the dynamic libraries being there as
+#   well, this location can be automagically detected as relative to
+#   Directory::libraryLocation().
+# - Thanks to the $<CONFIG> being part of the output path, you are always sure
+#   you never accidentally mix up debug/release libraries when switching
+#   CMAKE_BUILD_TYPE in an existing build dir.
+#
+# The runtime location is set to CMAKE_BINARY_DIR and not PROJECT_BINARY_DIR
+# because have one runtime location per CMake subproject would not solve much
+# either. If the user already provides CMAKE_RUNTIME_OUTPUT_DIRECTORY (even
+# empty), it's respected and nothing is being done.
+#
+# Explicitly using a generator expression to ensure plugins are added to e.g.
+# <CONFIG>/lib/magnum/importers/ instead of lib/magnum/importers/<CONFIG>. Also
+# adding this to cache, making superprojects pick that up implicitly as well,
+# without forcing them to explicitly mirror this setting.
+if(NOT DEFINED CMAKE_RUNTIME_OUTPUT_DIRECTORY AND NOT DEFINED CMAKE_LIBRARY_OUTPUT_DIRECTORY AND NOT DEFINED CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/$<CONFIG>/bin CACHE PATH "" FORCE)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/$<CONFIG>/lib CACHE PATH "" FORCE)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/$<CONFIG>/lib CACHE PATH "" FORCE)
+endif()
 
 add_subdirectory(modules)
 add_subdirectory(src)

@@ -34,7 +34,23 @@
 #include "Magnum/DimensionTraits.h"
 #include "Magnum/PixelStorage.h"
 
+#ifndef DOXYGEN_GENERATING_OUTPUT
+namespace Corrade { namespace Containers {
+
+/* Forward declaration of an utility used in pixels() to avoid forcing users to
+   include the relatively large StridedArrayView header *before* the Image
+   class definition. */
+template<unsigned newDimensions, class U, unsigned dimensions, class T> StridedArrayView<newDimensions, U> arrayCast(const StridedArrayView<dimensions, T>& view);
+
+}}
+#endif
+
 namespace Magnum {
+
+#ifndef DOXYGEN_GENERATING_OUTPUT
+/** @todo remove once AbstractImageConverter returns ImageData instead */
+namespace Trade { class AbstractImageConverter; }
+#endif
 
 /**
 @brief Image
@@ -310,12 +326,16 @@ template<UnsignedInt dimensions> class Image {
         /** @brief Move assignment */
         Image<dimensions>& operator=(Image<dimensions>&& other) noexcept;
 
-        /** @brief Conversion to view */
+        /** @brief Conversion to a view */
+        /*implicit*/ operator BasicImageView<dimensions>() const;
+
+        /**
+         * @brief Conversion to a mutable view
+         * @m_since{2019,10}
+         */
         /* Not restricted to const&, because we might want to pass the view to
            another function in an oneliner (e.g. saving screenshot) */
         /*implicit*/ operator BasicMutableImageView<dimensions>();
-        /** @overload */
-        /*implicit*/ operator BasicImageView<dimensions>() const;
 
         /** @brief Storage of pixel data */
         PixelStorage storage() const { return _storage; }
@@ -359,7 +379,7 @@ template<UnsignedInt dimensions> class Image {
         std::pair<VectorTypeFor<dimensions, std::size_t>, VectorTypeFor<dimensions, std::size_t>> dataProperties() const;
 
         /**
-         * @brief Raw data
+         * @brief Image data
          *
          * @see @ref release(), @ref pixels()
          */
@@ -369,7 +389,8 @@ template<UnsignedInt dimensions> class Image {
         Containers::ArrayView<const char> data() const & { return _data; }
 
         /**
-         * @brief Raw data from a r-value
+         * @brief Image data from a r-value
+         * @m_since{2019,10}
          *
          * Unlike @ref data(), which returns a view, this is equivalent to
          * @ref release() to avoid a dangling view when the temporary instance
@@ -379,6 +400,7 @@ template<UnsignedInt dimensions> class Image {
         Containers::Array<char> data() && { return release(); }
 
         /** @overload
+         * @m_since{2019,10}
          * @todo what to do here?!
          */
         Containers::Array<char> data() const && = delete;
@@ -386,8 +408,8 @@ template<UnsignedInt dimensions> class Image {
         #ifdef MAGNUM_BUILD_DEPRECATED
         /**
          * @brief Image data in a particular type
-         * @deprecated Use non-templated @ref data() together with
-         *      @ref Corrade::Containers::arrayCast() instead for properly
+         * @m_deprecated_since{2019,10} Use non-templated @ref data() together
+         *      with @ref Corrade::Containers::arrayCast() instead for properly
          *      bounds-checked type conversion.
          */
         template<class T> CORRADE_DEPRECATED("use data() together with Containers::arrayCast() instead") T* data() {
@@ -396,8 +418,8 @@ template<UnsignedInt dimensions> class Image {
 
         /**
          * @brief Image data in a particular type
-         * @deprecated Use non-templated @ref data() together with
-         *      @ref Corrade::Containers::arrayCast() instead for properly
+         * @m_deprecated_since{2019,10} Use non-templated @ref data() together
+         *      with @ref Corrade::Containers::arrayCast() instead for properly
          *      bounds-checked type conversion.
          */
         template<class T> CORRADE_DEPRECATED("use data() together with Containers::arrayCast() instead") const T* data() const {
@@ -407,6 +429,7 @@ template<UnsignedInt dimensions> class Image {
 
         /**
          * @brief View on pixel data
+         * @m_since{2019,10}
          *
          * Provides direct and easy-to-use access to image pixels. See
          * @ref Image-pixel-views for more information.
@@ -416,6 +439,7 @@ template<UnsignedInt dimensions> class Image {
 
         /**
          * @brief View on pixel data with a concrete pixel type
+         * @m_since{2019,10}
          *
          * Compared to non-templated @ref pixels() in addition casts the pixel
          * data to a specified type. The user is responsible for choosing
@@ -424,11 +448,15 @@ template<UnsignedInt dimensions> class Image {
          */
         template<class T> Containers::StridedArrayView<dimensions, T> pixels() {
             /* Deliberately not adding a StridedArrayView include, it should
-               work without since this is a templated function */
+               work without since this is a templated function and we declare
+               arrayCast() above to satisfy two-phase lookup. */
             return Containers::arrayCast<dimensions, T>(pixels());
         }
 
-        /** @overload */
+        /**
+         * @overload
+         * @m_since{2019,10}
+         */
         template<class T> Containers::StridedArrayView<dimensions, const T> pixels() const {
             return Containers::arrayCast<dimensions, const T>(pixels());
         }
@@ -443,6 +471,14 @@ template<UnsignedInt dimensions> class Image {
         Containers::Array<char> release();
 
     private:
+        #ifndef DOXYGEN_GENERATING_OUTPUT
+        /* For custom deleter checks. Not done in the constructors here because
+           the restriction is pointless when used outside of plugin
+           implementations. */
+        /** @todo figure out a better way (return ImageData there instead?) */
+        friend Trade::AbstractImageConverter;
+        #endif
+
         PixelStorage _storage;
         PixelFormat _format;
         UnsignedInt _formatExtra;
@@ -571,12 +607,16 @@ template<UnsignedInt dimensions> class CompressedImage {
         /** @brief Move assignment */
         CompressedImage<dimensions>& operator=(CompressedImage<dimensions>&& other) noexcept;
 
-        /** @brief Conversion to view */
+        /** @brief Conversion to a view */
+        /*implicit*/ operator BasicCompressedImageView<dimensions>() const;
+
+        /**
+         * @brief Conversion to a mutable view
+         * @m_since{2019,10}
+         */
         /* Not restricted to const&, because we might want to pass the view to
            another function in an oneliner (e.g. saving screenshot) */
         /*implicit*/ operator BasicMutableCompressedImageView<dimensions>();
-        /** @overload */
-        /*implicit*/ operator BasicCompressedImageView<dimensions>() const;
 
         /** @brief Storage of compressed pixel data */
         CompressedPixelStorage storage() const { return _storage; }
@@ -615,6 +655,7 @@ template<UnsignedInt dimensions> class CompressedImage {
 
         /**
          * @brief Raw data from a r-value
+         * @m_since{2019,10}
          *
          * Unlike @ref data(), which returns a view, this is equivalent to
          * @ref release() to avoid a dangling view when the temporary instance
@@ -624,6 +665,7 @@ template<UnsignedInt dimensions> class CompressedImage {
         Containers::Array<char> data() && { return release(); }
 
         /** @overload
+         * @m_since{2019,10}
          * @todo what to do here?!
          */
         Containers::Array<char> data() const && = delete;
@@ -631,8 +673,8 @@ template<UnsignedInt dimensions> class CompressedImage {
         #ifdef MAGNUM_BUILD_DEPRECATED
         /**
          * @brief Image data in a particular type
-         * @deprecated Use non-templated @ref data() together with
-         *      @ref Corrade::Containers::arrayCast() instead for properly
+         * @m_deprecated_since{2019,10} Use non-templated @ref data() together
+         *      with @ref Corrade::Containers::arrayCast() instead for properly
          *      bounds-checked type conversion.
          */
         template<class T> CORRADE_DEPRECATED("use data() together with Containers::arrayCast() instead") T* data() {
@@ -641,8 +683,8 @@ template<UnsignedInt dimensions> class CompressedImage {
 
         /**
          * @brief Image data in a particular type
-         * @deprecated Use non-templated @ref data() together with
-         *      @ref Corrade::Containers::arrayCast() instead for properly
+         * @m_deprecated_since{2019,10} Use non-templated @ref data() together
+         *      with @ref Corrade::Containers::arrayCast() instead for properly
          *      bounds-checked type conversion.
          */
         template<class T> CORRADE_DEPRECATED("use data() together with Containers::arrayCast() instead") const T* data() const {
@@ -660,6 +702,14 @@ template<UnsignedInt dimensions> class CompressedImage {
         Containers::Array<char> release();
 
     private:
+        #ifndef DOXYGEN_GENERATING_OUTPUT
+        /* For custom deleter checks. Not done in the constructors here because
+           the restriction is pointless when used outside of plugin
+           implementations. */
+        /** @todo figure out a better way (return ImageData there instead?) */
+        friend Trade::AbstractImageConverter;
+        #endif
+
         /* To be made public once block size and block data size are stored
            together with the image */
         explicit CompressedImage(CompressedPixelStorage storage, UnsignedInt format, const VectorTypeFor<dimensions, Int>& size, Containers::Array<char>&& data) noexcept;

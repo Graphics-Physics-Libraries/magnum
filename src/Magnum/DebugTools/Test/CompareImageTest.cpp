@@ -67,6 +67,7 @@ struct CompareImageTest: TestSuite::Tester {
     void deltaImageSpecials();
 
     void pixelDelta();
+    void pixelDeltaEmpty();
     void pixelDeltaOverflow();
     void pixelDeltaSpecials();
 
@@ -76,6 +77,7 @@ struct CompareImageTest: TestSuite::Tester {
     void compareAboveThresholds();
     void compareAboveMaxThreshold();
     void compareAboveMeanThreshold();
+    void compareNonZeroThreshold();
     void compareSpecials();
     void compareSpecialsMeanOnly();
     void compareSpecialsDisallowedThreshold();
@@ -83,29 +85,36 @@ struct CompareImageTest: TestSuite::Tester {
     void setupExternalPluginManager();
     void teardownExternalPluginManager();
 
-    void image();
+    void imageZeroDelta();
+    void imageNonZeroDelta();
+    void imageNonZeroDeltaNoPixels();
     void imageError();
-    void imageFile();
+    void imageFileZeroDelta();
+    void imageFileNonZeroDelta();
     void imageFileError();
     void imageFilePluginLoadFailed();
     void imageFileActualLoadFailed();
     void imageFileExpectedLoadFailed();
     void imageFileActualIsCompressed();
     void imageFileExpectedIsCompressed();
-    void imageToFile();
+    void imageToFileZeroDelta();
+    void imageToFileNonZeroDelta();
     void imageToFileError();
     void imageToFilePluginLoadFailed();
     void imageToFileExpectedLoadFailed();
     void imageToFileExpectedIsCompressed();
-    void fileToImage();
+    void fileToImageZeroDelta();
+    void fileToImageNonZeroDelta();
     void fileToImageError();
     void fileToImagePluginLoadFailed();
     void fileToImageActualLoadFailed();
     void fileToImageActualIsCompressed();
 
-    void pixelsToImage();
+    void pixelsToImageZeroDelta();
+    void pixelsToImageNonZeroDelta();
     void pixelsToImageError();
-    void pixelsToFile();
+    void pixelsToFileZeroDelta();
+    void pixelsToFileNonZeroDelta();
     void pixelsToFileError();
 
     private:
@@ -129,6 +138,7 @@ CompareImageTest::CompareImageTest() {
               &CompareImageTest::deltaImageSpecials,
 
               &CompareImageTest::pixelDelta,
+              &CompareImageTest::pixelDeltaEmpty,
               &CompareImageTest::pixelDeltaOverflow,
               &CompareImageTest::pixelDeltaSpecials,
 
@@ -138,14 +148,18 @@ CompareImageTest::CompareImageTest() {
               &CompareImageTest::compareAboveThresholds,
               &CompareImageTest::compareAboveMaxThreshold,
               &CompareImageTest::compareAboveMeanThreshold,
+              &CompareImageTest::compareNonZeroThreshold,
               &CompareImageTest::compareSpecials,
               &CompareImageTest::compareSpecialsMeanOnly,
               &CompareImageTest::compareSpecialsDisallowedThreshold,
 
-              &CompareImageTest::image,
+              &CompareImageTest::imageZeroDelta,
+              &CompareImageTest::imageNonZeroDelta,
+              &CompareImageTest::imageNonZeroDeltaNoPixels,
               &CompareImageTest::imageError});
 
-    addTests({&CompareImageTest::imageFile,
+    addTests({&CompareImageTest::imageFileZeroDelta,
+              &CompareImageTest::imageFileNonZeroDelta,
               &CompareImageTest::imageFileError},
         &CompareImageTest::setupExternalPluginManager,
         &CompareImageTest::teardownExternalPluginManager);
@@ -160,7 +174,8 @@ CompareImageTest::CompareImageTest() {
     addTests({&CompareImageTest::imageFileActualIsCompressed,
               &CompareImageTest::imageFileExpectedIsCompressed});
 
-    addTests({&CompareImageTest::imageToFile,
+    addTests({&CompareImageTest::imageToFileZeroDelta,
+              &CompareImageTest::imageToFileNonZeroDelta,
               &CompareImageTest::imageToFileError},
         &CompareImageTest::setupExternalPluginManager,
         &CompareImageTest::teardownExternalPluginManager);
@@ -173,7 +188,8 @@ CompareImageTest::CompareImageTest() {
 
     addTests({&CompareImageTest::imageToFileExpectedIsCompressed});
 
-    addTests({&CompareImageTest::fileToImage,
+    addTests({&CompareImageTest::fileToImageZeroDelta,
+              &CompareImageTest::fileToImageNonZeroDelta,
               &CompareImageTest::fileToImageError},
         &CompareImageTest::setupExternalPluginManager,
         &CompareImageTest::teardownExternalPluginManager);
@@ -186,10 +202,12 @@ CompareImageTest::CompareImageTest() {
 
     addTests({&CompareImageTest::fileToImageActualIsCompressed});
 
-    addTests({&CompareImageTest::pixelsToImage,
+    addTests({&CompareImageTest::pixelsToImageZeroDelta,
+              &CompareImageTest::pixelsToImageNonZeroDelta,
               &CompareImageTest::pixelsToImageError});
 
-    addTests({&CompareImageTest::pixelsToFile,
+    addTests({&CompareImageTest::pixelsToFileZeroDelta,
+              &CompareImageTest::pixelsToFileNonZeroDelta,
               &CompareImageTest::pixelsToFileError},
         &CompareImageTest::setupExternalPluginManager,
         &CompareImageTest::teardownExternalPluginManager);
@@ -383,7 +401,7 @@ void CompareImageTest::deltaImage() {
         "          |,::::::~~~~===+++????77IIIZZZ$$$|\n"
         "          |,,,,,::::~~~===+++???777IIIZZZ$$|\n"
         "          |...,,,,:::~~~===+++??777IIIZZZ$$|\n"
-        "          | ....,,:::~~~===+++???777IIZZZ$$|\n");
+        "          | ....,,:::~~~===+++???777IIZZZ$$|");
 }
 
 void CompareImageTest::deltaImageScaling() {
@@ -406,15 +424,16 @@ void CompareImageTest::deltaImageScaling() {
         "          |::::~~~~===+++??777IIZZZ$$00088DD|\n"
         "          |,,::::~~~===++???777IIZZ$$$00888D|\n"
         "          |.,,,,:::~~===++???77IIZZZ$$000888|\n"
-        "          |...,,,::~~~==++???77IIIZZ$$000888|\n");
+        "          |...,,,::~~~==++???77IIIZZ$$000888|");
 }
 
 void CompareImageTest::deltaImageColors() {
     /* Print for visual color verification */
     {
-        Debug() << "Visual verification -- some letters should be yellow, some red, some white:";
-        Debug d{Debug::Flag::NoNewlineAtTheEnd};
-        Implementation::printDeltaImage(d, DeltaRed, {3, 3}, 2.0f, 0.5f, 0.2f);
+        Debug out;
+        out << "Visual verification -- some letters should be yellow, some red, some white:"
+            << Debug::newline;
+        Implementation::printDeltaImage(out, DeltaRed, {3, 3}, 2.0f, 0.5f, 0.2f);
     }
 
     std::ostringstream out;
@@ -424,7 +443,7 @@ void CompareImageTest::deltaImageColors() {
        preserve image ratio */
     CORRADE_COMPARE(out.str(),
         "          |.7 |\n"
-        "          |: ,|\n");
+        "          |: ,|");
 }
 
 void CompareImageTest::deltaImageSpecials() {
@@ -443,21 +462,21 @@ void CompareImageTest::deltaImageSpecials() {
        otherwise */
     CORRADE_COMPARE(out.str(),
         "          |MM |\n"
-        "          |~M8|\n");
+        "          |~M8|");
 }
 
 void CompareImageTest::pixelDelta() {
     {
-        Debug() << "Visual verification -- some lines should be yellow, some red:";
-        Debug d;
-        Implementation::printPixelDeltas(d, DeltaRed, ActualRed.format(), ActualRed.pixels(), ExpectedRed.pixels(), 0.5f, 0.1f, 10);
+        Debug out;
+        out << "Visual verification -- some lines should be yellow, some red:";
+        Implementation::printPixelDeltas(out, DeltaRed, ActualRed.format(), ActualRed.pixels(), ExpectedRed.pixels(), 0.5f, 0.1f, 10);
     }
 
     std::ostringstream out;
     Debug d{&out, Debug::Flag::DisableColors};
     Implementation::printPixelDeltas(d, DeltaRed, ActualRed.format(), ActualRed.pixels(), ExpectedRed.pixels(), 0.5f, 0.1f, 10);
 
-    CORRADE_COMPARE(out.str(),
+    CORRADE_COMPARE(out.str(), "\n"
         "        Pixels above max/mean threshold:\n"
         "          [1,2] Vector(1), expected Vector(0) (Δ = 1)\n"
         "          [0,0] Vector(0.3), expected Vector(0.65) (Δ = 0.35)\n"
@@ -465,12 +484,20 @@ void CompareImageTest::pixelDelta() {
         "          [0,2] Vector(-0.1), expected Vector(0.02) (Δ = 0.12)");
 }
 
+void CompareImageTest::pixelDeltaEmpty() {
+    std::ostringstream out;
+    Debug d{&out, Debug::Flag::DisableColors};
+    Implementation::printPixelDeltas(d, DeltaRed, ActualRed.format(), ActualRed.pixels(), ExpectedRed.pixels(), 1.0f, 1.0f, 10);
+
+    CORRADE_COMPARE(out.str(), "");
+}
+
 void CompareImageTest::pixelDeltaOverflow() {
     std::ostringstream out;
     Debug d{&out, Debug::Flag::DisableColors};
     Implementation::printPixelDeltas(d, DeltaRed, ActualRed.format(), ActualRed.pixels(), ExpectedRed.pixels(), 0.5f, 0.1f, 3);
 
-    CORRADE_COMPARE(out.str(),
+    CORRADE_COMPARE(out.str(), "\n"
         "        Top 3 out of 4 pixels above max/mean threshold:\n"
         "          [1,2] Vector(1), expected Vector(0) (Δ = 1)\n"
         "          [0,0] Vector(0.3), expected Vector(0.65) (Δ = 0.35)\n"
@@ -483,8 +510,8 @@ void CompareImageTest::pixelDeltaSpecials() {
     Implementation::printPixelDeltas(d, DeltaSpecials, ActualSpecials.format(), ActualSpecials.pixels(), ExpectedSpecials.pixels(), 1.5f, 0.5f, 10);
 
     /* MSVC prints -nan(ind) instead of ±nan. But only sometimes. */
-    #ifdef _MSC_VER
-    CORRADE_COMPARE(out.str(),
+    #if defined(CORRADE_TARGET_MSVC) && !defined(CORRADE_TARGET_CLANG_CL)
+    CORRADE_COMPARE(out.str(), "\n"
         "        Pixels above max/mean threshold:\n"
         "          [5,0] Vector(-inf), expected Vector(inf) (Δ = inf)\n"
         "          [3,0] Vector(0.3), expected Vector(-nan(ind)) (Δ = -nan(ind))\n"
@@ -493,7 +520,7 @@ void CompareImageTest::pixelDeltaSpecials() {
         "          [0,0] Vector(inf), expected Vector(1) (Δ = inf)\n"
         "          [8,0] Vector(3), expected Vector(-0.1) (Δ = 3.1)");
     #else
-    CORRADE_COMPARE(out.str(),
+    CORRADE_COMPARE(out.str(), "\n"
         "        Pixels above max/mean threshold:\n"
         "          [5,0] Vector(-inf), expected Vector(inf) (Δ = inf)\n"
         "          [3,0] Vector(0.3), expected Vector(nan) (Δ = nan)\n"
@@ -614,6 +641,25 @@ void CompareImageTest::compareAboveMeanThreshold() {
         "          [1,0] #5647ec, expected #5610ed (Δ = 18.6667)\n");
 }
 
+void CompareImageTest::compareNonZeroThreshold() {
+    std::stringstream out;
+
+    {
+        TestSuite::Comparator<CompareImage> compare{40.0f, 20.0f};
+        TestSuite::ComparisonStatusFlags flags = compare(ActualRgb, ExpectedRgb);
+        /* No diagnostic as we don't have any expected filename */
+        CORRADE_COMPARE(flags, TestSuite::ComparisonStatusFlag::Verbose);
+        Debug d{&out, Debug::Flag::DisableColors};
+        compare.printMessage(flags, d, "a", "b");
+    }
+
+    CORRADE_COMPARE(out.str(),
+        "Images a and b have deltas 39/18.5 below threshold 40/20. Delta image:\n"
+        "          |?M|\n"
+        "        Pixels above max/mean threshold:\n"
+        "          [1,1] #abcd85, expected #abcdfa (Δ = 39)\n");
+}
+
 void CompareImageTest::compareSpecials() {
     std::stringstream out;
 
@@ -626,9 +672,10 @@ void CompareImageTest::compareSpecials() {
         compare.printMessage(flags, d, "a", "b");
     }
 
-    /* Apple platforms, Android, Emscripten and MinGW32 don't print signed
-       NaNs. This is *not* a libc++ thing, tho -- libc++ on Linux prints signed NaNs. */
-    #if defined(CORRADE_TARGET_APPLE) || defined(CORRADE_TARGET_ANDROID) || defined(CORRADE_TARGET_EMSCRIPTEN) || defined(__MINGW32__)
+    /* Apple platforms, Android and MinGW32 don't print signed NaNs. This is
+       *not* a libc++ thing, tho -- libc++ on Linux prints signed NaNs. It used
+       to be with Emscripten too, but since 1.38.44 works the same as Linux. */
+    #if defined(CORRADE_TARGET_APPLE) || defined(CORRADE_TARGET_ANDROID) || defined(CORRADE_TARGET_MINGW)
     CORRADE_COMPARE(out.str(),
         "Images a and b have both max and mean delta above threshold, actual 3.1/nan but at most 1.5/0.5 expected. Delta image:\n"
         "          |MMMM M ,M|\n"
@@ -640,8 +687,23 @@ void CompareImageTest::compareSpecials() {
         "          [0,0] Vector(inf), expected Vector(1) (Δ = inf)\n"
         "          [8,0] Vector(3), expected Vector(-0.1) (Δ = 3.1)\n");
 
-    /* MSVC prints -nan(ind) instead of ±nan. But only sometimes. */
-    #elif defined(_MSC_VER)
+    /* clang-cl prints -nan(ind) instead of ±nan, but differently than MSVC */
+    #elif defined(CORRADE_TARGET_CLANG_CL)
+    CORRADE_COMPARE(out.str(),
+        "Images a and b have both max and mean delta above threshold, actual 3.1/-nan(ind) but at most 1.5/0.5 expected. Delta image:\n"
+        "          |MMMM M ,M|\n"
+        "        Pixels above max/mean threshold:\n"
+        "          [5,0] Vector(-inf), expected Vector(inf) (Δ = inf)\n"
+        "          [3,0] Vector(0.3), expected Vector(nan) (Δ = nan)\n"
+        "          [2,0] Vector(nan), expected Vector(0.3) (Δ = nan)\n"
+        "          [1,0] Vector(0.3), expected Vector(-inf) (Δ = inf)\n"
+        "          [0,0] Vector(inf), expected Vector(1) (Δ = inf)\n"
+        "          [8,0] Vector(3), expected Vector(-0.1) (Δ = 3.1)\n");
+
+    /* MSVC prints -nan(ind) instead of ±nan. But only sometimes, and
+       differently on 32/64bit builds. */
+    #elif defined(CORRADE_TARGET_MSVC)
+    #ifdef _M_X64
     CORRADE_COMPARE(out.str(),
         "Images a and b have both max and mean delta above threshold, actual 3.1/-nan(ind) but at most 1.5/0.5 expected. Delta image:\n"
         "          |MMMM M ,M|\n"
@@ -652,8 +714,20 @@ void CompareImageTest::compareSpecials() {
         "          [1,0] Vector(0.3), expected Vector(-inf) (Δ = inf)\n"
         "          [0,0] Vector(inf), expected Vector(1) (Δ = inf)\n"
         "          [8,0] Vector(3), expected Vector(-0.1) (Δ = 3.1)\n");
+    #else
+    CORRADE_COMPARE(out.str(),
+        "Images a and b have both max and mean delta above threshold, actual 3.1/nan but at most 1.5/0.5 expected. Delta image:\n"
+        "          |MMMM M ,M|\n"
+        "        Pixels above max/mean threshold:\n"
+        "          [5,0] Vector(-inf), expected Vector(inf) (Δ = inf)\n"
+        "          [3,0] Vector(0.3), expected Vector(-nan(ind)) (Δ = nan)\n"
+        "          [2,0] Vector(-nan(ind)), expected Vector(0.3) (Δ = nan)\n"
+        "          [1,0] Vector(0.3), expected Vector(-inf) (Δ = inf)\n"
+        "          [0,0] Vector(inf), expected Vector(1) (Δ = inf)\n"
+        "          [8,0] Vector(3), expected Vector(-0.1) (Δ = 3.1)\n");
+    #endif
 
-    /* Linux */
+    /* Linux, Emscripten */
     #else
     CORRADE_COMPARE(out.str(),
         "Images a and b have both max and mean delta above threshold, actual 3.1/-nan but at most 1.5/0.5 expected. Delta image:\n"
@@ -680,9 +754,10 @@ void CompareImageTest::compareSpecialsMeanOnly() {
         compare.printMessage(flags, d, "a", "b");
     }
 
-    /* Apple platforms, Android, Emscripten and MinGW32 don't print signed
-       NaNs. This is *not* a libc++ thing, tho -- libc++ on Linux prints signed NaNs. */
-    #if defined(CORRADE_TARGET_APPLE) || defined(CORRADE_TARGET_ANDROID) || defined(CORRADE_TARGET_EMSCRIPTEN) || defined(__MINGW32__)
+    /* Apple platforms, Android and MinGW32 don't print signed NaNs. This is
+       *not* a libc++ thing, tho -- libc++ on Linux prints signed NaNs. It used
+       to be with Emscripten too, but since 1.38.44 works the same as Linux. */
+    #if defined(CORRADE_TARGET_APPLE) || defined(CORRADE_TARGET_ANDROID) || defined(__MINGW32__)
     CORRADE_COMPARE(out.str(),
         "Images a and b have mean delta above threshold, actual nan but at most 0.5 expected. Max delta 3.1 is within threshold 15. Delta image:\n"
         "          |MMMM M ,M|\n"
@@ -694,8 +769,23 @@ void CompareImageTest::compareSpecialsMeanOnly() {
         "          [0,0] Vector(inf), expected Vector(1) (Δ = inf)\n"
         "          [8,0] Vector(3), expected Vector(-0.1) (Δ = 3.1)\n");
 
-    /* MSVC prints -nan(ind) instead of ±nan. But only sometimes. */
-    #elif defined(CORRADE_TARGET_WINDOWS) && defined(_MSC_VER)
+    /* clang-cl prints -nan(ind) instead of ±nan, but differently than MSVC */
+    #elif defined(CORRADE_TARGET_CLANG_CL)
+    CORRADE_COMPARE(out.str(),
+        "Images a and b have mean delta above threshold, actual -nan(ind) but at most 0.5 expected. Max delta 3.1 is within threshold 15. Delta image:\n"
+        "          |MMMM M ,M|\n"
+        "        Pixels above max/mean threshold:\n"
+        "          [5,0] Vector(-inf), expected Vector(inf) (Δ = inf)\n"
+        "          [3,0] Vector(0.3), expected Vector(nan) (Δ = nan)\n"
+        "          [2,0] Vector(nan), expected Vector(0.3) (Δ = nan)\n"
+        "          [1,0] Vector(0.3), expected Vector(-inf) (Δ = inf)\n"
+        "          [0,0] Vector(inf), expected Vector(1) (Δ = inf)\n"
+        "          [8,0] Vector(3), expected Vector(-0.1) (Δ = 3.1)\n");
+
+    /* MSVC prints -nan(ind) instead of ±nan. But only sometimes, and
+       differently on 32/64bit builds. */
+    #elif defined(CORRADE_TARGET_MSVC)
+    #ifdef _M_X64
     CORRADE_COMPARE(out.str(),
         "Images a and b have mean delta above threshold, actual -nan(ind) but at most 0.5 expected. Max delta 3.1 is within threshold 15. Delta image:\n"
         "          |MMMM M ,M|\n"
@@ -706,8 +796,20 @@ void CompareImageTest::compareSpecialsMeanOnly() {
         "          [1,0] Vector(0.3), expected Vector(-inf) (Δ = inf)\n"
         "          [0,0] Vector(inf), expected Vector(1) (Δ = inf)\n"
         "          [8,0] Vector(3), expected Vector(-0.1) (Δ = 3.1)\n");
+    #else
+    CORRADE_COMPARE(out.str(),
+        "Images a and b have mean delta above threshold, actual nan but at most 0.5 expected. Max delta 3.1 is within threshold 15. Delta image:\n"
+        "          |MMMM M ,M|\n"
+        "        Pixels above max/mean threshold:\n"
+        "          [5,0] Vector(-inf), expected Vector(inf) (Δ = inf)\n"
+        "          [3,0] Vector(0.3), expected Vector(-nan(ind)) (Δ = nan)\n"
+        "          [2,0] Vector(-nan(ind)), expected Vector(0.3) (Δ = nan)\n"
+        "          [1,0] Vector(0.3), expected Vector(-inf) (Δ = inf)\n"
+        "          [0,0] Vector(inf), expected Vector(1) (Δ = inf)\n"
+        "          [8,0] Vector(3), expected Vector(-0.1) (Δ = 3.1)\n");
+    #endif
 
-    /* Linux */
+    /* Linux, Emscripten */
     #else
     CORRADE_COMPARE(out.str(),
         "Images a and b have mean delta above threshold, actual -nan but at most 0.5 expected. Max delta 3.1 is within threshold 15. Delta image:\n"
@@ -760,6 +862,12 @@ void CompareImageTest::teardownExternalPluginManager() {
     _converterManager = Containers::NullOpt;
 }
 
+constexpr const char* ImageCompareVerbose =
+    "Images a and b have deltas 39/18.5 below threshold 40/20. Delta image:\n"
+    "          |?M|\n"
+    "        Pixels above max/mean threshold:\n"
+    "          [1,1] #abcd85, expected #abcdfa (Δ = 39)\n";
+
 constexpr const char* ImageCompareError =
     "Images a and b have both max and mean delta above threshold, actual 39/18.5 but at most 20/10 expected. Delta image:\n"
     "          |?M|\n"
@@ -768,12 +876,52 @@ constexpr const char* ImageCompareError =
     "          [1,0] #5647ec, expected #5610ed (Δ = 18.6667)\n"
     "          [0,1] #235710, expected #232710 (Δ = 16)\n";
 
-void CompareImageTest::image() {
-    CORRADE_COMPARE_WITH(ActualRgb, ExpectedRgb, (CompareImage{40.0f, 20.0f}));
+void CompareImageTest::imageZeroDelta() {
+    CORRADE_COMPARE_WITH(ExpectedRgb, ExpectedRgb, (CompareImage{40.0f, 20.0f}));
 
     /* No diagnostic as there's no error */
     TestSuite::Comparator<CompareImage> compare{40.0f, 20.0f};
-    CORRADE_COMPARE(compare(ActualRgb, ExpectedRgb), TestSuite::ComparisonStatusFlags{});
+    CORRADE_COMPARE(compare(ExpectedRgb, ExpectedRgb), TestSuite::ComparisonStatusFlags{});
+}
+
+void CompareImageTest::imageNonZeroDelta() {
+    /* This will produce output if --verbose is specified */
+    CORRADE_COMPARE_WITH(ActualRgb, ExpectedRgb, (CompareImage{40.0f, 20.0f}));
+
+    std::ostringstream out;
+
+    {
+        TestSuite::Comparator<CompareImage> compare{40.0f, 20.0f};
+        TestSuite::ComparisonStatusFlags flags = compare(ActualRgb, ExpectedRgb);
+        /* No diagnostic as there's no error */
+        CORRADE_COMPARE(flags, TestSuite::ComparisonStatusFlag::Verbose);
+        Debug d{&out, Debug::Flag::DisableColors};
+        compare.printMessage(flags, d, "a", "b");
+    }
+
+    CORRADE_COMPARE(out.str(), ImageCompareVerbose);
+}
+
+void CompareImageTest::imageNonZeroDeltaNoPixels() {
+    /* This will produce output if --verbose is specified */
+    CORRADE_COMPARE_WITH(ActualRgb, ExpectedRgb, (CompareImage{40.0f, 40.0f}));
+
+    std::ostringstream out;
+
+    {
+        TestSuite::Comparator<CompareImage> compare{40.0f, 40.0f};
+        TestSuite::ComparisonStatusFlags flags = compare(ActualRgb, ExpectedRgb);
+        /* No diagnostic as there's no error */
+        CORRADE_COMPARE(flags, TestSuite::ComparisonStatusFlag::Verbose);
+        Debug d{&out, Debug::Flag::DisableColors};
+        compare.printMessage(flags, d, "a", "b");
+    }
+
+    /* No pixel list written as there are no outliers. Testing this just once
+       since all other combinations (image/file/pixels) use the same codepath. */
+    CORRADE_COMPARE(out.str(),
+        "Images a and b have deltas 39/18.5 below threshold 40/40. Delta image:\n"
+        "          |?M|\n");
 }
 
 void CompareImageTest::imageError() {
@@ -791,22 +939,49 @@ void CompareImageTest::imageError() {
     CORRADE_COMPARE(out.str(), ImageCompareError);
 }
 
-void CompareImageTest::imageFile() {
+void CompareImageTest::imageFileZeroDelta() {
     if(_importerManager->loadState("AnyImageImporter") == PluginManager::LoadState::NotFound ||
        _importerManager->loadState("TgaImporter") == PluginManager::LoadState::NotFound)
         CORRADE_SKIP("AnyImageImporter or TgaImporter plugins not found.");
 
     CORRADE_COMPARE_WITH(
-        Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageActual.tga"),
+        Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga"),
         Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga"),
         (CompareImageFile{*_importerManager, 40.0f, 20.0f}));
 
     /* No diagnostic as there's no error */
     TestSuite::Comparator<CompareImageFile> compare{&*_importerManager, nullptr, 40.0f, 20.0f};
     CORRADE_COMPARE(compare(
-        Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageActual.tga"),
+        Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga"),
         Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga")),
-        TestSuite::ComparisonStatusFlags{});
+        TestSuite::ComparisonStatusFlag{});
+}
+
+void CompareImageTest::imageFileNonZeroDelta() {
+    if(_importerManager->loadState("AnyImageImporter") == PluginManager::LoadState::NotFound ||
+       _importerManager->loadState("TgaImporter") == PluginManager::LoadState::NotFound)
+        CORRADE_SKIP("AnyImageImporter or TgaImporter plugins not found.");
+
+    /* This will produce output if --verbose is specified */
+    CORRADE_COMPARE_WITH(
+        Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageActual.tga"),
+        Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga"),
+        (CompareImageFile{*_importerManager, 40.0f, 20.0f}));
+
+    std::ostringstream out;
+
+    {
+        TestSuite::Comparator<CompareImageFile> compare{&*_importerManager, nullptr, 40.0f, 20.0f};
+        TestSuite::ComparisonStatusFlags flags = compare(
+            Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageActual.tga"),
+            Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga"));
+        /* No diagnostic as there's no error */
+        CORRADE_COMPARE(flags, TestSuite::ComparisonStatusFlag::Verbose);
+        Debug d{&out, Debug::Flag::DisableColors};
+        compare.printMessage(flags, d, "a", "b");
+    }
+
+    CORRADE_COMPARE(out.str(), ImageCompareVerbose);
 }
 
 void CompareImageTest::imageFileError() {
@@ -994,19 +1169,43 @@ void CompareImageTest::imageFileExpectedIsCompressed() {
     CORRADE_VERIFY(!Utility::Directory::exists(filename));
 }
 
-void CompareImageTest::imageToFile() {
+void CompareImageTest::imageToFileZeroDelta() {
     if(_importerManager->loadState("AnyImageImporter") == PluginManager::LoadState::NotFound ||
        _importerManager->loadState("TgaImporter") == PluginManager::LoadState::NotFound)
         CORRADE_SKIP("AnyImageImporter or TgaImporter plugins not found.");
 
-    CORRADE_COMPARE_WITH(ActualRgb,
+    CORRADE_COMPARE_WITH(ExpectedRgb,
         Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga"),
         (CompareImageToFile{*_importerManager, 40.0f, 20.0f}));
 
     /* No diagnostic as there's no error */
     TestSuite::Comparator<CompareImageToFile> compare{&*_importerManager, nullptr, 40.0f, 20.0f};
-    CORRADE_COMPARE(compare(ActualRgb, Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga")),
+    CORRADE_COMPARE(compare(ExpectedRgb, Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga")),
         TestSuite::ComparisonStatusFlags{});
+}
+
+void CompareImageTest::imageToFileNonZeroDelta() {
+    if(_importerManager->loadState("AnyImageImporter") == PluginManager::LoadState::NotFound ||
+       _importerManager->loadState("TgaImporter") == PluginManager::LoadState::NotFound)
+        CORRADE_SKIP("AnyImageImporter or TgaImporter plugins not found.");
+
+    /* This will produce output if --verbose is specified */
+    CORRADE_COMPARE_WITH(ActualRgb,
+        Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga"),
+        (CompareImageToFile{*_importerManager, 40.0f, 20.0f}));
+
+    std::ostringstream out;
+
+    {
+        TestSuite::Comparator<CompareImageToFile> compare{&*_importerManager, nullptr, 40.0f, 20.0f};
+        TestSuite::ComparisonStatusFlags flags = compare(ActualRgb, Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga"));
+        /* No diagnostic as there's no error */
+        CORRADE_COMPARE(flags, TestSuite::ComparisonStatusFlag::Verbose);
+        Debug d{&out, Debug::Flag::DisableColors};
+        compare.printMessage(flags, d, "a", "b");
+    }
+
+    CORRADE_COMPARE(out.str(), ImageCompareVerbose);
 }
 
 void CompareImageTest::imageToFileError() {
@@ -1148,20 +1347,46 @@ void CompareImageTest::imageToFileExpectedIsCompressed() {
     CORRADE_VERIFY(!Utility::Directory::exists(filename));
 }
 
-void CompareImageTest::fileToImage() {
+void CompareImageTest::fileToImageZeroDelta() {
     if(_importerManager->loadState("AnyImageImporter") == PluginManager::LoadState::NotFound ||
        _importerManager->loadState("TgaImporter") == PluginManager::LoadState::NotFound)
         CORRADE_SKIP("AnyImageImporter or TgaImporter plugins not found.");
 
     CORRADE_COMPARE_WITH(
-        Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageActual.tga"),
+        Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga"),
         ExpectedRgb,
         (CompareFileToImage{*_importerManager, 40.0f, 20.0f}));
 
     /* No diagnostic as there's no error */
     TestSuite::Comparator<CompareFileToImage> compare{&*_importerManager, 40.0f, 20.0f};
-    CORRADE_COMPARE(compare(Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageActual.tga"),
+    CORRADE_COMPARE(compare(Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga"),
         ExpectedRgb), TestSuite::ComparisonStatusFlags{});
+}
+
+void CompareImageTest::fileToImageNonZeroDelta() {
+    if(_importerManager->loadState("AnyImageImporter") == PluginManager::LoadState::NotFound ||
+       _importerManager->loadState("TgaImporter") == PluginManager::LoadState::NotFound)
+        CORRADE_SKIP("AnyImageImporter or TgaImporter plugins not found.");
+
+    /* This will produce output if --verbose is specified */
+    CORRADE_COMPARE_WITH(
+        Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageActual.tga"),
+        ExpectedRgb,
+        (CompareFileToImage{*_importerManager, 40.0f, 20.0f}));
+
+    std::ostringstream out;
+
+    {
+        TestSuite::Comparator<CompareFileToImage> compare{&*_importerManager, 40.0f, 20.0f};
+        TestSuite::ComparisonStatusFlags flags = compare(Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageActual.tga"),
+        ExpectedRgb);
+        /* No diagnostic as there's no error */
+        CORRADE_COMPARE(flags, TestSuite::ComparisonStatusFlag::Verbose);
+        Debug d{&out, Debug::Flag::DisableColors};
+        compare.printMessage(flags, d, "a", "b");
+    }
+
+    CORRADE_COMPARE(out.str(), ImageCompareVerbose);
 }
 
 void CompareImageTest::fileToImageError() {
@@ -1246,15 +1471,35 @@ void CompareImageTest::fileToImageActualIsCompressed() {
         "Actual image a (.../CompareImageCompressed.dds) is compressed, comparison not possible.\n");
 }
 
-void CompareImageTest::pixelsToImage() {
+void CompareImageTest::pixelsToImageZeroDelta() {
+    /* Same as image(), but taking pixels instead */
+
+    CORRADE_COMPARE_WITH(ExpectedRgb.pixels<Color3ub>(),
+        ExpectedRgb, (CompareImage{40.0f, 20.0f}));
+
+    /* No diagnostic as there's no error */
+    TestSuite::Comparator<CompareImage> compare{40.0f, 20.0f};
+    CORRADE_COMPARE(compare(ExpectedRgb.pixels<Color3ub>(), ExpectedRgb), TestSuite::ComparisonStatusFlags{});
+}
+
+void CompareImageTest::pixelsToImageNonZeroDelta() {
     /* Same as image(), but taking pixels instead */
 
     CORRADE_COMPARE_WITH(ActualRgb.pixels<Color3ub>(),
         ExpectedRgb, (CompareImage{40.0f, 20.0f}));
 
-    /* No diagnostic as there's no error */
-    TestSuite::Comparator<CompareImage> compare{40.0f, 20.0f};
-    CORRADE_COMPARE(compare(ActualRgb, ExpectedRgb), TestSuite::ComparisonStatusFlags{});
+    std::ostringstream out;
+
+    {
+        TestSuite::Comparator<CompareImage> compare{40.0f, 20.0f};
+        TestSuite::ComparisonStatusFlags flags = compare(ActualRgb.pixels<Color3ub>(), ExpectedRgb);
+        /* No diagnostic as there's no error */
+        CORRADE_COMPARE(flags, TestSuite::ComparisonStatusFlag::Verbose);
+        Debug d{&out, Debug::Flag::DisableColors};
+        compare.printMessage(flags, d, "a", "b");
+    }
+
+    CORRADE_COMPARE(out.str(), ImageCompareVerbose);
 }
 
 void CompareImageTest::pixelsToImageError() {
@@ -1275,7 +1520,24 @@ void CompareImageTest::pixelsToImageError() {
     CORRADE_COMPARE(out.str(), ImageCompareError);
 }
 
-void CompareImageTest::pixelsToFile() {
+void CompareImageTest::pixelsToFileZeroDelta() {
+    /* Same as imageToFile(), but taking pixels instead */
+
+    if(_importerManager->loadState("AnyImageImporter") == PluginManager::LoadState::NotFound ||
+       _importerManager->loadState("TgaImporter") == PluginManager::LoadState::NotFound)
+        CORRADE_SKIP("AnyImageImporter or TgaImporter plugins not found.");
+
+    CORRADE_COMPARE_WITH(ExpectedRgb.pixels<Color3ub>(),
+        Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga"),
+        (CompareImageToFile{*_importerManager, 40.0f, 20.0f}));
+
+    /* No diagnostic as there's no error */
+    TestSuite::Comparator<CompareImageToFile> compare{&*_importerManager, nullptr, 40.0f, 20.0f};
+    CORRADE_COMPARE(compare(ExpectedRgb.pixels<Color3ub>(), Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga")),
+        TestSuite::ComparisonStatusFlags{});
+}
+
+void CompareImageTest::pixelsToFileNonZeroDelta() {
     /* Same as imageToFile(), but taking pixels instead */
 
     if(_importerManager->loadState("AnyImageImporter") == PluginManager::LoadState::NotFound ||
@@ -1286,10 +1548,18 @@ void CompareImageTest::pixelsToFile() {
         Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga"),
         (CompareImageToFile{*_importerManager, 40.0f, 20.0f}));
 
-    /* No diagnostic as there's no error */
-    TestSuite::Comparator<CompareImageToFile> compare{&*_importerManager, nullptr, 40.0f, 20.0f};
-    CORRADE_COMPARE(compare(ActualRgb, Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga")),
-        TestSuite::ComparisonStatusFlags{});
+    std::ostringstream out;
+
+    {
+        TestSuite::Comparator<CompareImageToFile> compare{&*_importerManager, nullptr, 40.0f, 20.0f};
+        TestSuite::ComparisonStatusFlags flags = compare(ActualRgb.pixels<Color3ub>(), Utility::Directory::join(DEBUGTOOLS_TEST_DIR, "CompareImageExpected.tga"));
+        /* No diagnostic as there's no error */
+        CORRADE_COMPARE(flags, TestSuite::ComparisonStatusFlag::Verbose);
+        Debug d{&out, Debug::Flag::DisableColors};
+        compare.printMessage(flags, d, "a", "b");
+    }
+
+    CORRADE_COMPARE(out.str(), ImageCompareVerbose);
 }
 
 void CompareImageTest::pixelsToFileError() {

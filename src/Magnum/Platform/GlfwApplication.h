@@ -6,6 +6,7 @@
     Copyright © 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019
               Vladimír Vondruš <mosra@centrum.cz>
     Copyright © 2016 Jonathan Hale <squareys@googlemail.com>
+    Copyright © 2019, 2020 Marco Melorio <m.melorio@icloud.com>
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -62,10 +63,7 @@ namespace Implementation {
 
 Application using the [GLFW](http://glfw.org) toolkit. Supports keyboard and
 mouse handling with support for changing cursor and mouse tracking and warping.
-
-This application library is available on all platforms where GLFW is ported. It
-depends on the [GLFW](http://glfw.org) library and is built if
-`WITH_GLFWAPPLICATION` is enabled when building Magnum.
+Available on all platforms where GLFW is ported.
 
 @m_class{m-block m-success}
 
@@ -96,21 +94,32 @@ See @ref cmake for more information.
 
 @section Platform-GlfwApplication-usage General usage
 
-In order to use this library from CMake, you need to copy
+This application library depends on the [GLFW](http://glfw.org) library and is
+built if `WITH_GLFWAPPLICATION` is enabled when building Magnum. To use this
+library with CMake, put
 [FindGLFW.cmake](https://github.com/mosra/magnum/blob/master/modules/FindGLFW.cmake)
-from the `modules/` directory in Magnum sources to a `modules/` dir in your
-project and pointing `CMAKE_MODULE_PATH` to it (if not done already) so it is
-able to find the GLFW library. Then request the `GlfwApplication` component of
-the `Magnum` package and link to the `Magnum::GlfwApplication` target:
+into your `modules/` directory, request the `GlfwApplication` component of the
+`Magnum` package and link to the `Magnum::GlfwApplication` target:
 
 @code{.cmake}
-# Path where FindGLFW.cmake can be found, adapt as needed
-set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/modules/" ${CMAKE_MODULE_PATH})
-
 find_package(Magnum REQUIRED GlfwApplication)
 
 # ...
-target_link_libraries(your-app Magnum::GlfwApplication)
+target_link_libraries(your-app PRIVATE Magnum::GlfwApplication)
+@endcode
+
+Additionally, if you're using Magnum as a CMake subproject, bundle the
+[glfw repository](https://github.com/glfw/glfw) and do the following
+* *before* calling @cmake find_package() @ce to ensure it's enabled, as the
+library is not built by default. If you want to use system-installed GLFW, omit
+the first part and point `CMAKE_PREFIX_PATH` to its installation dir if
+necessary.
+
+@code{.cmake}
+add_subdirectory(glfw)
+
+set(WITH_GLFWAPPLICATION ON CACHE BOOL "" FORCE)
+add_subdirectory(magnum EXCLUDE_FROM_ALL)
 @endcode
 
 If no other application is requested, you can also use the generic
@@ -234,18 +243,44 @@ class GlfwApplication {
          * @brief Execute main loop
          * @return Value for returning from @cpp main() @ce
          *
-         * See @ref MAGNUM_GLFWAPPLICATION_MAIN() for usage information.
+         * Calls @ref mainLoopIteration() in a loop until @ref exit() is
+         * called. See @ref MAGNUM_GLFWAPPLICATION_MAIN() for usage
+         * information.
          */
         int exec();
 
         /**
-         * @brief Exit application main loop
-         * @param exitCode  The exit code the application should return
+         * @brief Run one iteration of application main loop
+         * @return @cpp false @ce if @ref exit() was called and the application
+         *      should exit, @cpp true @ce otherwise
+         * @m_since_latest
+         *
+         * Called internally from @ref exec(). If you want to have better
+         * control over how the main loop behaves, you can call this function
+         * yourself from your own `main()` function instead of it being called
+         * automatically from @ref exec() / @ref MAGNUM_GLFWAPPLICATION_MAIN().
          */
-        void exit(int exitCode = 0) {
-            glfwSetWindowShouldClose(_window, true);
-            _exitCode = exitCode;
-        }
+        bool mainLoopIteration();
+
+        /**
+         * @brief Exit application
+         * @param exitCode  The exit code the application should return
+         *
+         * When called from application constructor, it will cause the
+         * application to exit immediately after constructor ends, without any
+         * events being processed (thus not even @ref exitEvent()). Calling
+         * this function is recommended over @ref std::exit() or
+         * @ref Corrade::Utility::Fatal "Fatal", which exit without calling
+         * destructors on local scope. Note that, however, you need to
+         * explicitly @cpp return @ce after calling it, as it can't exit the
+         * constructor on its own:
+         *
+         * @snippet MagnumPlatform.cpp exit-from-constructor
+         *
+         * When called from the main loop, the application exits cleanly
+         * before next main loop iteration is executed.
+         */
+        void exit(int exitCode = 0);
 
         /**
          * @brief Underlying window handle
@@ -342,26 +377,44 @@ class GlfwApplication {
          */
         Vector2i windowSize() const;
 
+        /**
+         * @brief Set window size
+         * @param size    The size, in screen coordinates
+         * @m_since_latest
+         *
+         * To make the sizing work independently of the display DPI, @p size is
+         * internally multiplied with @ref dpiScaling() before getting applied.
+         * Expects that a window is already created.
+         * @see @ref setMinWindowSize(), @ref setMaxWindowSize()
+         */
+        void setWindowSize(const Vector2i& size);
+
         #if GLFW_VERSION_MAJOR*100 + GLFW_VERSION_MINOR >= 302 || defined(DOXYGEN_GENERATING_OUTPUT)
         /**
          * @brief Set window minimum size
          * @param size    The minimum size, in screen coordinates
+         * @m_since{2019,10}
          *
          * If a value is set to @cpp -1 @ce, it will disable/remove the
-         * corresponding limit.
-         *
+         * corresponding limit. To make the sizing work independently of the
+         * display DPI, @p size is internally multiplied with @ref dpiScaling()
+         * before getting applied. Expects that a window is already created.
          * @note Supported since GLFW 3.2.
+         * @see @ref setMaxWindowSize(), @ref setWindowSize()
          */
         void setMinWindowSize(const Vector2i& size = {-1, -1});
 
         /**
          * @brief Set window maximum size
          * @param size    The maximum size, in screen coordinates
+         * @m_since{2019,10}
          *
          * If a value is set to @cpp -1 @ce, it will disable/remove the
-         * corresponding limit.
-         *
+         * corresponding limit. To make the sizing work independently of the
+         * display DPI, @p size is internally multiplied with @ref dpiScaling()
+         * before getting applied. Expects that a window is already created.
          * @note Supported since GLFW 3.2.
+         * @see @ref setMinWindowSize(), @ref setMaxWindowSize()
          */
         void setMaxWindowSize(const Vector2i& size = {-1, -1});
         #endif
@@ -389,7 +442,7 @@ class GlfwApplication {
          *
          * How the content should be scaled relative to system defaults for
          * given @ref windowSize(). If a window is not created yet, returns
-         * zero vector, use @ref dpiScaling(const Configuration&) const for
+         * zero vector, use @ref dpiScaling(const Configuration&) for
          * calculating a value independently. See @ref Platform-GlfwApplication-dpi
          * for more information.
          * @see @ref framebufferSize()
@@ -404,14 +457,39 @@ class GlfwApplication {
          * and custom scaling specified on the command-line. See
          * @ref Platform-GlfwApplication-dpi for more information.
          */
-        Vector2 dpiScaling(const Configuration& configuration) const;
+        Vector2 dpiScaling(const Configuration& configuration);
 
         /**
          * @brief Set window title
+         * @m_since{2019,10}
          *
          * The @p title is expected to be encoded in UTF-8.
          */
         void setWindowTitle(const std::string& title);
+
+        #if GLFW_VERSION_MAJOR*100 + GLFW_VERSION_MINOR >= 302 || defined(DOXYGEN_GENERATING_OUTPUT)
+        /**
+         * @brief Set window icon
+         * @m_since_latest
+         *
+         * The @p images are expected to be with origin at bottom left (which
+         * is the default for imported images) and in one of
+         * @ref PixelFormat::RGB8Unorm, @ref PixelFormat::RGB8Srgb,
+         * @ref PixelFormat::RGBA8Unorm or @ref PixelFormat::RGBA8Srgb formats.
+         * If you have just one image, you can use
+         * @ref setWindowIcon(const ImageView2D&) instead.
+         * @note Available since GLFW 3.2. The function has no effect on macOS
+         *      / Wayland, see @m_class{m-doc-external} [glfwSetWindowIcon()](https://www.glfw.org/docs/latest/group__window.html#gadd7ccd39fe7a7d1f0904666ae5932dc5)
+         *      for more information.
+         */
+        void setWindowIcon(std::initializer_list<ImageView2D> images);
+
+        /**
+         * @overload
+         * @m_since_latest
+         */
+        void setWindowIcon(const ImageView2D& image);
+        #endif
 
         /**
          * @brief Swap buffers
@@ -434,7 +512,7 @@ class GlfwApplication {
         void setSwapInterval(Int interval);
 
         /** @copydoc Sdl2Application::redraw() */
-        void redraw() { _flags |= Flag::Redraw; }
+        void redraw();
 
     private:
         /**
@@ -459,9 +537,9 @@ class GlfwApplication {
 
         #ifdef MAGNUM_BUILD_DEPRECATED
         /** @brief @copybrief viewportEvent(ViewportEvent&)
-         * @deprecated Use @ref viewportEvent(ViewportEvent&) instead.
-         *      To preserve backwards compatibility, this function is called
-         *      from @ref viewportEvent(ViewportEvent&) with
+         * @m_deprecated_since{2018,10} Use @ref viewportEvent(ViewportEvent&)
+         *      instead. To preserve backwards compatibility, this function is
+         *      called from @ref viewportEvent(ViewportEvent&) with
          *      @ref ViewportEvent::windowSize() passed to @p size. Overriding
          *      the new function will cause this function to not be called
          *      anymore.
@@ -472,7 +550,11 @@ class GlfwApplication {
         /** @copydoc Sdl2Application::drawEvent() */
         virtual void drawEvent() = 0;
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Keyboard handling */
 
@@ -482,12 +564,84 @@ class GlfwApplication {
         /** @copydoc Sdl2Application::keyReleaseEvent() */
         virtual void keyReleaseEvent(KeyEvent& event);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Mouse handling */
 
     public:
-        /** @brief Warp mouse cursor to given coordinates */
+        /**
+         * @brief Cursor type
+         * @m_since_latest
+         *
+         * @see @ref setCursor()
+         */
+        enum class Cursor: UnsignedInt {
+            Arrow,          /**< Arrow */
+            TextInput,      /**< Text input */
+            Crosshair,      /**< Crosshair */
+
+            /* Checking for GLFW_RESIZE_NWSE_CURSOR being defined instead of a
+               version check because older Git clones have version set to 3.4
+               but don't contain those defines. All new cursors were added in
+               the same commit, so it's okay to test for just one define. */
+            #if defined(DOXYGEN_GENERATING_OUTPUT) || defined(GLFW_RESIZE_NWSE_CURSOR)
+            /**
+             * Double arrow pointing northwest and southeast
+             * @note Available since GLFW 3.4.
+             */
+            ResizeNWSE,
+
+            /**
+             * Double arrow pointing northeast and southwest
+             * @note Available since GLFW 3.4.
+             */
+            ResizeNESW,
+            #endif
+
+            ResizeWE,       /**< Double arrow pointing west and east */
+            ResizeNS,       /**< Double arrow pointing north and south */
+
+            #if defined(DOXYGEN_GENERATING_OUTPUT) || defined(GLFW_RESIZE_NWSE_CURSOR)
+            /**
+             * Four pointed arrow pointing north, south, east, and west
+             * @note Available since GLFW 3.4.
+             */
+            ResizeAll,
+
+            /**
+             * Slashed circle or crossbones
+             * @note Available since GLFW 3.4.
+             */
+            No,
+            #endif
+
+            Hand,           /**< Hand */
+            Hidden,         /**< Hidden */
+            HiddenLocked    /**< Hidden and locked */
+        };
+
+        /**
+         * @brief Set cursor type
+         * @m_since_latest
+         *
+         * Default is @ref Cursor::Arrow.
+         */
+        void setCursor(Cursor cursor);
+
+        /**
+         * @brief Get current cursor type
+         * @m_since_latest
+         */
+        Cursor cursor();
+
+        /**
+         * @brief Warp mouse cursor to given coordinates
+         * @m_since_latest
+         */
         void warpCursor(const Vector2i& position) {
             glfwSetCursorPos(_window, Double(position.x()), Double(position.y()));
         }
@@ -510,7 +664,11 @@ class GlfwApplication {
         /** @copydoc Sdl2Application::mouseScrollEvent() */
         virtual void mouseScrollEvent(MouseScrollEvent& event);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Text input handling */
     public:
@@ -521,7 +679,7 @@ class GlfwApplication {
          * @ref textInputEvent().
          * @see @ref startTextInput(), @ref stopTextInput()
          */
-        bool isTextInputActive() const { return !!(_flags & Flag::TextInputActive); }
+        bool isTextInputActive() const;
 
         /**
          * @brief Start text input
@@ -529,7 +687,7 @@ class GlfwApplication {
          * Starts text input that will go to @ref textInputEvent().
          * @see @ref stopTextInput(), @ref isTextInputActive()
          */
-        void startTextInput() { _flags |= Flag::TextInputActive; }
+        void startTextInput();
 
         /**
          * @brief Stop text input
@@ -538,7 +696,7 @@ class GlfwApplication {
          * @see @ref startTextInput(), @ref isTextInputActive(),
          *      @ref textInputEvent()
          */
-        void stopTextInput() { _flags &= ~Flag::TextInputActive; }
+        void stopTextInput();
 
     private:
         /**
@@ -549,7 +707,11 @@ class GlfwApplication {
          */
         virtual void textInputEvent(TextInputEvent& event);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Special events */
 
@@ -564,18 +726,21 @@ class GlfwApplication {
          */
         virtual void exitEvent(ExitEvent& event);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
     private:
-        enum class Flag: UnsignedByte {
-            Redraw = 1 << 0,
-            TextInputActive = 1 << 1
-        };
-
+        enum class Flag: UnsignedByte;
         typedef Containers::EnumSet<Flag> Flags;
         CORRADE_ENUMSET_FRIEND_OPERATORS(Flags)
 
         void setupCallbacks();
+
+        GLFWcursor* _cursors[8]{};
+        Cursor _cursor = Cursor::Arrow;
 
         /* These are saved from command-line arguments */
         bool _verboseLog{};
@@ -719,7 +884,7 @@ class GlfwApplication::GLConfiguration {
         /**
          * @brief Set color buffer size
          *
-         * Default is @cpp {8, 8, 8, 0} @ce (8-bit-per-channel RGB, no alpha).
+         * Default is @cpp {8, 8, 8, 8} @ce (8-bit-per-channel RGBA).
          * @see @ref setDepthBufferSize(), @ref setStencilBufferSize()
          */
         GLConfiguration& setColorBufferSize(const Vector4i& size) {
@@ -789,13 +954,13 @@ class GlfwApplication::GLConfiguration {
         #ifdef MAGNUM_BUILD_DEPRECATED
         /**
          * @brief @copybrief isSrgbCapable()
-         * @deprecated Use @ref isSrgbCapable() instead.
+         * @m_deprecated_since{2018,10} Use @ref isSrgbCapable() instead.
          */
         CORRADE_DEPRECATED("use isSrgbCapable() instead") bool isSRGBCapable() const { return isSrgbCapable(); }
 
         /**
          * @brief @copybrief setSrgbCapable()
-         * @deprecated Use @ref setSrgbCapable() instead.
+         * @m_deprecated_since{2018,10} Use @ref setSrgbCapable() instead.
          */
         CORRADE_DEPRECATED("use setSrgbCapable() instead") GLConfiguration& setSRGBCapable(bool enabled) {
             return setSrgbCapable(enabled);
@@ -952,17 +1117,39 @@ class GlfwApplication::Configuration {
         typedef Implementation::GlfwDpiScalingPolicy DpiScalingPolicy;
         #endif
 
-        /** @brief Cursor mode */
-        enum class CursorMode: Int {
-            /** Visible unconstrained cursor */
-            Normal = GLFW_CURSOR_NORMAL,
+        #ifdef MAGNUM_BUILD_DEPRECATED
+        /**
+         * @brief Cursor mode
+         *
+         * @m_deprecated_since_latest Use @ref GlfwApplication::setCursor()
+         *      instead.
+         */
+        enum class CORRADE_DEPRECATED_ENUM("use GlfwApplication::setCursor() instead") CursorMode: Int {
+            /**
+             * Visible unconstrained cursor
+             *
+             * @m_deprecated_since_latest Use @ref GlfwApplication::setCursor()
+             *      with @ref Cursor::Arrow (or any other) instead.
+             */
+            Normal CORRADE_DEPRECATED_ENUM("use GlfwApplication::setCursor() with Cursor::Arrow instead") = GLFW_CURSOR_NORMAL,
 
-            /** Hidden cursor */
-            Hidden = GLFW_CURSOR_HIDDEN,
+            /**
+             * Hidden cursor
+             *
+             * @m_deprecated_since_latest Use @ref GlfwApplication::setCursor()
+             *      with @ref Cursor::Hidden instead.
+             */
+            Hidden CORRADE_DEPRECATED_ENUM("use GlfwApplication::setCursor() with Cursor::Hidden instead") = GLFW_CURSOR_HIDDEN,
 
-            /** Cursor hidden and locked window */
-            Disabled = GLFW_CURSOR_DISABLED
+            /**
+             * Cursor hidden and locked window
+             *
+             * @m_deprecated_since_latest Use @ref GlfwApplication::setCursor()
+             *      with @ref Cursor::HiddenLocked instead.
+             */
+            Disabled CORRADE_DEPRECATED_ENUM("use GlfwApplication::setCursor() with Cursor::HiddenLocked instead") = GLFW_CURSOR_DISABLED
         };
+        #endif
 
         /*implicit*/ Configuration();
         ~Configuration();
@@ -1055,21 +1242,35 @@ class GlfwApplication::Configuration {
             return *this;
         }
 
-        /** @brief Cursor mode */
-        CursorMode cursorMode() const {
+        #ifdef MAGNUM_BUILD_DEPRECATED
+        /**
+         * @brief Cursor mode
+         *
+         * @m_deprecated_since_latest Use @ref GlfwApplication::cursor()
+         *      instead.
+         */
+        CORRADE_IGNORE_DEPRECATED_PUSH
+        CORRADE_DEPRECATED("use GlfwApplication::cursor() instead") CursorMode cursorMode() const {
             return _cursorMode;
         }
+        CORRADE_IGNORE_DEPRECATED_POP
 
         /**
          * @brief Set cursor mode
          * @return  Reference to self (for method chaining)
          *
          * Default is @ref CursorMode::Normal.
+         *
+         * @m_deprecated_since_latest Use @ref GlfwApplication::setCursor()
+         *      instead.
          */
-        Configuration& setCursorMode(CursorMode cursorMode) {
+        CORRADE_IGNORE_DEPRECATED_PUSH
+        CORRADE_DEPRECATED("use GlfwApplication::setCursor() instead") Configuration& setCursorMode(CursorMode cursorMode) {
             _cursorMode = cursorMode;
             return *this;
         }
+        CORRADE_IGNORE_DEPRECATED_POP
+        #endif
 
     private:
         std::string _title;
@@ -1077,7 +1278,11 @@ class GlfwApplication::Configuration {
         WindowFlags _windowFlags;
         DpiScalingPolicy _dpiScalingPolicy;
         Vector2 _dpiScaling;
-        CursorMode _cursorMode;
+        #ifdef MAGNUM_BUILD_DEPRECATED
+        CORRADE_IGNORE_DEPRECATED_PUSH
+        CursorMode _cursorMode = CursorMode::Normal;
+        CORRADE_IGNORE_DEPRECATED_POP
+        #endif
 };
 
 CORRADE_ENUMSET_OPERATORS(GlfwApplication::Configuration::WindowFlags)
@@ -1350,6 +1555,8 @@ class GlfwApplication::KeyEvent: public GlfwApplication::InputEvent {
              */
             RightSuper = GLFW_KEY_RIGHT_SUPER,
 
+            /* no equivalent for Sdl2Application's AltGr */
+
             Enter = GLFW_KEY_ENTER,             /**< Enter */
             Esc = GLFW_KEY_ESCAPE,              /**< Escape */
 
@@ -1380,6 +1587,13 @@ class GlfwApplication::KeyEvent: public GlfwApplication::InputEvent {
 
             Space = GLFW_KEY_SPACE,             /**< Space */
             Tab = GLFW_KEY_TAB,                 /**< Tab */
+
+            /**
+             * Quote (<tt>'</tt>)
+             * @m_since_latest
+             */
+            Quote = GLFW_KEY_APOSTROPHE,
+
             Comma = GLFW_KEY_COMMA,             /**< Comma */
             Period = GLFW_KEY_PERIOD,           /**< Period */
             Minus = GLFW_KEY_MINUS,             /**< Minus */
@@ -1388,16 +1602,52 @@ class GlfwApplication::KeyEvent: public GlfwApplication::InputEvent {
             Slash = GLFW_KEY_SLASH,             /**< Slash */
             /* Note: This may only be represented as SHIFT + 5 */
             Percent = '%',                      /**< Percent */
-            Semicolon = GLFW_KEY_SEMICOLON,     /**< Semicolon */
+            Semicolon = GLFW_KEY_SEMICOLON,     /**< Semicolon (`;`) */
 
             #ifdef MAGNUM_BUILD_DEPRECATED
-            /** Semicolon
-             * @deprecated Use @ref Key::Semicolon instead.
+            /** Semicolon (`;`)
+             * @m_deprecated_since{2019,01} Use @ref Key::Semicolon instead.
              */
             Smicolon CORRADE_DEPRECATED_ENUM("use Key::Semicolon instead") = Semicolon,
             #endif
 
             Equal = GLFW_KEY_EQUAL,             /**< Equal */
+
+            /**
+             * Left bracket (`[`)
+             * @m_since_latest
+             */
+            LeftBracket = GLFW_KEY_LEFT_BRACKET,
+
+            /**
+             * Right bracket (`]`)
+             * @m_since_latest
+             */
+            RightBracket = GLFW_KEY_RIGHT_BRACKET,
+
+            /**
+             * Backslash (`\`)
+             * @m_since_latest
+             */
+            Backslash = GLFW_KEY_BACKSLASH,
+
+            /**
+             * Backquote (<tt>`</tt>)
+             * @m_since_latest
+             */
+            Backquote = GLFW_KEY_GRAVE_ACCENT,
+
+            /**
+             * Non-US \#1
+             * @m_since_latest
+             */
+            World1 = GLFW_KEY_WORLD_1,
+
+            /**
+             * Non-US \#2
+             * @m_since_latest
+             */
+            World2 = GLFW_KEY_WORLD_2,
 
             Zero = GLFW_KEY_0,                  /**< Zero */
             One = GLFW_KEY_1,                   /**< One */
@@ -1592,6 +1842,7 @@ class GlfwApplication::MouseMoveEvent: public GlfwApplication::InputEvent {
 
         /**
          * @brief Relative position
+         * @m_since{2019,10}
          *
          * Position relative to previous move event. Unlike
          * @ref Sdl2Application, GLFW doesn't provide relative position
@@ -1702,6 +1953,8 @@ class GlfwApplication::TextInputEvent {
 /** @hideinitializer
 @brief Entry point for GLFW-based applications
 @param className Class name
+
+@m_keywords{MAGNUM_APPLICATION_MAIN()}
 
 See @ref Magnum::Platform::GlfwApplication "Platform::GlfwApplication" for
 usage information. This macro abstracts out platform-specific entry point code

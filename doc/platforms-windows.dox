@@ -36,10 +36,10 @@ namespace Magnum {
 
 Windows supports two approaches to advertising HiDPI support. The recommended
 way is via a so-called manifest file added to an executable, but it's also
-possible to it programatically through the `SetProcessDpiAwareness()` family of
-APIs. Note there's three different levels of DPI awareness setup for Windows
-Vista and newer, Windows 8.1 and newer and Windows 10, and for best support may
-want to support all three.
+possible to it programatically through the [SetProcessDpiAwareness()](https://docs.microsoft.com/en-us/windows/win32/api/shellscalingapi/nf-shellscalingapi-setprocessdpiawareness)
+family of APIs. Note there's three different levels of DPI awareness setup for
+Windows Vista and newer, Windows 8.1 and newer and Windows 10, and for best
+support may want to support all three.
 
 When using MSVC, the manifest file can be added directly via CMake. Advertising application-wide per-monitor support can look like in the following snippet,
 together with fallbacks for older systems:
@@ -71,7 +71,7 @@ if(CORRADE_TARGET_WINDOWS)
 endif()
 @endcode
 
-Some toolkits (such as GLFW in @ref Platform-GlfwApplication-dpi "Platform::GlfwApplication")
+If you're not using CMake, [here's how to do it directly with mt.exe](https://docs.microsoft.com/en-us/cpp/build/how-to-embed-a-manifest-inside-a-c-cpp-application). Some toolkits (such as GLFW in @ref Platform-GlfwApplication-dpi "Platform::GlfwApplication")
 are advertising HiDPI support implicitly programatically. In that case the
 manifest file doesn't need to be supplied, but there may be some disadvantages
 compared to supplying the manifest. See the
@@ -81,7 +81,7 @@ for more information.
 @m_class{m-block m-info}
 
 @par Supplying manifests with MinGW
-    With MinGw the operation is slightly more involved, as you need to pass it
+    With MinGW the operation is slightly more involved, as you need to pass it
     through a `*.rc` file. A downside is that MinGW is not able to merge
     information from multiple manifests like the MSVC toolchain can.
 @par
@@ -124,6 +124,31 @@ much as possible:
     simply link to the @ref main "Corrade::Main" library, which will do needed
     conversion implicitly for you
 
+@section platform-windows-icon Executable icon
+
+In order to supply an icon for the executable, make an `*.ico` file
+(preferrably out of multiple different sizes) and create a `*.rc` file
+referencing it. The first argument can be anything (it can be used for
+retrieving the icon later at runtime via Windows APIs), Windows always pick the
+first icon in the `*.rc` file for the executable.
+
+@code{.txt}
+MYICON ICON "my-icon.ico"
+@endcode
+
+Then add the `*.rc` file to your application sources and CMake will take care
+of the rest:
+
+@code{.cmake}
+if(CORRADE_TARGET_WINDOWS)
+    target_sources(my-application PRIVATE icon.rc)
+endif()
+@endcode
+
+Note that this doesn't have any effect on the *window* icon --- there it has to
+be specified at runtime, for example via
+@ref Platform::Sdl2Application::setWindowIcon().
+
 @section platform-windows-terminal-colors Colored terminal output
 
 There's two options for colored terminal output --- either using the classic
@@ -138,10 +163,49 @@ its documentation for more information.
 
 @section platform-windows-hiding-console Hiding console window
 
-By default, CMake compiles GUI applications with an potentially unwanted
+By default, CMake compiles GUI applications with a potentially unwanted
 console window lurking in the background. This can be fixed by creating your
 executable with @cmake add_executable(... WIN32 ...) @ce and linking to the
 @ref main "Corrade::Main" library. See its documentation for more information.
+
+@section platforms-windows-clang-cl Using Clang-CL
+
+As an alternative to MSVC it's possible to use [Clang-CL](https://clang.llvm.org/docs/UsersManual.html#clang-cl).
+Compared to MinGW it is fully ABI-compatible with MSVC, sharing the same STL
+implementation, and thus you can freely mix and match libraries built by either
+of them.
+
+If you already have MSVC 2019, clang-cl is available as an optional install
+component. Configuring your project to be used with e.g. Ninja could then look
+similarly to the following. Custom clang-cl installations work as well of
+course, adapt the paths as necessary:
+
+@code{.bat}
+C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Auxiliary/Build/vcvarsall.bat" x64
+
+cmake .. ^
+    -DCMAKE_C_COMPILER="C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/Llvm/bin/clang-cl.exe" ^
+    -DCMAKE_CXX_COMPILER="C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/Llvm/bin/clang-cl.exe" ^
+    -DCMAKE_LINKER="C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/Llvm/bin/lld-link.exe" ^
+    -DCMAKE_CXX_FLAGS="-m64" ^
+    -G Ninja
+@endcode
+
+CMake is currently [having issues propagating correct bitness to clang-cl](https://gitlab.kitware.com/cmake/cmake/issues/16259)
+when using Ninja, which means you may need to explicitly pass either `-m64` or
+`-m32` to Clang. In the above case, `vcvarsall.bat` was called with the `x64`
+parameter but the Clang bundled with Visual Studio is 32-bit and thus defaults
+to 32-bit builds. Additionally, if your code needs to use exceptions (Magnum
+itself doesn't, but @ref Corrade::TestSuite relies on them to report failures
+in tests), you may need to explicitly pass `/EHs` via `CMAKE_CXX_FLAGS` as
+exceptions are currently [disabled by default](https://github.com/catchorg/Catch2/issues/1113).
+
+While Magnum itself is tested to work with this compiler, be prepared that you
+might run into exciting new issues that aren't present with MSVC, MinGW or
+Clang alone. In dire situations, you can use @ref CORRADE_TARGET_CLANG_CL to
+add compiler-specific workarounds.
+
+More information on [the Microsoft C++ Team Blog](https://devblogs.microsoft.com/cppblog/clang-llvm-support-in-visual-studio/).
 
 @section platforms-windows-rt Windows RT
 
@@ -161,7 +225,8 @@ are in the @ref Platform-Sdl2Application-bootstrap-winrt "SDL2 bootstrap applica
 
 @code{.xml}
 <?xml version="1.0" encoding="utf-8"?>
-<Package xmlns="http://schemas.microsoft.com/appx/2010/manifest" xmlns:m2="http://schemas.microsoft.com/appx/2013/manifest">
+<Package xmlns="http://schemas.microsoft.com/appx/2010/manifest"
+         xmlns:m2="http://schemas.microsoft.com/appx/2013/manifest">
   <Identity Name="MyApplication" Publisher="CN=A Publisher" Version="1.1.0.0" />
   <Properties>
     <DisplayName>My Application</DisplayName>
@@ -172,7 +237,8 @@ are in the @ref Platform-Sdl2Application-bootstrap-winrt "SDL2 bootstrap applica
     <Resource Language="x-generate" />
   </Resources>
   <Applications>
-    <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="MyApplication.App">
+    <Application Id="App" Executable="$targetnametoken$.exe"
+                 EntryPoint="MyApplication.App">
       <m2:VisualElements
         DisplayName="Magnum Windows Store Application"
         Description="My Application"
@@ -248,6 +314,38 @@ problem). See https://stackoverflow.com/a/37872393 for more information.
 @code{.cmake}
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /utf-8")
 @endcode
+
+@subsection platform-windows-troubleshooting-default-project The ALL_BUILD project can't be executed
+
+When CMake generates Visual Studio projects, it will set `ALL_BUILD` as a
+default project. This can be annoying since the `ALL_BUILD` can be only built
+but not executed, and thus pressing *Build & Run* will fail with an error. A
+workaround is to right-click the actual executable target (such as
+`MyApplication`) and select *Set as Startup Project*. With CMake 3.6 and newer,
+this can be also changed by setting the [VS_STARTUP_PROJECT](https://cmake.org/cmake/help/latest/prop_dir/VS_STARTUP_PROJECT.html)
+property for the project directory:
+
+@code{.cmake}
+add_executable(MyApplication ...)
+set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT MyApplication)
+@endcode
+
+The Magnum bootstrap projects set this automatically.
+
+@subsection platform-windows-troubleshooting-bom-in-shaders UTF-8 BOM in shader code
+
+If your GLSL shaders fail to compile with the following error, it means you
+have your file saved as UTF-8 with a BOM:
+
+@code{.shell-session}
+GL::Shader::compile(): compilation of vertex shader 1 failed with the following message:
+ERROR:2:1: `` : syntax error: illegal extended ASCII character (0xef)
+ERROR:2:1: `` : syntax error: illegal extended ASCII character (0xbb)
+ERROR:2:1: `` : syntax error: illegal extended ASCII character (0xbf)
+@endcode
+
+While the C++ compilers can usually ignore the BOM marker, it's not so common
+with GLSL compilers in the drivers. Save your file as UTF-8 without BOM.
 
 @todoc DLL paths
 @todoc vcpkg

@@ -5,6 +5,7 @@
 
     Copyright © 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019
               Vladimír Vondruš <mosra@centrum.cz>
+    Copyright © 2019 Marco Melorio <m.melorio@icloud.com>
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,6 +33,7 @@
 #include <string>
 #include <Corrade/Containers/ArrayView.h>
 #include <Corrade/Containers/EnumSet.h>
+#include <Corrade/Containers/Optional.h>
 #include <Corrade/Containers/Pointer.h>
 
 #include "Magnum/Magnum.h"
@@ -46,15 +48,37 @@
 #ifdef CORRADE_TARGET_WINDOWS /* Windows version of SDL2 redefines main(), we don't want that */
 #define SDL_MAIN_HANDLED
 #endif
+
+#ifdef CORRADE_TARGET_CLANG_CL
+/* SDL does #pragma pack(push,8) and #pragma pack(pop,8) in different headers
+   (begin_code.h and end_code.h) and clang-cl doesn't like that, even though it
+   is completely fine. Silence the warning. */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpragma-pack"
+#endif
 /* SDL.h includes the world, adding 50k LOC. We don't want that either. */
 #include <SDL_keycode.h>
 #include <SDL_mouse.h>
+#include <SDL_version.h> /* huh, why is this not pulled in implicitly?! */
 #include <SDL_video.h>
 #include <SDL_scancode.h>
+
+#ifdef CORRADE_TARGET_IOS
+/* Including SDL_main.h unconditionally would mean it'd override Corrade::Main
+   on Windows (both are parsing wargv and converting them to UTF-8, but ours
+   does that better and additionally enables ANSI colors and UTF-8 console
+   output). Right now (SDL 2.0.11) it's only needed for WinRT (which is done
+   below), Android (which we don't support for SDL) and iOS, so whitelist it
+   only for iOS. */
+#include <SDL_main.h>
+#endif
 
 #ifdef CORRADE_TARGET_WINDOWS_RT
 #include <SDL_main.h> /* For SDL_WinRTRunApp */
 #include <wrl.h> /* For the WinMain entrypoint */
+#endif
+#ifdef CORRADE_TARGET_CLANG_CL
+#pragma clang diagnostic pop
 #endif
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
@@ -73,14 +97,11 @@ namespace Implementation {
 @m_keywords{Application}
 
 Application using [Simple DirectMedia Layer](http://www.libsdl.org/) toolkit.
-Supports keyboard and mouse handling.
-
-This application library is in theory available for all platforms for which
-SDL2 is ported (thus also @ref CORRADE_TARGET_EMSCRIPTEN "Emscripten", see
+Supports keyboard and mouse handling. This application library is available for
+all platforms for which SDL2 is ported except Android (thus also
+@ref CORRADE_TARGET_EMSCRIPTEN "Emscripten", see
 respective sections in @ref building-corrade-cross-emscripten "Corrade's" and
-@ref building-cross-emscripten "Magnum's" building documentation). It depends
-on the [SDL2](http://www.libsdl.org) library (Emscripten has it built in) and
-is built if `WITH_SDL2APPLICATION` is enabled in CMake.
+@ref building-cross-emscripten "Magnum's" building documentation).
 
 @m_class{m-block m-success}
 
@@ -183,21 +204,29 @@ final package along with a PowerShell script for easy local installation.
 
 @section Platform-Sdl2Application-usage General usage
 
-In order to use this library from CMake, you need to copy
+This application library depends on the [SDL2](http://www.libsdl.org) library
+(Emscripten has it built in) and is built if `WITH_SDL2APPLICATION` is enabled
+when building Magnum. To use this library with CMake, put
 [FindSDL2.cmake](https://github.com/mosra/magnum/blob/master/modules/FindSDL2.cmake)
-from the `modules/` directory in Magnum sources to a `modules/` dir in your
-project and pointing `CMAKE_MODULE_PATH` to it (if not done already) so it is
-able to find the SDL2 library. Then request the `Sdl2Application` component of
+into your `modules/` directory, request the `Sdl2Application` component of
 the `Magnum` package and link to the `Magnum::Sdl2Application` target:
 
 @code{.cmake}
-# Path where FindSDL2.cmake can be found, adapt as needed
-set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/modules/" ${CMAKE_MODULE_PATH})
-
 find_package(Magnum REQUIRED Sdl2Application)
 
 # ...
-target_link_libraries(your-app Magnum::Sdl2Application)
+target_link_libraries(your-app PRIVATE Magnum::Sdl2Application)
+@endcode
+
+Additionally, if you're using Magnum as a CMake subproject, do the following
+* *before* calling @cmake find_package() @ce to ensure it's enabled, as the
+library is not built by default.  Using SDL2 itself as a CMake subproject isn't
+tested at the moment, so you need to provide it as a system dependency and
+point `CMAKE_PREFIX_PATH` to its installation dir if necessary.
+
+@code{.cmake}
+set(WITH_SDL2APPLICATION ON CACHE BOOL "" FORCE)
+add_subdirectory(magnum EXCLUDE_FROM_ALL)
 @endcode
 
 If no other application is requested, you can also use the generic
@@ -382,6 +411,12 @@ The default is depending on the platform:
     @ref Platform-EmscriptenApplication-dpi "EmscriptenApplication DPI awareness docs"
     for more information.
 
+With @ref windowSize(), @ref framebufferSize() and @ref dpiScaling() having a
+different relation on each platform, the way to calculate context scaling
+consistently everywhere is using this expression:
+
+@snippet MagnumPlatform.cpp Sdl2Application-dpi-scaling
+
 If your application is saving and restoring window size, it's advisable to take
 @ref dpiScaling() into account:
 
@@ -495,22 +530,36 @@ class Sdl2Application {
         int exec();
 
         /**
-         * @brief Exit application main loop
-         * @param exitCode  The exit code the application should return
-         *
-         * Stops main loop started by @ref exec().
-         */
-        void exit(int exitCode = 0);
-
-        /**
          * @brief Run one iteration of application main loop
+         * @return @cpp false @ce if @ref exit() was called and the application
+         *      should exit, @cpp true @ce otherwise
          *
          * Called internally from @ref exec(). If you want to have better
          * control over how the main loop behaves, you can call this function
          * yourself from your own `main()` function instead of it being called
          * automatically from @ref exec() / @ref MAGNUM_SDL2APPLICATION_MAIN().
          */
-        void mainLoopIteration();
+        bool mainLoopIteration();
+
+        /**
+         * @brief Exit application
+         * @param exitCode  The exit code the application should return
+         *
+         * When called from application constructor, it will cause the
+         * application to exit immediately after constructor ends, without any
+         * events being processed (thus not even @ref exitEvent()). Calling
+         * this function is recommended over @ref std::exit() or
+         * @ref Corrade::Utility::Fatal "Fatal", which exit without calling
+         * destructors on local scope. Note that, however, you need to
+         * explicitly @cpp return @ce after calling it, as it can't exit the
+         * constructor on its own:
+         *
+         * @snippet MagnumPlatform.cpp exit-from-constructor
+         *
+         * When called from the main loop, the application exits cleanly
+         * before next main loop iteration is executed.
+         */
+        void exit(int exitCode = 0);
 
         #ifndef CORRADE_TARGET_EMSCRIPTEN
         /**
@@ -526,6 +575,7 @@ class Sdl2Application {
         #if defined(MAGNUM_TARGET_GL) && !defined(CORRADE_TARGET_EMSCRIPTEN)
         /**
          * @brief Underlying OpenGL context
+         * @m_since{2019,10}
          *
          * Use in case you need to call SDL functionality directly. Returns
          * @cpp nullptr @ce in case the context was not created yet.
@@ -628,24 +678,45 @@ class Sdl2Application {
 
         #if !defined(CORRADE_TARGET_EMSCRIPTEN) || defined(DOXYGEN_GENERATING_OUTPUT)
         /**
+         * @brief Set window size
+         * @param size    The size, in screen coordinates
+         * @m_since_latest
+         *
+         * To make the sizing work independently of the display DPI, @p size is
+         * internally multiplied with @ref dpiScaling() before getting applied.
+         * Expects that a window is already created.
+         * @note Not available in @ref CORRADE_TARGET_EMSCRIPTEN "Emscripten".
+         * @see @ref setMinWindowSize(), @ref setMaxWindowSize()
+         */
+        void setWindowSize(const Vector2i& size);
+
+        /**
          * @brief Set minimum window size
          * @param size    The minimum size, in screen coordinates
+         * @m_since{2019,10}
          *
          * Note that, unlike in @ref GlfwApplication, SDL2 doesn't have a way
-         * to disable/remove a size limit.
-         *
+         * to disable/remove a size limit. To make the sizing work
+         * independently of the display DPI, @p size is internally multiplied
+         * with @ref dpiScaling() before getting applied. Expects that a window
+         * is already created.
          * @note Not available in @ref CORRADE_TARGET_EMSCRIPTEN "Emscripten".
+         * @see @ref setMaxWindowSize(), @ref setWindowSize()
          */
         void setMinWindowSize(const Vector2i& size);
 
         /**
          * @brief Set maximal window size
          * @param size    The maximum size, in screen coordinates
+         * @m_since{2019,10}
          *
          * Note that, unlike in @ref GlfwApplication, SDL2 doesn't have a way
-         * to disable/remove a size limit.
-         *
+         * to disable/remove a size limit. To make the sizing work
+         * independently of the display DPI, @p size is internally multiplied
+         * with @ref dpiScaling() before getting applied. Expects that a window
+         * is already created.
          * @note Not available in @ref CORRADE_TARGET_EMSCRIPTEN "Emscripten".
+         * @see @ref setMinWindowSize(), @ref setMaxWindowSize()
          */
         void setMaxWindowSize(const Vector2i& size);
         #endif
@@ -673,7 +744,7 @@ class Sdl2Application {
          *
          * How the content should be scaled relative to system defaults for
          * given @ref windowSize(). If a window is not created yet, returns
-         * zero vector, use @ref dpiScaling(const Configuration&) const for
+         * zero vector, use @ref dpiScaling(const Configuration&) for
          * calculating a value independently. See @ref Platform-Sdl2Application-dpi
          * for more information.
          * @see @ref framebufferSize()
@@ -688,14 +759,37 @@ class Sdl2Application {
          * and custom scaling specified on the command-line. See
          * @ref Platform-Sdl2Application-dpi for more information.
          */
-        Vector2 dpiScaling(const Configuration& configuration) const;
+        Vector2 dpiScaling(const Configuration& configuration);
 
         /**
          * @brief Set window title
+         * @m_since{2019,10}
          *
          * The @p title is expected to be encoded in UTF-8.
          */
         void setWindowTitle(const std::string& title);
+
+        #if !defined(CORRADE_TARGET_EMSCRIPTEN) && (SDL_MAJOR_VERSION*1000 + SDL_MINOR_VERSION*100 + SDL_PATCHLEVEL >= 2005 || defined(DOXYGEN_GENERATING_OUTPUT))
+        /**
+         * @brief Set window icon
+         * @m_since_latest
+         *
+         * The @p image is expected to be with origin at bottom left (which is
+         * the default for imported images) and in one of
+         * @ref PixelFormat::RGB8Unorm, @ref PixelFormat::RGB8Srgb,
+         * @ref PixelFormat::RGBA8Unorm or @ref PixelFormat::RGBA8Srgb formats.
+         * Unlike @ref GlfwApplication::setWindowIcon(), SDL doesn't provide a
+         * way to supply multiple images in different sizes.
+         * @note Available since SDL 2.0.5. Not available on
+         *      @ref CORRADE_TARGET_EMSCRIPTEN "Emscripten", use
+         *      @cb{.html} <link rel="icon"> @ce in your HTML markup instead.
+         *      Although it's not documented in SDL itself, the function might
+         *      have no effect on macOS / Wayland, similarly to how
+         *      @ref GlfwApplication::setWindowIcon() behaves on those
+         *      platforms.
+         */
+        void setWindowIcon(const ImageView2D& image);
+        #endif
 
         #if defined(CORRADE_TARGET_EMSCRIPTEN) || defined(DOXYGEN_GENERATING_OUTPUT)
         /**
@@ -742,7 +836,8 @@ class Sdl2Application {
          *
          * This setting reduces the main loop frequency in case VSync is
          * not/cannot be enabled or no drawing is done. Default is @cpp 0 @ce
-         * (i.e. looping at maximum frequency).
+         * (i.e. looping at maximum frequency). If the application is drawing
+         * on the screen and VSync is enabled, this setting is ignored.
          * @note Not available in @ref CORRADE_TARGET_EMSCRIPTEN "Emscripten",
          *      the browser is managing the frequency instead.
          * @see @ref setSwapInterval()
@@ -759,7 +854,7 @@ class Sdl2Application {
          * in the next iteration. You can call it from @ref drawEvent() itself
          * to redraw immediately without waiting for user input.
          */
-        void redraw() { _flags |= Flag::Redraw; }
+        void redraw();
 
     private:
         /**
@@ -786,9 +881,9 @@ class Sdl2Application {
 
         #ifdef MAGNUM_BUILD_DEPRECATED
         /** @brief @copybrief viewportEvent(ViewportEvent&)
-         * @deprecated Use @ref viewportEvent(ViewportEvent&) instead.
-         *      To preserve backwards compatibility, this function is called
-         *      from @ref viewportEvent(ViewportEvent&) with
+         * @m_deprecated_since{2018,10} Use @ref viewportEvent(ViewportEvent&)
+         *      instead. To preserve backwards compatibility, this function is
+         *      called from @ref viewportEvent(ViewportEvent&) with
          *      @ref ViewportEvent::framebufferSize() passed to @p size.
          *      Overriding the new function will cause this function to not be
          *      called anymore.
@@ -807,7 +902,11 @@ class Sdl2Application {
          */
         virtual void drawEvent() = 0;
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Keyboard handling */
 
@@ -825,22 +924,89 @@ class Sdl2Application {
          */
         virtual void keyReleaseEvent(KeyEvent& event);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Mouse handling */
 
     public:
-        /** @brief Whether mouse is locked */
-        bool isMouseLocked() const { return SDL_GetRelativeMouseMode(); }
+        /**
+         * @brief Cursor type
+         * @m_since_latest
+         *
+         * @see @ref setCursor()
+         */
+        enum class Cursor: UnsignedInt {
+            Arrow,          /**< Arrow */
+            TextInput,      /**< Text input */
+            Wait,           /**< Wait */
+            Crosshair,      /**< Crosshair */
+            WaitArrow,      /**< Small wait cursor */
+            ResizeNWSE,     /**< Double arrow pointing northwest and southeast */
+            ResizeNESW,     /**< Double arrow pointing northeast and southwest */
+            ResizeWE,       /**< Double arrow pointing west and east */
+            ResizeNS,       /**< Double arrow pointing north and south */
+            ResizeAll,      /**< Four pointed arrow pointing north, south, east, and west */
+            No,             /**< Slashed circle or crossbones */
+            Hand,           /**< Hand */
+            Hidden,         /**< Hidden */
+
+            #ifndef CORRADE_TARGET_EMSCRIPTEN
+            /**
+             * Hidden and locked. When the mouse is locked, only
+             * @ref MouseMoveEvent::relativePosition() is changing, absolute
+             * position stays the same.
+             * @note Not available in @ref CORRADE_TARGET_EMSCRIPTEN "Emscripten".
+             */
+            HiddenLocked
+            #endif
+        };
+
+        /**
+         * @brief Set cursor type
+         * @m_since_latest
+         *
+         * Default is @ref Cursor::Arrow.
+         */
+        void setCursor(Cursor cursor);
+
+        /**
+         * @brief Get current cursor type
+         * @m_since_latest
+         */
+        Cursor cursor();
+
+        #ifndef CORRADE_TARGET_EMSCRIPTEN
+        /**
+         * @brief Warp mouse cursor to given coordinates
+         *
+         * @note Not available in @ref CORRADE_TARGET_EMSCRIPTEN "Emscripten".
+         */
+        void warpCursor(const Vector2i& position) {
+            SDL_WarpMouseInWindow(_window, position.x(), position.y());
+        }
+        #endif
+
+        #ifdef MAGNUM_BUILD_DEPRECATED
+        /**
+         * @brief Whether mouse is locked
+         *
+         * @m_deprecated_since_latest Use @ref cursor() together with
+         *      @ref Cursor::HiddenLocked instead.
+         */
+        CORRADE_DEPRECATED("use cursor() together with Cursor::HiddenLocked instead") bool isMouseLocked() const { return SDL_GetRelativeMouseMode(); }
 
         /**
          * @brief Enable or disable mouse locking
          *
-         * When mouse is locked, the cursor is hidden and only
-         * @ref MouseMoveEvent::relativePosition() is changing, absolute
-         * position stays the same.
+         * @m_deprecated_since_latest Use @ref setCursor() together with
+         *      @ref Cursor::HiddenLocked instead.
          */
-        void setMouseLocked(bool enabled);
+        CORRADE_DEPRECATED("use setCursor() together with Cursor::HiddenLocked instead") void setMouseLocked(bool enabled);
+        #endif
 
     private:
         /**
@@ -874,7 +1040,11 @@ class Sdl2Application {
          */
         virtual void mouseScrollEvent(MouseScrollEvent& event);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Touch gesture handling */
 
@@ -887,7 +1057,11 @@ class Sdl2Application {
          */
         virtual void multiGestureEvent(MultiGestureEvent& event);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Text input handling */
     public:
@@ -947,7 +1121,11 @@ class Sdl2Application {
          */
         virtual void textEditingEvent(TextEditingEvent& event);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Special events */
 
@@ -995,25 +1173,22 @@ class Sdl2Application {
          */
         virtual void anyEvent(SDL_Event& event);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
     private:
-        enum class Flag: UnsignedByte {
-            Redraw = 1 << 0,
-            VSyncEnabled = 1 << 1,
-            NoTickEvent = 1 << 2,
-            NoAnyEvent = 1 << 3,
-            #ifndef CORRADE_TARGET_EMSCRIPTEN
-            Exit = 1 << 4
-            #endif
-            #ifdef CORRADE_TARGET_EMSCRIPTEN
-            TextInputActive = 1 << 5,
-            Resizable = 1 << 6
-            #endif
-        };
-
+        enum class Flag: UnsignedByte;
         typedef Containers::EnumSet<Flag> Flags;
         CORRADE_ENUMSET_FRIEND_OPERATORS(Flags)
+
+        #ifndef CORRADE_TARGET_EMSCRIPTEN
+        SDL_Cursor* _cursors[14]{};
+        #else
+        Cursor _cursor;
+        #endif
 
         /* These are saved from command-line arguments */
         bool _verboseLog{};
@@ -1026,14 +1201,13 @@ class Sdl2Application {
         SDL_Window* _window{};
         UnsignedInt _minimalLoopPeriod;
         #else
+        SDL_Surface* _surface{};
         Vector2i _lastKnownCanvasSize;
         #endif
 
         #ifdef MAGNUM_TARGET_GL
         #ifndef CORRADE_TARGET_EMSCRIPTEN
-        SDL_GLContext _glContext;
-        #else
-        SDL_Surface* _glContext{};
+        SDL_GLContext _glContext{};
         #endif
         Containers::Pointer<Platform::GLContext> _context;
         #endif
@@ -1195,7 +1369,7 @@ class Sdl2Application::GLConfiguration {
         /**
          * @brief Set color buffer size
          *
-         * Default is @cpp {8, 8, 8, 0} @ce (8-bit-per-channel RGB, no alpha).
+         * Default is @cpp {8, 8, 8, 8} @ce (8-bit-per-channel RGBA).
          * @see @ref setDepthBufferSize(), @ref setStencilBufferSize()
          */
         GLConfiguration& setColorBufferSize(const Vector4i& size) {
@@ -1270,13 +1444,13 @@ class Sdl2Application::GLConfiguration {
         #ifdef MAGNUM_BUILD_DEPRECATED
         /**
          * @brief @copybrief isSrgbCapable()
-         * @deprecated Use @ref isSrgbCapable() instead.
+         * @m_deprecated_since{2018,10} Use @ref isSrgbCapable() instead.
          */
         CORRADE_DEPRECATED("use isSrgbCapable() instead") bool isSRGBCapable() const { return isSrgbCapable(); }
 
         /**
          * @brief @copybrief setSrgbCapable()
-         * @deprecated Use @ref setSrgbCapable() instead.
+         * @m_deprecated_since{2018,10} Use @ref setSrgbCapable() instead.
          */
         CORRADE_DEPRECATED("use setSrgbCapable() instead") GLConfiguration& setSRGBCapable(bool enabled) {
             return setSrgbCapable(enabled);
@@ -1372,8 +1546,8 @@ class Sdl2Application::Configuration {
             /**
              * Allow high DPI.
              *
-             * @deprecated Has no effect, as this flag is passed implicitly
-             *      on platforms where needed. See
+             * @m_deprecated_since{2018,10} Has no effect, as this flag is
+             *      passed implicitly on platforms where needed. See
              *      @ref Platform-Sdl2Application-dpi for more information.
              */
             AllowHighDpi CORRADE_DEPRECATED_ENUM("has no effect, passed implicitly on platforms that need it") = 0,
@@ -1416,7 +1590,29 @@ class Sdl2Application::Configuration {
              * @ref tryCreate(const Configuration&) to prevent implicit
              * creation of an OpenGL context.
              */
-            Contextless = 1u << 31 /* Hope this won't ever conflict with anything */
+            Contextless = 1u << 31, /* Hope this won't ever conflict with anything */
+
+            /**
+             * Request a window for use with OpenGL. Useful in combination with
+             * @ref WindowFlag::Contextless, otherwise enabled implicitly when
+             * creating an OpenGL context using @ref Sdl2Application(const Arguments&),
+             * @ref Sdl2Application(const Arguments&, const Configuration&, const GLConfiguration&),
+             * @ref create(const Configuration&, const GLConfiguration&) or
+             * @ref tryCreate(const Configuration&, const GLConfiguration&).
+             * @m_since{2019,10}
+             */
+            OpenGL = SDL_WINDOW_OPENGL,
+
+            #if !defined(CORRADE_TARGET_EMSCRIPTEN) && (SDL_MAJOR_VERSION*1000 + SDL_MINOR_VERSION*100 + SDL_PATCHLEVEL >= 2006 || defined(DOXYGEN_GENERATING_OUTPUT))
+            /**
+             * Request a window for use with Vulkan. Useful in combination with
+             * @ref WindowFlag::Contextless.
+             * @note Available since SDL 2.0.6, not available on
+             *      @ref CORRADE_TARGET_EMSCRIPTEN "Emscripten".
+             * @m_since{2019,10}
+             */
+            Vulkan = SDL_WINDOW_VULKAN
+            #endif
         };
 
         /**
@@ -1430,7 +1626,10 @@ class Sdl2Application::Configuration {
             SDL_WINDOW_FULLSCREEN|SDL_WINDOW_BORDERLESS|SDL_WINDOW_HIDDEN|
             SDL_WINDOW_MAXIMIZED|SDL_WINDOW_MINIMIZED|SDL_WINDOW_INPUT_GRABBED|
             #endif
-            Uint32(WindowFlag::Contextless)
+            Uint32(WindowFlag::Contextless)|SDL_WINDOW_OPENGL
+            #if !defined(CORRADE_TARGET_EMSCRIPTEN) && SDL_MAJOR_VERSION*1000 + SDL_MINOR_VERSION*100 + SDL_PATCHLEVEL >= 2006
+            |SDL_WINDOW_VULKAN
+            #endif
             > WindowFlags;
         #else
         typedef Containers::EnumSet<WindowFlag> WindowFlags;
@@ -1977,14 +2176,47 @@ class Sdl2Application::KeyEvent: public Sdl2Application::InputEvent {
 
             Space = SDLK_SPACE,         /**< Space */
             Tab = SDLK_TAB,             /**< Tab */
+
+            /**
+             * Quote (<tt>'</tt>)
+             * @m_since_latest
+             */
+            Quote = SDLK_QUOTE,
+
             Comma = SDLK_COMMA,         /**< Comma */
             Period = SDLK_PERIOD,       /**< Period */
             Minus = SDLK_MINUS,         /**< Minus */
             Plus = SDLK_PLUS,           /**< Plus */
             Slash = SDLK_SLASH,         /**< Slash */
             Percent = SDLK_PERCENT,     /**< Percent */
-            Semicolon = SDLK_SEMICOLON, /**< Semicolon */
+            Semicolon = SDLK_SEMICOLON, /**< Semicolon (`;`) */
             Equal = SDLK_EQUALS,        /**< Equal */
+
+            /**
+             * Left bracket (`[`)
+             * @m_since_latest
+             */
+            LeftBracket = SDLK_LEFTBRACKET,
+
+            /**
+             * Right bracket (`]`)
+             * @m_since_latest
+             */
+            RightBracket = SDLK_RIGHTBRACKET,
+
+            /**
+             * Backslash (`\`)
+             * @m_since_latest
+             */
+            Backslash = SDLK_BACKSLASH,
+
+            /**
+             * Backquote (<tt>`</tt>)
+             * @m_since_latest
+             */
+            Backquote = SDLK_BACKQUOTE,
+
+            /* no equivalent for GlfwApplication's World1 / World2 */
 
             Zero = SDLK_0,              /**< Zero */
             One = SDLK_1,               /**< One */
@@ -2146,19 +2378,18 @@ class Sdl2Application::MouseEvent: public Sdl2Application::InputEvent {
             #ifndef CORRADE_TARGET_EMSCRIPTEN
             , Int clickCount
             #endif
-            ): InputEvent{event}, _button{button}, _position{position},
+            ): InputEvent{event}, _button{button}, _position{position}
             #ifndef CORRADE_TARGET_EMSCRIPTEN
-            _clickCount{clickCount},
+            , _clickCount{clickCount}
             #endif
-            _modifiersLoaded{false} {}
+            {}
 
         const Button _button;
         const Vector2i _position;
         #ifndef CORRADE_TARGET_EMSCRIPTEN
         const Int _clickCount;
         #endif
-        bool _modifiersLoaded;
-        Modifiers _modifiers;
+        Containers::Optional<Modifiers> _modifiers;
 };
 
 /**
@@ -2215,12 +2446,11 @@ class Sdl2Application::MouseMoveEvent: public Sdl2Application::InputEvent {
     private:
         friend Sdl2Application;
 
-        explicit MouseMoveEvent(const SDL_Event& event, const Vector2i& position, const Vector2i& relativePosition, Buttons buttons): InputEvent{event}, _position{position}, _relativePosition{relativePosition}, _buttons{buttons}, _modifiersLoaded{false} {}
+        explicit MouseMoveEvent(const SDL_Event& event, const Vector2i& position, const Vector2i& relativePosition, Buttons buttons): InputEvent{event}, _position{position}, _relativePosition{relativePosition}, _buttons{buttons} {}
 
         const Vector2i _position, _relativePosition;
         const Buttons _buttons;
-        bool _modifiersLoaded;
-        Modifiers _modifiers;
+        Containers::Optional<Modifiers> _modifiers;
 };
 
 /**
@@ -2250,13 +2480,11 @@ class Sdl2Application::MouseScrollEvent: public Sdl2Application::InputEvent {
     private:
         friend Sdl2Application;
 
-        explicit MouseScrollEvent(const SDL_Event& event, const Vector2& offset): InputEvent{event}, _offset{offset}, _positionLoaded{false}, _modifiersLoaded{false} {}
+        explicit MouseScrollEvent(const SDL_Event& event, const Vector2& offset): InputEvent{event}, _offset{offset} {}
 
         const Vector2 _offset;
-        bool _positionLoaded;
-        bool _modifiersLoaded;
-        Vector2i _position;
-        Modifiers _modifiers;
+        Containers::Optional<Vector2i> _position;
+        Containers::Optional<Modifiers> _modifiers;
 };
 
 /**
@@ -2454,6 +2682,8 @@ class Sdl2Application::TextEditingEvent {
 /** @hideinitializer
 @brief Entry point for SDL2-based applications
 @param className Class name
+
+@m_keywords{MAGNUM_APPLICATION_MAIN()}
 
 See @ref Magnum::Platform::Sdl2Application "Platform::Sdl2Application" for
 usage information. This macro abstracts out platform-specific entry point code

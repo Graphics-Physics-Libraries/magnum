@@ -30,12 +30,12 @@
 #endif
 
 #ifdef EXPLICIT_UNIFORM_LOCATION
-layout(location = 1)
+layout(location = 2)
 #endif
 uniform lowp vec4 backgroundColor; /* defaults to zero */
 
 #ifdef EXPLICIT_UNIFORM_LOCATION
-layout(location = 2)
+layout(location = 3)
 #endif
 uniform lowp vec4 color
     #ifndef GL_ES
@@ -44,11 +44,12 @@ uniform lowp vec4 color
     ;
 
 #ifdef EXPLICIT_TEXTURE_LAYER
-layout(binding = 15)
+/* See AbstractVector.h for details about the ID */
+layout(binding = 6)
 #endif
 uniform lowp sampler2D vectorTexture;
 
-in mediump vec2 fragmentTextureCoordinates;
+in mediump vec2 interpolatedTextureCoordinates;
 
 #ifdef NEW_GLSL
 #ifdef EXPLICIT_ATTRIB_LOCATION
@@ -58,6 +59,6 @@ out lowp vec4 fragmentColor;
 #endif
 
 void main() {
-    lowp float intensity = texture(vectorTexture, fragmentTextureCoordinates).r;
+    lowp float intensity = texture(vectorTexture, interpolatedTextureCoordinates).r;
     fragmentColor = mix(backgroundColor, color, intensity);
 }

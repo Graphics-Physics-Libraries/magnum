@@ -29,16 +29,16 @@
 #include "Magnum/Math/Color.h"
 #include "Magnum/Primitives/Implementation/Spheroid.h"
 #include "Magnum/Primitives/Implementation/WireframeSpheroid.h"
-#include "Magnum/Trade/MeshData3D.h"
+#include "Magnum/Trade/MeshData.h"
 
 namespace Magnum { namespace Primitives {
 
-Trade::MeshData3D coneSolid(const UnsignedInt rings, const UnsignedInt segments, const Float halfLength, const ConeFlags flags) {
+Trade::MeshData coneSolid(const UnsignedInt rings, const UnsignedInt segments, const Float halfLength, const ConeFlags flags) {
     CORRADE_ASSERT(rings >= 1 && segments >= 3,
         "Primitives::coneSolid(): at least one ring and three segments expected",
-        (Trade::MeshData3D{MeshPrimitive::Triangles, {}, {}, {}, {}, {}, nullptr}));
+        (Trade::MeshData{MeshPrimitive::Triangles, 0}));
 
-    Implementation::Spheroid cone{segments, flags & ConeFlag::GenerateTextureCoords ? Implementation::Spheroid::TextureCoords::Generate : Implementation::Spheroid::TextureCoords::DontGenerate};
+    Implementation::Spheroid cone{segments, Implementation::Spheroid::Flag(UnsignedByte(flags))};
 
     const Float length = 2.0f*halfLength;
     const Float textureCoordsV = flags & ConeFlag::CapEnd ? 1.0f/(length + 1.0f) : 0.0f;
@@ -52,17 +52,22 @@ Trade::MeshData3D coneSolid(const UnsignedInt rings, const UnsignedInt segments,
     /* Vertex rings */
     cone.cylinderVertexRings(rings+1, -halfLength, {-1.0f/rings, length/rings}, textureCoordsV, length/(rings*(flags & ConeFlag::CapEnd ? length + 1.0f : length)));
 
-    /* Faces */
+    /* Faces. Account for the extra vertices for caps and texture coords. */
     if(flags & ConeFlag::CapEnd) cone.bottomFaceRing();
-    cone.faceRings(rings, flags & ConeFlag::CapEnd ? (1 + segments) : 0);
+    if(flags & ConeFlag::CapEnd && flags & (ConeFlag::Tangents|ConeFlag::TextureCoordinates))
+        cone.faceRings(rings, 2 + segments);
+    else if(flags & ConeFlag::CapEnd)
+        cone.faceRings(rings, 1 + segments);
+    else
+        cone.faceRings(rings, 0);
 
     return cone.finalize();
 }
 
-Trade::MeshData3D coneWireframe(const UnsignedInt segments, const Float halfLength) {
+Trade::MeshData coneWireframe(const UnsignedInt segments, const Float halfLength) {
     CORRADE_ASSERT(segments >= 4 && segments%4 == 0,
-        "Primitives::cylinderWireframe(): multiples of 4 segments expected",
-        (Trade::MeshData3D{MeshPrimitive::Lines, {}, {}, {}, {}, {}, nullptr}));
+        "Primitives::coneWireframe(): multiples of 4 segments expected",
+        (Trade::MeshData{MeshPrimitive::Lines, 0}));
 
     Implementation::WireframeSpheroid cone{segments/4};
     cone.ring(-halfLength);

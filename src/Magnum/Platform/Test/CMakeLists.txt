@@ -25,7 +25,10 @@
 
 find_package(Corrade REQUIRED Main)
 
-set(ADDITIONAL_WEB_FILES "")
+# Icons for SDL/GLFW
+if(NOT CORRADE_TARGET_EMSCRIPTEN AND (WITH_SDL2APPLICATION OR WITH_GLFWAPPLICATION))
+    corrade_add_resource(Platform_RESOURCES resources.conf)
+endif()
 
 if(WITH_ANDROIDAPPLICATION)
     add_library(PlatformAndroidApplicationTest SHARED AndroidApplicationTest.cpp)
@@ -40,15 +43,31 @@ if(WITH_EMSCRIPTENAPPLICATION)
     add_executable(PlatformEmscriptenApplicationTest EmscriptenApplicationTest.cpp)
     target_link_libraries(PlatformEmscriptenApplicationTest PRIVATE MagnumEmscriptenApplication MagnumGL)
     set_target_properties(PlatformEmscriptenApplicationTest PROPERTIES FOLDER "Magnum/Platform/Test")
-    # So we can spin up a webserver in the build dir for easy testing
-    list(APPEND ADDITIONAL_WEB_FILES EmscriptenApplicationTest.html)
+    add_custom_command(TARGET PlatformEmscriptenApplicationTest POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/../WebApplication.css
+            ${CMAKE_CURRENT_SOURCE_DIR}/../EmscriptenApplication.js
+            $<TARGET_FILE_DIR:PlatformEmscriptenApplicationTest>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/EmscriptenApplicationTest.html
+            $<TARGET_FILE_DIR:PlatformEmscriptenApplicationTest>/PlatformEmscriptenApplicationTest.html)
 endif()
 
 if(WITH_GLFWAPPLICATION)
     add_executable(PlatformGlfwApplicationTest WIN32 GlfwApplicationTest.cpp)
     # HiDPi.manifest not needed, as GLFW sets that on its own
     target_link_libraries(PlatformGlfwApplicationTest PRIVATE MagnumGlfwApplication Corrade::Main)
+    # Window icon loading
+    target_sources(PlatformGlfwApplicationTest PRIVATE ${Platform_RESOURCES})
+    target_link_libraries(PlatformGlfwApplicationTest PRIVATE MagnumTrade)
     set_target_properties(PlatformGlfwApplicationTest PROPERTIES FOLDER "Magnum/Platform/Test")
+    if(CORRADE_TARGET_APPLE)
+        # The plist is needed in order to mark the app as DPI-aware
+        set_target_properties(PlatformGlfwApplicationTest PROPERTIES
+            MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/GlfwApplicationTest.plist
+            MACOSX_BUNDLE ON
+            XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "YES")
+    endif()
 endif()
 
 if(WITH_GLXAPPLICATION)
@@ -67,9 +86,21 @@ if(WITH_SDL2APPLICATION)
         endif()
     endif()
     target_link_libraries(PlatformSdl2ApplicationTest PRIVATE MagnumSdl2Application Corrade::Main)
+    # Window icon loading
+    if(NOT CORRADE_TARGET_EMSCRIPTEN)
+        target_sources(PlatformSdl2ApplicationTest PRIVATE ${Platform_RESOURCES})
+        target_link_libraries(PlatformSdl2ApplicationTest PRIVATE MagnumTrade)
+    endif()
     set_target_properties(PlatformSdl2ApplicationTest PROPERTIES FOLDER "Magnum/Platform/Test")
     if(CORRADE_TARGET_EMSCRIPTEN)
-        list(APPEND ADDITIONAL_WEB_FILES Sdl2ApplicationTest.html)
+        add_custom_command(TARGET PlatformSdl2ApplicationTest POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_CURRENT_SOURCE_DIR}/../WebApplication.css
+                ${CMAKE_CURRENT_SOURCE_DIR}/../EmscriptenApplication.js
+                $<TARGET_FILE_DIR:PlatformSdl2ApplicationTest>
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_CURRENT_SOURCE_DIR}/Sdl2ApplicationTest.html
+                $<TARGET_FILE_DIR:PlatformSdl2ApplicationTest>/PlatformSdl2ApplicationTest.html)
     elseif(CORRADE_TARGET_IOS OR CORRADE_TARGET_APPLE)
         # The plist is needed in order to mark the app as DPI-aware
         set_target_properties(PlatformSdl2ApplicationTest PROPERTIES
@@ -96,10 +127,14 @@ if(WITH_WINDOWLESSEGLAPPLICATION)
     target_link_libraries(PlatformWindowlessEglApplicationTest PRIVATE MagnumWindowlessEglApplication)
     set_target_properties(PlatformWindowlessEglApplicationTest PROPERTIES FOLDER "Magnum/Platform/Test")
     if(CORRADE_TARGET_EMSCRIPTEN)
-        # So we can spin up a webserver in the build dir for easy testing
-        list(APPEND ADDITIONAL_WEB_FILES
-            ../WindowlessEmscriptenApplication.js
-            WindowlessEglApplicationTest.html)
+        add_custom_command(TARGET PlatformWindowlessEglApplicationTest POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_CURRENT_SOURCE_DIR}/../WebApplication.css
+                ${CMAKE_CURRENT_SOURCE_DIR}/../WindowlessEmscriptenApplication.js
+                $<TARGET_FILE_DIR:PlatformWindowlessEglApplicationTest>
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_CURRENT_SOURCE_DIR}/WindowlessEglApplicationTest.html
+                $<TARGET_FILE_DIR:PlatformWindowlessEglApplicationTest>/PlatformWindowlessEglApplicationTest.html)
     endif()
 endif()
 
@@ -128,14 +163,4 @@ if(WITH_WINDOWLESSWINDOWSEGLAPPLICATION)
     add_executable(PlatformWindowlessWindowsEglApplicationTest WindowlessWindowsEglApplicationTest.cpp)
     target_link_libraries(PlatformWindowlessWindowsEglApplicationTest PRIVATE MagnumWindowlessWindowsEglApplication)
     set_target_properties(PlatformWindowlessWindowsEglApplicationTest PROPERTIES FOLDER "Magnum/Platform/Test")
-endif()
-
-if(WITH_EMSCRIPTENAPPLICATION OR (WITH_SDL2APPLICATION AND CORRADE_TARGET_EMSCRIPTEN))
-    list(APPEND ADDITIONAL_WEB_FILES ../EmscriptenApplication.js)
-endif()
-
-if(WITH_EMSCRIPTENAPPLICATION OR (WITH_SDL2APPLICATION AND CORRADE_TARGET_EMSCRIPTEN) OR WITH_WINDOWLESSWINDOWSEGLAPPLICATION)
-    # So we can spin up a webserver in the build dir for easy testing
-    file(COPY ../WebApplication.css ${ADDITIONAL_WEB_FILES}
-        DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 endif()

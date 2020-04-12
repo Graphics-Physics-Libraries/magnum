@@ -50,7 +50,10 @@ struct MeshTest: TestSuite::Tester {
     void drawViewCountNotSet();
 
     void mapPrimitive();
+    void mapPrimitiveImplementationSpecific();
+    void mapPrimitiveUnsupported();
     void mapPrimitiveInvalid();
+
     void mapIndexType();
     void mapIndexTypeInvalid();
 
@@ -69,7 +72,10 @@ MeshTest::MeshTest() {
               &MeshTest::drawViewCountNotSet,
 
               &MeshTest::mapPrimitive,
+              &MeshTest::mapPrimitiveImplementationSpecific,
+              &MeshTest::mapPrimitiveUnsupported,
               &MeshTest::mapPrimitiveInvalid,
+
               &MeshTest::mapIndexType,
               &MeshTest::mapIndexTypeInvalid,
 
@@ -126,11 +132,10 @@ void MeshTest::drawCountNotSet() {
     std::ostringstream out;
     Error redirectError{&out};
 
-    Mesh mesh{NoCreate};
-    mesh.draw(Shader{NoCreate});
+    Shader{NoCreate}.draw(Mesh{NoCreate});
 
     CORRADE_COMPARE(out.str(),
-        "GL::Mesh::draw(): setCount() was never called, probably a mistake?\n");
+        "GL::AbstractShaderProgram::draw(): Mesh::setCount() was never called, probably a mistake?\n");
 }
 
 void MeshTest::drawViewCountNotSet() {
@@ -138,11 +143,10 @@ void MeshTest::drawViewCountNotSet() {
     Error redirectError{&out};
 
     Mesh mesh{NoCreate};
-    MeshView view{mesh};
-    view.draw(Shader{NoCreate});
+    Shader{NoCreate}.draw(MeshView{mesh});
 
     CORRADE_COMPARE(out.str(),
-        "GL::MeshView::draw(): setCount() was never called, probably a mistake?\n");
+        "GL::AbstractShaderProgram::draw(): MeshView::setCount() was never called, probably a mistake?\n");
 }
 
 void MeshTest::mapPrimitive() {
@@ -153,30 +157,92 @@ void MeshTest::mapPrimitive() {
     CORRADE_COMPARE(meshPrimitive(Magnum::MeshPrimitive::Triangles), MeshPrimitive::Triangles);
     CORRADE_COMPARE(meshPrimitive(Magnum::MeshPrimitive::TriangleStrip), MeshPrimitive::TriangleStrip);
     CORRADE_COMPARE(meshPrimitive(Magnum::MeshPrimitive::TriangleFan), MeshPrimitive::TriangleFan);
+
+    /* Ensure all generic primitives are handled. This goes through the first
+       16 bits, which should be enough. Going through 32 bits takes 8 seconds,
+       too much. */
+    for(UnsignedInt i = 1; i <= 0xffff; ++i) {
+        const auto primitive = Magnum::MeshPrimitive(i);
+        #ifdef __GNUC__
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic error "-Wswitch"
+        #endif
+        switch(primitive) {
+            #define _c(primitive) \
+                case Magnum::MeshPrimitive::primitive: \
+                    if(hasMeshPrimitive(Magnum::MeshPrimitive::primitive))  \
+                        CORRADE_VERIFY(UnsignedInt(meshPrimitive(Magnum::MeshPrimitive::primitive)) >= 0); \
+                    break;
+            #include "Magnum/Implementation/meshPrimitiveMapping.hpp"
+            #undef _c
+        }
+        #ifdef __GNUC__
+        #pragma GCC diagnostic pop
+        #endif
+    }
+}
+
+void MeshTest::mapPrimitiveImplementationSpecific() {
+    CORRADE_VERIFY(hasMeshPrimitive(meshPrimitiveWrap(GL_LINES)));
+    CORRADE_COMPARE(meshPrimitive(meshPrimitiveWrap(GL_LINES)),
+        MeshPrimitive::Lines);
+}
+
+void MeshTest::mapPrimitiveUnsupported() {
+    std::ostringstream out;
+    Error redirectError{&out};
+    meshPrimitive(Magnum::MeshPrimitive::Instances);
+    CORRADE_COMPARE(out.str(), "GL::meshPrimitive(): unsupported primitive MeshPrimitive::Instances\n");
 }
 
 void MeshTest::mapPrimitiveInvalid() {
     std::ostringstream out;
     Error redirectError{&out};
 
-    meshPrimitive(Magnum::MeshPrimitive(0x123));
+    meshPrimitive(Magnum::MeshPrimitive{});
+    meshPrimitive(Magnum::MeshPrimitive(0x12));
     CORRADE_COMPARE(out.str(),
-        "GL::meshPrimitive(): invalid primitive MeshPrimitive(0x123)\n");
+        "GL::meshPrimitive(): invalid primitive MeshPrimitive(0x0)\n"
+        "GL::meshPrimitive(): invalid primitive MeshPrimitive(0x12)\n");
 }
 
 void MeshTest::mapIndexType() {
     CORRADE_COMPARE(meshIndexType(Magnum::MeshIndexType::UnsignedByte), MeshIndexType::UnsignedByte);
     CORRADE_COMPARE(meshIndexType(Magnum::MeshIndexType::UnsignedShort), MeshIndexType::UnsignedShort);
     CORRADE_COMPARE(meshIndexType(Magnum::MeshIndexType::UnsignedInt), MeshIndexType::UnsignedInt);
+
+    /* Ensure all generic index types are handled. This goes through the first
+       16 bits, which should be enough. Going through 32 bits takes 8 seconds,
+       too much. */
+    for(UnsignedInt i = 1; i <= 0xffff; ++i) {
+        const auto type = Magnum::MeshIndexType(i);
+        #ifdef __GNUC__
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic error "-Wswitch"
+        #endif
+        switch(type) {
+            #define _c(type) \
+                case Magnum::MeshIndexType::type: \
+                    CORRADE_VERIFY(UnsignedInt(meshIndexType(Magnum::MeshIndexType::type)) >= 0); \
+                    break;
+            #include "Magnum/Implementation/meshIndexTypeMapping.hpp"
+            #undef _c
+        }
+        #ifdef __GNUC__
+        #pragma GCC diagnostic pop
+        #endif
+    }
 }
 
 void MeshTest::mapIndexTypeInvalid() {
     std::ostringstream out;
     Error redirectError{&out};
 
-    meshIndexType(Magnum::MeshIndexType(0x123));
+    meshIndexType(Magnum::MeshIndexType(0x0));
+    meshIndexType(Magnum::MeshIndexType(0x12));
     CORRADE_COMPARE(out.str(),
-        "GL::meshIndexType(): invalid type MeshIndexType(0x123)\n");
+        "GL::meshIndexType(): invalid type MeshIndexType(0x0)\n"
+        "GL::meshIndexType(): invalid type MeshIndexType(0x12)\n");
 }
 
 void MeshTest::debugPrimitive() {

@@ -294,28 +294,30 @@ in inverse.
     there
 2.  Add a <tt>\@file</tt>-level documentation block, with @c \@brief listing
     all classes, functions, typedefs, enums, macros etc. that are in the file
-3.  Add the file to corresponding `*_SRCS`, `*_HEADERS`, `*_PRIVATE_HEADERS`
+3.  Annotate it with a correct variant of the <tt>\@m_since_latest</tt> command
+    for given repository
+4.  Add the file to corresponding `*_SRCS`, `*_HEADERS`, `*_PRIVATE_HEADERS`
     list in `CMakeLists.txt`
-4.  If applicable, add a new test class file in the `Test/` directory
+5.  If applicable, add a new test class file in the `Test/` directory
     -   name it `FileNameTest.cpp`, put a class named `FileNameTest` inside,
         wrapped in a `Test` subnamespace of the original file namespace
     -   use @cmake corrade_add_test() @ce to add it to tests
     -   if some tests need GL context, add a separate test with `GLTest`
         suffix, wrapping the corresponding @cmake corrade_add_test() @ce in
         @cmake if(BUILD_GL_TESTS) @ce
-5.  Populate the file, see @ref developers-symbol and @ref coding-style for
+6.  Populate the file, see @ref developers-symbol and @ref coding-style for
     more information.
-6.  Mention the new functionality in `doc/changelog.dox` (and similar files in
+7.  Mention the new functionality in `doc/changelog.dox` (and similar files in
     other repos)
-7.  @ref building-doc "Build documentation":
+8.  @ref building-doc "Build documentation":
     -   run [doxygen.py](http://mcss.mosra.cz/doxygen/) on `Doxyfile-mcss`
         and verify there are no new warnings
     -   eyeball the relevant docs and fix suspicious things
-8.  Build a coverage build (`package/archlinux/PKGBUILD-coverage`), or abuse
+9.  Build a coverage build (`package/archlinux/PKGBUILD-coverage`), or abuse
     the CI for that later
-9.  Push to a temporary branch (e.g., `next`)
-10. Iterate until the CIs are green and the code coverage is good enough
-11. Merge to `master`
+10. Push to a temporary branch (e.g., `next`)
+11. Iterate until the CIs are green and the code coverage is good enough
+12. Merge to `master`
 
 In order to remove a file, be sure to touch all places mentioned above, only
 in inverse --- but usually @ref developers-deprecation "deprecate first".
@@ -325,18 +327,20 @@ in inverse --- but usually @ref developers-deprecation "deprecate first".
 1.  If the symbol is standalone (i.e., not member of a class), list it in the
     <tt>\@file</tt>-level @c \@brief docs
 2.  Document it
-3.  Add a test for it to corresponding file, verify the test gets actually run
-4.  Mention the new functionality in `doc/changelog.dox` (and similar files in
+3.  Annotate it with a correct variant of the <tt>\@m_since_latest</tt> command
+    for given repository
+4.  Add a test for it to corresponding file, verify the test gets actually run
+5.  Mention the new functionality in `doc/changelog.dox` (and similar files in
     other repos)
-5.  @ref building-doc "Build documentation":
+6.  @ref building-doc "Build documentation":
     -   run [doxygen.py](http://mcss.mosra.cz/doxygen/) on `Doxyfile-mcss`
         and verify there are no new warnings
     -   eyeball the relevant docs and fix suspicious things
-6.  Build a coverage build (`package/archlinux/PKGBUILD-coverage`), or abuse
+7.  Build a coverage build (`package/archlinux/PKGBUILD-coverage`), or abuse
     the CI for that later
-7.  Push to a temporary branch (e.g., `next`)
-8.  Iterate until the CIs are green and the code coverage is good enough
-9.  Merge to `master`
+8.  Push to a temporary branch (e.g., `next`)
+9.  Iterate until the CIs are green and the code coverage is good enough
+10. Merge to `master`
 
 In order to remove a symbol, be sure to touch all places mentioned above, only
 in inverse --- but usually @ref developers-deprecation "deprecate first".
@@ -403,7 +407,7 @@ in inverse --- but usually @ref developers-deprecation "deprecate first".
     -   run [doxygen.py](http://mcss.mosra.cz/doxygen/) on `Doxyfile-mcss`
         and verify there are no new warnings
     -   eyeball the relevant docs and fix suspicious things
-10.  Push to a temporary branch (e.g., `next`)
+10. Push to a temporary branch (e.g., `next`)
 11. Iterate until the CIs are green
 12. Merge to `master`
 13. If possible, trigger builds of dependent projects (where they are still
@@ -483,6 +487,61 @@ in inverse --- but usually @ref developers-deprecation "deprecate first".
 7.  Merge to `master`
 8.  If possible, trigger builds of dependent projects and verify they are still
     green (or wait for the scheduled builds)
+
+@section developers-adding-attribute Checklist for adding a new mesh attribute
+
+1.  Extend @ref Trade::MeshAttribute with the new entry
+2.  Add a corresponding reserved type to @ref Shaders::Generic, if not there
+    already
+    -   Also update `src/Magnum/Shaders/generic.glsl` with the reserved ID
+3.  Update the type assertion in the @ref Trade::MeshAttributeData constructor
+    to account for the new type
+4.  Add a pair of convenience getters to @ref Trade::MeshData similar to e.g.
+    @ref Trade::MeshData::normalsInto() / @ref Trade::MeshData::normalsAsArray()
+    with a type that's the same as the one used in the @ref Shaders::Generic
+    definition, test that it does the right thing for every supported type
+5.  Update @ref Trade::operator<<(Debug&, MeshAttribute) for the new entry
+6.  Update @ref MeshTools::compile() to recognize the new attribute. If there
+    is already a builtin shader capable of using this attribute, add new test
+    to `MeshToolsCompileGLTest`.
+7.  Push to a temporary branch (e.g., `next`)
+8.  Iterate until the CIs are green
+9.  Merge to `master`
+
+@section developers-adding-vertex-format Checklist for adding a new vertex format
+
+1.  Extend @ref VertexFormat with the new entry, if it's not there already,
+    document mapping to GL, Vulkan, D3D and Metal (if exists)
+2.  Update docs of @ref Trade::MeshAttribute to mention where the format can be
+    newly used
+3.  Appropriately relax the assertion in the @ref Trade::MeshAttributeData
+    constructor
+3.  Extend `Trade::Implementation::vertexFormatFor()`, add a mapping between
+    this entry and a C++ type, optionally also
+    `isVertexFormatCompatibleWithAttribute()` if there's more than one entry
+    corresponding to a particular C++ type. If the mapping is unconventional,
+    be sure to mention it in the
+    @ref Trade::MeshAttributeData::MeshAttributeData(MeshAttribute, const Containers::StridedArrayView1D<T>&)
+    constructor docs.
+4.  Update corresponding `Trade::MeshData::*Into()` convenience getters to
+    ensure they can handle this type
+5.  Update `src/Magnum/Implementation/vertexFormatMapping.hpp` and
+    `src/Magnum/Vk/Implementation/vertexFormatMapping.hpp` with the new entry
+6.  Update @ref vertexFormatSize(), @ref vertexFormatComponentFormat(),
+    @ref vertexFormatComponentCount() and @ref isVertexFormatNormalized() to
+    handle this format
+7.  Update the @ref GL::hasVertexFormat() utility and
+    @ref GL::DynamicAttribute::DynamicAttribute(Kind, UnsignedInt, VertexFormat)
+    constructor to provide mapping of the new type to GL; add a test for the
+    new type, if it's special in some way, otherwise the all-catching loop will
+    check it
+8.  Update @ref MeshTools::compile() to recognize the new type (if anything
+    extra needs to be done, usually doesn't as everything is handled by
+    @ref GL::DynamicAttribute already); add corresponding new test(s) to
+    `MeshToolsCompileGLTest`.
+9.  Push to a temporary branch (e.g., `next`)
+10. Iterate until the CIs are green
+11. Merge to `master`
 
 @section developers-gl-extensions Checklist for adding / removing GL versions and extensions
 
@@ -844,28 +903,30 @@ inverse.
     -   add a temporary <tt>\@<b></b>anchor changelog-latest</tt> (and
         equivalent in other repos) on top so the links from main page work
         properly
-8.  Bump `MAGNUM_LIBRARY_VERSION` and `MAGNUM_LIBRARY_SOVERSION` in all
+8.  Convert all occurences of <tt>\@m_since_latest</tt> to
+    <tt>\@m_since{20XY,ab}</tt>
+9.  Bump `MAGNUM_LIBRARY_VERSION` and `MAGNUM_LIBRARY_SOVERSION` in all
     projects, if needed --- ensure all projects have the exact same version
-9.  Rebuild all projects with the new shared library version numbers, verify
+10. Rebuild all projects with the new shared library version numbers, verify
     all tools and examples still behave properly
-10. Build and upload public docs (see @ref developers-documentation), verify
+11. Build and upload public docs (see @ref developers-documentation), verify
     that there are no new warnings and the changelog looks correct
-11. Push all new changes to a temporary branch (e.g., `next`), don't forget the
+12. Push all new changes to a temporary branch (e.g., `next`), don't forget the
     `ports` branch in examples
-12. Wait for the CIs to get green
-13. Update `conanfile.py` in all projects that have it with a new version ---
+13. Wait for the CIs to get green
+14. Update `conanfile.py` in all projects that have it with a new version ---
     this *has to be* done before the version is tagged.
-14. Update Debian package changelog in `package/debian/changelog`, copypasting
+15. Update Debian package changelog in `package/debian/changelog`, copypasting
     the last entry, updating it and using @cb{.sh} date -R @ce for a date ---
     again, this *should be* done before the version is tagged so stable
     releases in PPAs can be done directly from the tag with no extra patching
-15. Tag a new version using @cb{.sh} git tag -a v20XY.ab @ce, say just
+16. Tag a new version using @cb{.sh} git tag -a v20XY.ab @ce, say just
     `Version 20XY.ab` as a message
-16. Push the tag, verify that the CIs are still green
+17. Push the tag, verify that the CIs are still green
     -   to GitLab as well
-17. Update the Corrade and Magnum tagfiles on the website using the
+18. Update the Corrade and Magnum tagfiles on the website using the
     freshly-built *public* docs
-18. Write a release announcement for the blog
+19. Write a release announcement for the blog
     -   highlight the most prominent features, mention detailed blog posts
         about them, if any
     -   reference detailed changelogs for all projects at the end
@@ -873,8 +934,8 @@ inverse.
     -   create some fancy eye-catchy cover image featuring nice screenshots of
         new functionality
     -   add release annoucement link under the button on front page
-19. Publish the release announcement, verify it looks correct
-20. Advertise the release announcement, preferrably Monday 5 PM, never Friday
+20. Publish the release announcement, verify it looks correct
+21. Advertise the release announcement, preferrably Monday 5 PM, never Friday
     or weekends
     -   come up with some 100-character-long extended title
     -   Twitter (extended title + url and some hashtags), first dry-run the
@@ -889,22 +950,22 @@ inverse.
     -   send an e-mail to companies and universities on the private list
     -   add a message to the Gitter chat (title as heading, cover image,
         summary in a blockquote and "read more" link, `@` contributors)
-21. Reference Twitter, Reddit, Hacker News and mailing list in a "Discussion"
+22. Reference Twitter, Reddit, Hacker News and mailing list in a "Discussion"
     note at the end of the article, reupload that change
-22. Update versions of ArchLinux AUR packages:
+23. Update versions of ArchLinux AUR packages:
     -   run `makepkg` in `package/archlinux/magnum*-git`, verify it builds and
-        says correct version, ideally with `r0` at the ennd
+        says correct version, ideally with `r0` at the end
     -   copy the updated `PKGBUILD` to the AUR package repo, run
         @cb{.sh} makepkg --printsrcinfo > .SRCINFO @ce there
     -   commit the updated `PKGBUILD` and `.SRCINFO`, push
     -   after pushing all, verify that the version is updated in the AUR web
         interface as well
-23. Update Homebrew package versions
-24. Ask someone to update the Ubuntu PPA
-25. Ask someone to update Vcpkg packages
-26. Close the 20XY.ab GitHub milestone
-27. Add link to the release notes to the tag on GitHub
-28. Have a drink and take two days off
+24. Update Homebrew package versions
+25. Ask someone to update the Ubuntu PPA
+26. Ask someone to update Vcpkg packages
+27. Close the 20XY.ab GitHub milestone
+28. Add link to the release notes to the tag on GitHub
+29. Have a drink and take two days off
 
 */
 }

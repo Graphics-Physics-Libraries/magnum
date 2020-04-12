@@ -23,6 +23,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+#include <tuple> /* for std::tie() :( */
 #include <Corrade/Containers/ArrayViewStl.h>
 #include <Corrade/Containers/Reference.h>
 #include <Corrade/TestSuite/Tester.h>
@@ -41,6 +42,7 @@
 #include "Magnum/GL/PixelFormat.h"
 #include "Magnum/GL/Renderer.h"
 #include "Magnum/GL/Renderbuffer.h"
+#include "Magnum/GL/RenderbufferFormat.h"
 #include "Magnum/GL/Shader.h"
 #include "Magnum/GL/Texture.h"
 #include "Magnum/GL/TextureFormat.h"
@@ -51,7 +53,7 @@
 #include "Magnum/Primitives/Cube.h"
 #include "Magnum/Primitives/Plane.h"
 #include "Magnum/Shaders/Phong.h"
-#include "Magnum/Trade/MeshData3D.h"
+#include "Magnum/Trade/MeshData.h"
 
 #if !(defined(MAGNUM_TARGET_GLES2) && defined(MAGNUM_TARGET_WEBGL))
 #include "Magnum/GL/SampleQuery.h"
@@ -158,7 +160,7 @@ struct: GL::AbstractShaderProgram {} someShader;
 GL::Buffer buffer;
 GL::Mesh mesh;
 // ...
-mesh.draw(someShader);
+someShader.draw(mesh);
 
 {
     /* Entering a section with 3rd-party OpenGL code -- clean up all state that
@@ -265,6 +267,15 @@ enum: UnsignedInt {
     NormalOutput = 1
 };
 /* [AbstractShaderProgram-output-attributes] */
+
+#if !defined(MAGNUM_TARGET_GLES) && !defined(MAGNUM_TARGET_WEBGL)
+/* [AbstractShaderProgram-hide-irrelevant] */
+private:
+    using GL::AbstractShaderProgram::drawTransformFeedback;
+    using GL::AbstractShaderProgram::dispatchCompute;
+/* [AbstractShaderProgram-hide-irrelevant] */
+public:
+#endif
 
 /* [AbstractShaderProgram-constructor] */
 explicit MyShader() {
@@ -395,9 +406,8 @@ GL::Texture2D diffuseTexture, specularTexture;
 shader.setTransformationMatrix(transformation)
     .setProjectionMatrix(projection)
     .bindDiffuseTexture(diffuseTexture)
-    .bindSpecularTexture(specularTexture);
-
-mesh.draw(shader);
+    .bindSpecularTexture(specularTexture)
+    .draw(mesh);
 /* [AbstractShaderProgram-rendering] */
 }
 #endif
@@ -424,7 +434,9 @@ GL::BufferImage2D image = framebuffer.read(framebuffer.viewport(),
 GL::Buffer buffer;
 /* [Buffer-setdata] */
 Containers::ArrayView<Vector3> data;
-buffer.setData(data, GL::BufferUsage::StaticDraw);
+buffer.setData(data);
+
+GL::Buffer buffer2{data}; // or construct & fill in a single step
 /* [Buffer-setdata] */
 }
 
@@ -432,11 +444,11 @@ buffer.setData(data, GL::BufferUsage::StaticDraw);
 GL::Buffer buffer;
 /* [Buffer-setdata-stl] */
 std::vector<Vector3> data;
-buffer.setData(data, GL::BufferUsage::StaticDraw);
+buffer.setData(data);
 /* [Buffer-setdata-stl] */
 
 /* [Buffer-setdata-allocate] */
-buffer.setData({nullptr, 200*sizeof(Vector3)}, GL::BufferUsage::StaticDraw);
+buffer.setData({nullptr, 200*sizeof(Vector3)});
 /* [Buffer-setdata-allocate] */
 }
 
@@ -819,7 +831,7 @@ GL::DebugOutput::setEnabled(
         GL::DebugOutput::Severity::Notification, "Rendering a transparent mesh");
 
     GL::Renderer::enable(GL::Renderer::Feature::Blending);
-    mesh.draw(shader);
+    shader.draw(mesh);
     GL::Renderer::disable(GL::Renderer::Feature::Blending);
 
     // ...
@@ -852,7 +864,7 @@ struct: GL::AbstractShaderProgram {} shader;
     GL::DebugGroup group{GL::DebugGroup::Source::Application, 42, "Scene rendering"};
 
     GL::Renderer::enable(GL::Renderer::Feature::Blending);
-    mesh.draw(shader);
+    shader.draw(mesh);
     GL::Renderer::disable(GL::Renderer::Feature::Blending);
 
     /* The debug group is popped automatically at the end of the scope */
@@ -869,7 +881,7 @@ GL::DebugGroup group;
 group.push(GL::DebugGroup::Source::Application, 42, "Scene rendering");
 
 GL::Renderer::enable(GL::Renderer::Feature::Blending);
-mesh.draw(shader);
+shader.draw(mesh);
 GL::Renderer::disable(GL::Renderer::Feature::Blending);
 
 group.pop();
@@ -893,21 +905,71 @@ GL::defaultFramebuffer.mapForDraw({
 
 #ifndef MAGNUM_TARGET_GLES2
 {
-/* [Framebuffer-usage-attach] */
-GL::Framebuffer framebuffer{GL::defaultFramebuffer.viewport()};
-GL::Texture2D color, normal;
+struct MyShader {
+    void bindTexture(GL::Texture2D&) {}
+} myShader;
+Vector2i size;
+/* [Framebuffer-usage] */
+GL::Texture2D color;
 GL::Renderbuffer depthStencil;
+color.setStorage(1, GL::TextureFormat::RGBA8, size);
+depthStencil.setStorage(GL::RenderbufferFormat::Depth24Stencil8, size);
 
-// configure the textures and allocate texture memory...
-
+GL::Framebuffer framebuffer{{{}, size}};
 framebuffer.attachTexture(GL::Framebuffer::ColorAttachment{0}, color, 0);
-framebuffer.attachTexture(GL::Framebuffer::ColorAttachment{1}, normal, 0);
 framebuffer.attachRenderbuffer(
     GL::Framebuffer::BufferAttachment::DepthStencil, depthStencil);
-/* [Framebuffer-usage-attach] */
+/* [Framebuffer-usage] */
+
+/* [Framebuffer-usage-rendering] */
+framebuffer
+    .clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth)
+    .bind();
+
+// draw to this framebuffer ...
+
+/* Switch back to the default framebuffer */
+GL::defaultFramebuffer
+    .clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth)
+    .bind();
+
+// use the rendered texture in a shader ...
+myShader.bindTexture(color);
+/* [Framebuffer-usage-rendering] */
 }
 #endif
 
+#ifndef MAGNUM_TARGET_GLES2
+{
+/* [Framebuffer-usage-multisample] */
+Vector2i size = GL::defaultFramebuffer.viewport().size();
+
+/* 8x MSAA */
+GL::Renderbuffer color, depthStencil;
+color.setStorageMultisample(8, GL::RenderbufferFormat::RGBA8, size);
+depthStencil.setStorageMultisample(8,
+    GL::RenderbufferFormat::Depth24Stencil8, size);
+
+GL::Framebuffer framebuffer{{{}, size}};
+framebuffer.attachRenderbuffer(GL::Framebuffer::ColorAttachment{0}, color);
+framebuffer.attachRenderbuffer(
+    GL::Framebuffer::BufferAttachment::DepthStencil, depthStencil);
+
+framebuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth)
+    .bind();
+
+// draw to the multisampled framebuffer ...
+
+/* Resolve the color output to a single-sampled default framebuffer */
+GL::defaultFramebuffer.clear(GL::FramebufferClear::Color)
+    .bind();
+GL::Framebuffer::blit(framebuffer, GL::defaultFramebuffer,
+    {{}, size}, GL::FramebufferBlit::Color);
+/* [Framebuffer-usage-multisample] */
+}
+#endif
+
+#ifndef MAGNUM_TARGET_GLES2
 {
 struct MyShader {
     enum: UnsignedInt {
@@ -915,12 +977,20 @@ struct MyShader {
         NormalOutput = 1
     };
 };
-GL::Framebuffer framebuffer{{}};
-/* [Framebuffer-usage-map] */
+/* [Framebuffer-usage-deferred] */
+GL::Framebuffer framebuffer{GL::defaultFramebuffer.viewport()};
+GL::Texture2D color, normal;
+GL::Renderbuffer depthStencil;
+// setStorage() ...
+
+framebuffer.attachTexture(GL::Framebuffer::ColorAttachment{0}, color, 0);
+framebuffer.attachTexture(GL::Framebuffer::ColorAttachment{1}, normal, 0);
+framebuffer.attachRenderbuffer(
+    GL::Framebuffer::BufferAttachment::DepthStencil, depthStencil);
 framebuffer.mapForDraw({
     {MyShader::ColorOutput, GL::Framebuffer::ColorAttachment(0)},
     {MyShader::NormalOutput, GL::Framebuffer::ColorAttachment(1)}});
-/* [Framebuffer-usage-map] */
+/* [Framebuffer-usage-deferred] */
 
 /* [Framebuffer-mapForDraw] */
 framebuffer.mapForDraw({
@@ -928,6 +998,7 @@ framebuffer.mapForDraw({
     {MyShader::NormalOutput, GL::Framebuffer::DrawAttachment::None}});
 /* [Framebuffer-mapForDraw] */
 }
+#endif
 
 {
 /* [Mesh-nonindexed] */
@@ -957,16 +1028,17 @@ mesh.setPrimitive(MeshPrimitive::Triangles)
 {
 /* [Mesh-interleaved] */
 /* Non-indexed primitive with positions and normals */
-Trade::MeshData3D plane = Primitives::planeSolid();
+Trade::MeshData plane = Primitives::planeSolid();
 
 /* Fill a vertex buffer with interleaved position and normal data */
 GL::Buffer buffer;
-buffer.setData(MeshTools::interleave(plane.positions(0), plane.normals(0)), GL::BufferUsage::StaticDraw);
+buffer.setData(MeshTools::interleave(plane.positions3DAsArray(),
+                                     plane.normalsAsArray()));
 
 /* Configure the mesh, add the vertex buffer */
 GL::Mesh mesh;
 mesh.setPrimitive(plane.primitive())
-    .setCount(plane.positions(0).size())
+    .setCount(plane.vertexCount())
     .addVertexBuffer(buffer, 0, Shaders::Phong::Position{}, Shaders::Phong::Normal{});
 /* [Mesh-interleaved] */
 }
@@ -986,14 +1058,14 @@ Vector3 positions[240]{
     // ...
 };
 GL::Buffer vertexBuffer;
-vertexBuffer.setData(positions, GL::BufferUsage::StaticDraw);
+vertexBuffer.setData(positions);
 
 /* Fill index buffer with index data */
 UnsignedByte indices[75]{
     // ...
 };
 GL::Buffer indexBuffer;
-indexBuffer.setData(indices, GL::BufferUsage::StaticDraw);
+indexBuffer.setData(indices);
 
 /* Configure the mesh, add both vertex and index buffer */
 GL::Mesh mesh;
@@ -1007,28 +1079,28 @@ mesh.setPrimitive(MeshPrimitive::Triangles)
 {
 /* [Mesh-indexed-tools] */
 // Indexed primitive
-Trade::MeshData3D cube = Primitives::cubeSolid();
+Trade::MeshData cube = Primitives::cubeSolid();
 
 // Fill vertex buffer with interleaved position and normal data
 GL::Buffer vertexBuffer;
-vertexBuffer.setData(MeshTools::interleave(cube.positions(0), cube.normals(0)), GL::BufferUsage::StaticDraw);
+vertexBuffer.setData(MeshTools::interleave(cube.positions3DAsArray(),
+                                           cube.normalsAsArray()));
 
 // Compress index data
 Containers::Array<char> indexData;
 MeshIndexType indexType;
-UnsignedInt indexStart, indexEnd;
-std::tie(indexData, indexType, indexStart, indexEnd) = MeshTools::compressIndices(cube.indices());
+std::tie(indexData, indexType) = MeshTools::compressIndices(cube.indices());
 
 // Fill index buffer
 GL::Buffer indexBuffer;
-indexBuffer.setData(indexData, GL::BufferUsage::StaticDraw);
+indexBuffer.setData(indexData);
 
 // Configure the mesh, add both vertex and index buffer
 GL::Mesh mesh;
 mesh.setPrimitive(cube.primitive())
-    .setCount(cube.indices().size())
+    .setCount(cube.indexCount())
     .addVertexBuffer(vertexBuffer, 0, Shaders::Phong::Position{}, Shaders::Phong::Normal{})
-    .setIndexBuffer(indexBuffer, 0, indexType, indexStart, indexEnd);
+    .setIndexBuffer(indexBuffer, 0, indexType);
 /* [Mesh-indexed-tools] */
 }
 

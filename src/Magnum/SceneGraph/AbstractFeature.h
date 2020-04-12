@@ -136,11 +136,18 @@ template<UnsignedInt dimensions, class T> class AbstractFeature
     #endif
 {
     public:
-        /** @brief Object transformation underlying type */
+        /**
+         * @brief Object transformation underlying type
+         * @m_since{2019,10}
+         */
         typedef T Type;
 
         enum: UnsignedInt {
-            Dimensions = dimensions /**< Dimension count */
+            /**
+             * Dimension count
+             * @m_since{2019,10}
+             */
+            Dimensions = dimensions
         };
 
         /**
@@ -257,7 +264,11 @@ template<UnsignedInt dimensions, class T> class AbstractFeature
          */
         virtual void cleanInverted(const MatrixTypeFor<dimensions, T>& invertedAbsoluteTransformationMatrix);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
     private:
         #ifndef DOXYGEN_GENERATING_OUTPUT /* https://bugzilla.gnome.org/show_bug.cgi?id=776986 */

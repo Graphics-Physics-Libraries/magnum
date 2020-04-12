@@ -39,9 +39,11 @@ AnyImageImporter::AnyImageImporter(PluginManager::Manager<AbstractImporter>& man
 
 AnyImageImporter::AnyImageImporter(PluginManager::AbstractManager& manager, const std::string& plugin): AbstractImporter{manager, plugin} {}
 
+AnyImageImporter::AnyImageImporter(AnyImageImporter&&) noexcept = default;
+
 AnyImageImporter::~AnyImageImporter() = default;
 
-auto AnyImageImporter::doFeatures() const -> Features { return Feature::OpenData; }
+ImporterFeatures AnyImageImporter::doFeatures() const { return ImporterFeature::OpenData; }
 
 bool AnyImageImporter::doIsOpened() const { return !!_in; }
 
@@ -57,7 +59,9 @@ void AnyImageImporter::doOpenFile(const std::string& filename) {
 
     /* Detect type from extension */
     std::string plugin;
-    if(Utility::String::endsWith(normalized, ".bmp"))
+    if(Utility::String::endsWith(normalized, ".basis"))
+        plugin = "BasisImporter";
+    else if(Utility::String::endsWith(normalized, ".bmp"))
         plugin = "BmpImporter";
     else if(Utility::String::endsWith(normalized, ".dds"))
         plugin = "DdsImporter";
@@ -128,8 +132,11 @@ void AnyImageImporter::doOpenData(Containers::ArrayView<const char> data) {
     CORRADE_INTERNAL_ASSERT(manager());
 
     std::string plugin;
+    /* https://github.com/BinomialLLC/basis_universal/blob/7d784c728844c007d8c95d63231f7adcc0f65364/transcoder/basisu_file_headers.h#L78 */
+    if(Utility::String::viewBeginsWith(data, "sB"))
+        plugin = "BasisImporter";
     /* https://docs.microsoft.com/cs-cz/windows/desktop/direct3ddds/dx-graphics-dds-pguide */
-    if(Utility::String::viewBeginsWith(data, "DDS "))
+    else if(Utility::String::viewBeginsWith(data, "DDS "))
         plugin = "DdsImporter";
     /* http://www.openexr.com/openexrfilelayout.pdf */
     else if(Utility::String::viewBeginsWith(data, "\x76\x2f\x31\x01"))
@@ -194,9 +201,11 @@ void AnyImageImporter::doOpenData(Containers::ArrayView<const char> data) {
 
 UnsignedInt AnyImageImporter::doImage2DCount() const { return _in->image2DCount(); }
 
-Containers::Optional<ImageData2D> AnyImageImporter::doImage2D(const UnsignedInt id) { return _in->image2D(id); }
+UnsignedInt AnyImageImporter::doImage2DLevelCount(UnsignedInt id) { return _in->image2DLevelCount(id); }
+
+Containers::Optional<ImageData2D> AnyImageImporter::doImage2D(const UnsignedInt id, const UnsignedInt level) { return _in->image2D(id, level); }
 
 }}
 
 CORRADE_PLUGIN_REGISTER(AnyImageImporter, Magnum::Trade::AnyImageImporter,
-    "cz.mosra.magnum.Trade.AbstractImporter/0.3")
+    "cz.mosra.magnum.Trade.AbstractImporter/0.3.1")

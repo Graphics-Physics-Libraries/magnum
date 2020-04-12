@@ -151,6 +151,8 @@ class MAGNUM_GL_EXPORT CubeMapTextureArray: public AbstractTexture {
          *
          * This function can be safely used for constructing (and later
          * destructing) objects even without any OpenGL context being active.
+         * However note that this is a low-level and a potentially dangerous
+         * API, see the documentation of @ref NoCreate for alternatives.
          * @see @ref CubeMapTextureArray(), @ref wrap()
          */
         explicit CubeMapTextureArray(NoCreateT) noexcept: AbstractTexture{NoCreate, GL_TEXTURE_CUBE_MAP_ARRAY} {}
@@ -388,7 +390,7 @@ class MAGNUM_GL_EXPORT CubeMapTextureArray: public AbstractTexture {
 
         #ifdef MAGNUM_BUILD_DEPRECATED
         /** @brief @copybrief setSrgbDecode()
-         * @deprecated Use @ref setSrgbDecode() instead.
+         * @m_deprecated_since{2018,10} Use @ref setSrgbDecode() instead.
          */
         CORRADE_DEPRECATED("use setSrgbDecode() instead") CubeMapTextureArray& setSRGBDecode(bool decode) {
             return setSrgbDecode(decode);
@@ -487,6 +489,7 @@ class MAGNUM_GL_EXPORT CubeMapTextureArray: public AbstractTexture {
 
         /**
          * @brief Read given texture mip level to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref image(Int, Image3D&) the function reads the pixels
          * into the memory provided by @p image, expecting it's not
@@ -542,6 +545,7 @@ class MAGNUM_GL_EXPORT CubeMapTextureArray: public AbstractTexture {
 
         /**
          * @brief Read given compressed texture mip level to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref compressedImage(Int, CompressedImage3D&) the
          * function reads the pixels into the memory provided by @p image,
@@ -599,6 +603,7 @@ class MAGNUM_GL_EXPORT CubeMapTextureArray: public AbstractTexture {
 
         /**
          * @brief Read a range of given texture mip level to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref subImage(Int, const Range3Di&, Image3D&) the
          * function reads the pixels into the memory provided by @p image,
@@ -661,6 +666,7 @@ class MAGNUM_GL_EXPORT CubeMapTextureArray: public AbstractTexture {
 
         /**
          * @brief Read a range of given compressed texture mip level to an image view
+         * @m_since{2019,10}
          *
          * Compared to @ref compressedSubImage(Int, const Range3Di&, CompressedImage3D&)
          * the function reads the pixels into the memory provided by @p image,

@@ -195,7 +195,7 @@ constexpr struct {
         },
     #ifndef MAGNUM_TARGET_GLES2
     {"integer", RenderbufferFormat::RG32UI, PixelFormat::RGInteger, PixelType::UnsignedInt},
-    {"float", RenderbufferFormat::RGBA16F, PixelFormat::RGBA, PixelType::HalfFloat}
+    {"float", RenderbufferFormat::RGBA16F, PixelFormat::RGBA, PixelType::Half}
     #endif
 };
 
@@ -2255,13 +2255,25 @@ void FramebufferGLTest::implementationColorReadFormat() {
     PixelFormat format = framebuffer.implementationColorReadFormat();
     PixelType type = framebuffer.implementationColorReadType();
 
-    #ifdef CORRADE_TARGET_WINDOWS
-    CORRADE_EXPECT_FAIL_IF((Context::current().detectedDriver() & Context::DetectedDriver::IntelWindows) && data.renderbufferFormat != RenderbufferFormat::RGBA8,
-        "Framebuffer format queries on Intel Windows drivers are broken beyond repair for any non-trivial value.");
-    #endif
-    MAGNUM_VERIFY_NO_GL_ERROR();
-    CORRADE_COMPARE(format, data.expectedFormat);
-    CORRADE_COMPARE(type, data.expectedType);
+    {
+        #ifdef CORRADE_TARGET_WINDOWS
+        CORRADE_EXPECT_FAIL_IF((Context::current().detectedDriver() & Context::DetectedDriver::IntelWindows) && data.renderbufferFormat != RenderbufferFormat::RGBA8,
+            "Framebuffer format queries on Intel Windows drivers are broken beyond repair for any non-trivial value.");
+        #endif
+        MAGNUM_VERIFY_NO_GL_ERROR();
+    } {
+        #ifdef CORRADE_TARGET_WINDOWS
+        CORRADE_EXPECT_FAIL_IF(((Context::current().detectedDriver() & Context::DetectedDriver::IntelWindows) && data.renderbufferFormat != RenderbufferFormat::RGBA8) || ((Context::current().detectedDriver() & Context::DetectedDriver::Amd) && data.renderbufferFormat != RenderbufferFormat::RGBA8 && data.renderbufferFormat != RenderbufferFormat::RGBA16F),
+            "Framebuffer format queries on Intel Windows drivers are broken beyond repair for any non-trivial value; on AMD drivers always report RGBA8.");
+        #endif
+        CORRADE_COMPARE(format, data.expectedFormat);
+    } {
+        #ifdef CORRADE_TARGET_WINDOWS
+        CORRADE_EXPECT_FAIL_IF(((Context::current().detectedDriver() & Context::DetectedDriver::IntelWindows) && data.renderbufferFormat != RenderbufferFormat::RGBA8) || ((Context::current().detectedDriver() & Context::DetectedDriver::Amd) && data.renderbufferFormat != RenderbufferFormat::RGBA8),
+            "Framebuffer format queries on Intel Windows drivers are broken beyond repair for any non-trivial value; on AMD drivers always report RGBA8.");
+        #endif
+        CORRADE_COMPARE(type, data.expectedType);
+    }
 }
 
 }}}}

@@ -37,12 +37,17 @@
 #include <tuple> /** @todo remove when Color[34]::Hsv is removed */
 #endif
 
+#if defined(CORRADE_MSVC2017_COMPATIBILITY) && !defined(CORRADE_MSVC2015_COMPATIBILITY)
+/* Needed by the fullChannel() workaround */
+#include "Magnum/Math/Half.h"
+#endif
+
 namespace Magnum { namespace Math {
 
 namespace Implementation {
 
 /* Convert color from HSV */
-template<class T> typename std::enable_if<std::is_floating_point<T>::value, Color3<T>>::type fromHsv(ColorHsv<T> hsv) {
+template<class T> typename std::enable_if<IsFloatingPoint<T>::value, Color3<T>>::type fromHsv(ColorHsv<T> hsv) {
     /* Remove repeats */
     hsv.hue -= floor(T(hsv.hue)/T(360))*Deg<T>(360);
     if(hsv.hue < Deg<T>(0)) hsv.hue += Deg<T>(360);
@@ -64,7 +69,7 @@ template<class T> typename std::enable_if<std::is_floating_point<T>::value, Colo
         default: CORRADE_ASSERT_UNREACHABLE(); /* LCOV_EXCL_LINE */
     }
 }
-template<class T> inline typename std::enable_if<std::is_integral<T>::value, Color3<T>>::type fromHsv(const ColorHsv<typename TypeTraits<T>::FloatingPointType>& hsv) {
+template<class T> inline typename std::enable_if<IsIntegral<T>::value, Color3<T>>::type fromHsv(const ColorHsv<typename TypeTraits<T>::FloatingPointType>& hsv) {
     return pack<Color3<T>>(fromHsv<typename TypeTraits<T>::FloatingPointType>(hsv));
 }
 
@@ -86,90 +91,90 @@ template<class T> Deg<T> hue(const Color3<T>& color, T max, T delta) {
 }
 
 /* Hue, saturation, value for floating-point types */
-template<class T> inline Deg<T> hue(typename std::enable_if<std::is_floating_point<T>::value, const Color3<T>&>::type color) {
+template<class T> inline Deg<T> hue(typename std::enable_if<IsFloatingPoint<T>::value, const Color3<T>&>::type color) {
     T max = color.max();
     T delta = max - color.min();
     return hue(color, max, delta);
 }
-template<class T> inline T saturation(typename std::enable_if<std::is_floating_point<T>::value, const Color3<T>&>::type color) {
+template<class T> inline T saturation(typename std::enable_if<IsFloatingPoint<T>::value, const Color3<T>&>::type color) {
     T max = color.max();
     T delta = max - color.min();
     return max != T(0) ? delta/max : T(0);
 }
-template<class T> inline T value(typename std::enable_if<std::is_floating_point<T>::value, const Color3<T>&>::type color) {
+template<class T> inline T value(typename std::enable_if<IsFloatingPoint<T>::value, const Color3<T>&>::type color) {
     return color.max();
 }
 
 /* Hue, saturation, value for integral types */
-template<class T> inline Deg<typename Color3<T>::FloatingPointType> hue(typename std::enable_if<std::is_integral<T>::value, const Color3<T>&>::type color) {
+template<class T> inline Deg<typename Color3<T>::FloatingPointType> hue(typename std::enable_if<IsIntegral<T>::value, const Color3<T>&>::type color) {
     return hue<typename Color3<T>::FloatingPointType>(unpack<Color3<typename Color3<T>::FloatingPointType>>(color));
 }
-template<class T> inline typename Color3<T>::FloatingPointType saturation(typename std::enable_if<std::is_integral<T>::value, const Color3<T>&>::type& color) {
+template<class T> inline typename Color3<T>::FloatingPointType saturation(typename std::enable_if<IsIntegral<T>::value, const Color3<T>&>::type& color) {
     return saturation<typename Color3<T>::FloatingPointType>(unpack<Color3<typename Color3<T>::FloatingPointType>>(color));
 }
-template<class T> inline typename Color3<T>::FloatingPointType value(typename std::enable_if<std::is_integral<T>::value, const Color3<T>&>::type color) {
+template<class T> inline typename Color3<T>::FloatingPointType value(typename std::enable_if<IsIntegral<T>::value, const Color3<T>&>::type color) {
     return unpack<typename Color3<T>::FloatingPointType>(color.max());
 }
 
 /* Convert color to HSV */
-template<class T> inline ColorHsv<T> toHsv(typename std::enable_if<std::is_floating_point<T>::value, const Color3<T>&>::type color) {
+template<class T> inline ColorHsv<T> toHsv(typename std::enable_if<IsFloatingPoint<T>::value, const Color3<T>&>::type color) {
     T max = color.max();
     T delta = max - color.min();
 
     return ColorHsv<T>{hue<typename Color3<T>::FloatingPointType>(color, max, delta), max != T(0) ? delta/max : T(0), max};
 }
-template<class T> inline ColorHsv<typename TypeTraits<T>::FloatingPointType> toHsv(typename std::enable_if<std::is_integral<T>::value, const Color3<T>&>::type color) {
+template<class T> inline ColorHsv<typename TypeTraits<T>::FloatingPointType> toHsv(typename std::enable_if<IsIntegral<T>::value, const Color3<T>&>::type color) {
     return toHsv<typename TypeTraits<T>::FloatingPointType>(unpack<Color3<typename TypeTraits<T>::FloatingPointType>>(color));
 }
 
 /* sRGB -> RGB conversion */
-template<class T> typename std::enable_if<std::is_floating_point<T>::value, Color3<T>>::type fromSrgb(const Vector3<T>& srgb) {
+template<class T> typename std::enable_if<IsFloatingPoint<T>::value, Color3<T>>::type fromSrgb(const Vector3<T>& srgb) {
     constexpr const T a(T(0.055));
     return lerp(srgb/T(12.92), pow((srgb + Vector3<T>{a})/(T(1.0) + a), T(2.4)), srgb > Vector3<T>(T(0.04045)));
 }
-template<class T> typename std::enable_if<std::is_floating_point<T>::value, Color4<T>>::type fromSrgbAlpha(const Vector4<T>& srgbAlpha) {
+template<class T> typename std::enable_if<IsFloatingPoint<T>::value, Color4<T>>::type fromSrgbAlpha(const Vector4<T>& srgbAlpha) {
     return {fromSrgb<T>(srgbAlpha.rgb()), srgbAlpha.a()};
 }
-template<class T> inline typename std::enable_if<std::is_integral<T>::value, Color3<T>>::type fromSrgb(const Vector3<typename Color3<T>::FloatingPointType>& srgb) {
+template<class T> inline typename std::enable_if<IsIntegral<T>::value, Color3<T>>::type fromSrgb(const Vector3<typename Color3<T>::FloatingPointType>& srgb) {
     return pack<Color3<T>>(fromSrgb<typename Color3<T>::FloatingPointType>(srgb));
 }
-template<class T> inline typename std::enable_if<std::is_integral<T>::value, Color4<T>>::type fromSrgbAlpha(const Vector4<typename Color4<T>::FloatingPointType>& srgbAlpha) {
+template<class T> inline typename std::enable_if<IsIntegral<T>::value, Color4<T>>::type fromSrgbAlpha(const Vector4<typename Color4<T>::FloatingPointType>& srgbAlpha) {
     return {fromSrgb<T>(srgbAlpha.rgb()), pack<T>(srgbAlpha.a())};
 }
 template<class T, class Integral> inline Color3<T> fromSrgbIntegral(const Vector3<Integral>& srgb) {
-    static_assert(std::is_integral<Integral>::value, "only conversion from different integral type is supported");
+    static_assert(IsIntegral<Integral>::value, "only conversion from different integral type is supported");
     return fromSrgb<T>(unpack<Vector3<typename Color3<T>::FloatingPointType>>(srgb));
 }
 template<class T, class Integral> inline Color4<T> fromSrgbAlphaIntegral(const Vector4<Integral>& srgbAlpha) {
-    static_assert(std::is_integral<Integral>::value, "only conversion from different integral type is supported");
+    static_assert(IsIntegral<Integral>::value, "only conversion from different integral type is supported");
     return fromSrgbAlpha<T>(unpack<Vector4<typename Color4<T>::FloatingPointType>>(srgbAlpha));
 }
 
 /* RGB -> sRGB conversion */
-template<class T> Vector3<typename Color3<T>::FloatingPointType> toSrgb(typename std::enable_if<std::is_floating_point<T>::value, const Color3<T>&>::type rgb) {
+template<class T> Vector3<typename Color3<T>::FloatingPointType> toSrgb(typename std::enable_if<IsFloatingPoint<T>::value, const Color3<T>&>::type rgb) {
     constexpr const T a = T(0.055);
     return lerp(rgb*T(12.92), (T(1.0) + a)*pow(rgb, T(1.0)/T(2.4)) - Vector3<T>{a}, rgb > Vector3<T>(T(0.0031308)));
 }
-template<class T> Vector4<typename Color4<T>::FloatingPointType> toSrgbAlpha(typename std::enable_if<std::is_floating_point<T>::value, const Color4<T>&>::type rgba) {
+template<class T> Vector4<typename Color4<T>::FloatingPointType> toSrgbAlpha(typename std::enable_if<IsFloatingPoint<T>::value, const Color4<T>&>::type rgba) {
     return {toSrgb<T>(rgba.rgb()), rgba.a()};
 }
-template<class T> inline Vector3<typename Color3<T>::FloatingPointType> toSrgb(typename std::enable_if<std::is_integral<T>::value, const Color3<T>&>::type rgb) {
+template<class T> inline Vector3<typename Color3<T>::FloatingPointType> toSrgb(typename std::enable_if<IsIntegral<T>::value, const Color3<T>&>::type rgb) {
     return toSrgb<typename Color3<T>::FloatingPointType>(unpack<Color3<typename Color3<T>::FloatingPointType>>(rgb));
 }
-template<class T> inline Vector4<typename Color4<T>::FloatingPointType> toSrgbAlpha(typename std::enable_if<std::is_integral<T>::value, const Color4<T>&>::type rgba) {
+template<class T> inline Vector4<typename Color4<T>::FloatingPointType> toSrgbAlpha(typename std::enable_if<IsIntegral<T>::value, const Color4<T>&>::type rgba) {
     return {toSrgb<T>(rgba.rgb()), unpack<typename Color3<T>::FloatingPointType>(rgba.a())};
 }
 template<class T, class Integral> inline Vector3<Integral> toSrgbIntegral(const Color3<T>& rgb) {
-    static_assert(std::is_integral<Integral>::value, "only conversion from different integral type is supported");
+    static_assert(IsIntegral<Integral>::value, "only conversion from different integral type is supported");
     return pack<Vector3<Integral>>(toSrgb<T>(rgb));
 }
 template<class T, class Integral> inline Vector4<Integral> toSrgbAlphaIntegral(const Color4<T>& rgba) {
-    static_assert(std::is_integral<Integral>::value, "only conversion from different integral type is supported");
+    static_assert(IsIntegral<Integral>::value, "only conversion from different integral type is supported");
     return pack<Vector4<Integral>>(toSrgbAlpha<T>(rgba));
 }
 
 /* CIE XYZ -> RGB conversion */
-template<class T> typename std::enable_if<std::is_floating_point<T>::value, Color3<T>>::type fromXyz(const Vector3<T>& xyz) {
+template<class T> typename std::enable_if<IsFloatingPoint<T>::value, Color3<T>>::type fromXyz(const Vector3<T>& xyz) {
     /* Taken from https://en.wikipedia.org/wiki/Talk:SRGB#Rounded_vs._Exact,
        the rounded matrices from the main article don't round-trip perfectly */
     return Matrix3x3<T>{
@@ -177,12 +182,12 @@ template<class T> typename std::enable_if<std::is_floating_point<T>::value, Colo
         Vector3<T>{T(-329)/T(214), T(1648619)/T(878810), T(-2585)/T(12673)},
         Vector3<T>{T(-1974)/T(3959), T(36519)/T(878810), T(705)/T(667)}}*xyz;
 }
-template<class T> inline typename std::enable_if<std::is_integral<T>::value, Color3<T>>::type fromXyz(const Vector3<typename Color3<T>::FloatingPointType>& xyz) {
+template<class T> inline typename std::enable_if<IsIntegral<T>::value, Color3<T>>::type fromXyz(const Vector3<typename Color3<T>::FloatingPointType>& xyz) {
     return pack<Color3<T>>(fromXyz<typename Color3<T>::FloatingPointType>(xyz));
 }
 
 /* RGB -> CIE XYZ conversion */
-template<class T> Vector3<typename Color3<T>::FloatingPointType> toXyz(typename std::enable_if<std::is_floating_point<T>::value, const Color3<T>&>::type rgb) {
+template<class T> Vector3<typename Color3<T>::FloatingPointType> toXyz(typename std::enable_if<IsFloatingPoint<T>::value, const Color3<T>&>::type rgb) {
     /* Taken from https://en.wikipedia.org/wiki/Talk:SRGB#Rounded_vs._Exact,
        the rounded matrices from the main article don't round-trip perfectly */
     return (Matrix3x3<T>{
@@ -190,7 +195,7 @@ template<class T> Vector3<typename Color3<T>::FloatingPointType> toXyz(typename 
         Vector3<T>{T(87881)/T(245763), T(175762)/T(245763), T(87881)/T(737289)},
         Vector3<T>{T(12673)/T(70218), T(12673)/T(175545), T(1001167)/T(1053270)}})*rgb;
 }
-template<class T> inline Vector3<typename Color3<T>::FloatingPointType> toXyz(typename std::enable_if<std::is_integral<T>::value, const Color3<T>&>::type rgb) {
+template<class T> inline Vector3<typename Color3<T>::FloatingPointType> toXyz(typename std::enable_if<IsIntegral<T>::value, const Color3<T>&>::type rgb) {
     return toXyz<typename Color3<T>::FloatingPointType>(unpack<Color3<typename Color3<T>::FloatingPointType>>(rgb));
 }
 
@@ -202,16 +207,19 @@ template<class T> inline Vector3<typename Color3<T>::FloatingPointType> toXyz(ty
    projects created directly using VS (enabled by default since 15.5) but not
    projects using CMake. Not using SFINAE in this case makes it work. Minimal
    repro case here: https://twitter.com/czmosra/status/1039446378248896513 */
-template<class T> constexpr typename std::enable_if<std::is_floating_point<T>::value, T>::type fullChannel() {
-    return T(1);
+template<class T> constexpr typename std::enable_if<IsFloatingPoint<T>::value, T>::type fullChannel() {
+    return T(1.0);
 }
-template<class T> constexpr typename std::enable_if<std::is_integral<T>::value, T>::type fullChannel() {
+template<class T> constexpr typename std::enable_if<IsIntegral<T>::value, T>::type fullChannel() {
     return Implementation::bitMax<T>();
 }
 #else
 template<class T> constexpr T fullChannel() { return bitMax<T>(); }
-/** @todo half */
 template<> constexpr float fullChannel<float>() { return 1.0f; }
+template<> constexpr Half fullChannel<Half>() {
+    /* This is 1.0_h, but expressible in a constexpr context */
+    return Half{UnsignedShort{0x3c00}};
+}
 template<> constexpr double fullChannel<double>() { return 1.0; }
 template<> constexpr long double fullChannel<long double>() { return 1.0l; }
 #endif
@@ -221,25 +229,29 @@ template<> constexpr long double fullChannel<long double>() { return 1.0l; }
 /**
 @brief Color in linear RGB color space
 
-The class can store either floating-point (normalized) or integral
-(denormalized) representation of linear RGB color. Colors in sRGB color space
-should not be used directly in calculations --- they should be converted to
-linear RGB using @ref fromSrgb(), calculation done on the linear representation
-and then converted back to sRGB using @ref toSrgb().
+The class can store either a floating-point or an integral representation of a
+linear RGB color. Colors in sRGB color space should not beused directly in
+calculations --- they should be converted to linear RGB using @ref fromSrgb(),
+calculation done on the linear representation and then converted back to sRGB
+using @ref toSrgb().
 
-Note that constructor conversion between different types (like in @ref Vector
-classes) doesn't do any (de)normalization, you should use @ref pack() and
-@ref unpack() instead, for example:
+Integral colors are assumed to be in a packed representation where the
+@f$ [0.0, 1.0] @f$ range is mapped to @f$ [0, 2^b - 1] @f$ with @f$ b @f$ being
+bit count of given integer type. Note that constructor conversion between
+different types (like in @ref Vector classes) doesn't do any (un)packing, you
+need to use either @ref pack() / @ref unpack() or the integer variants of
+@ref toSrgb() / @ref fromSrgb() instead:
 
 @snippet MagnumMath.cpp Color3-pack
 
 Conversion from and to HSV is done always using floating-point types, so hue
-is always in range in range @f$ [0.0, 360.0] @f$, saturation and value in
-range @f$ [0.0, 1.0] @f$.
+is always in range in range @f$ [0.0\degree, 360.0\degree] @f$, saturation and
+value in range @f$ [0.0, 1.0] @f$.
 
 @see @link operator""_rgb() @endlink, @link operator""_rgbf() @endlink,
     @link operator""_srgb() @endlink, @link operator""_srgbf() @endlink,
-    @ref Color4, @ref Magnum::Color3, @ref Magnum::Color3ub
+    @ref Color4, @ref Magnum::Color3, @ref Magnum::Color3h,
+    @ref Magnum::Color3ub, @ref Magnum::Color3us
 */
 /* Not using template specialization because some internal functions are
    impossible to explicitly instantiate */
@@ -254,7 +266,7 @@ template<class T> class Color3: public Vector3<T> {
 
         #ifdef MAGNUM_BUILD_DEPRECATED
         /** @brief @copybrief ColorHsv
-         * @deprecated Use @ref ColorHsv instead.
+         * @m_deprecated_since{2019,10} Use @ref ColorHsv instead.
          */
         typedef CORRADE_DEPRECATED("use ColorHsv instead") std::tuple<Deg<FloatingPointType>, FloatingPointType, FloatingPointType> Hsv;
         #endif
@@ -329,7 +341,8 @@ template<class T> class Color3: public Vector3<T> {
          * @brief Create RGB color from HSV representation
          * @param hsv   Color in HSV color space
          *
-         * Hue can overflow the range @f$ [0.0, 360.0] @f$.
+         * Hue is allowed to overflow the range @f$ [0.0\degree, 360.0\degree] @f$,
+         * in which case it will be wrapped back to this range.
          * @see @ref toHsv()
          */
         static Color3<T> fromHsv(const ColorHsv<FloatingPointType>& hsv) {
@@ -338,7 +351,8 @@ template<class T> class Color3: public Vector3<T> {
 
         #ifdef MAGNUM_BUILD_DEPRECATED
         /** @brief @copybrief fromHsv(const ColorHsv<FloatingPointType>&)
-         * @deprecated Use @ref fromHsv(const ColorHsv<FloatingPointType>&) instead.
+         * @m_deprecated_since{2019,10} Use @ref fromHsv(const ColorHsv<FloatingPointType>&)
+         *      instead.
          */
         static CORRADE_DEPRECATED("use fromHsv(const ColorHsv<FloatingPointType>&) instead") Color3<T> fromHsv(Deg<FloatingPointType> hue, FloatingPointType saturation, FloatingPointType value) {
             return fromHsv({hue, saturation, value});
@@ -377,6 +391,11 @@ template<class T> class Color3: public Vector3<T> {
          *
          * @snippet MagnumMath.cpp Color3-fromSrgb
          *
+         * For conversion from a *linear* 24-bit representation (i.e, without
+         * applying the sRGB curve), use @ref unpack():
+         *
+         * @snippet MagnumMath.cpp Color3-unpack
+         *
          * @see @ref fromSrgb(UnsignedInt), @link operator""_srgbf() @endlink,
          *      @ref Color4::fromSrgbAlpha(const Vector4<Integral>&)
          */
@@ -397,6 +416,10 @@ template<class T> class Color3: public Vector3<T> {
          *
          * @snippet MagnumMath.cpp Color3-fromSrgb-int
          *
+         * Note that the integral value is endian-dependent (the red channel
+         * being in the *last* byte on little-endian platforms), for conversion
+         * from endian-independent sRGB / linear representation use
+         * @ref fromSrgb(const Vector3<Integral>&) / @ref unpack().
          * @see @ref Color4::fromSrgbAlpha(UnsignedInt)
          */
         static Color3<T> fromSrgb(UnsignedInt srgb) {
@@ -459,9 +482,10 @@ template<class T> class Color3: public Vector3<T> {
         /**
          * @copydoc Vector::Vector(const Vector<size, U>&)
          *
-         * @attention This function doesn't do any (un)packing, use @ref pack()
-         *      and @ref unpack() instead. See class documentation for more
-         *      information.
+         * @attention This function doesn't do any (un)packing, use either
+         *      @ref pack() / @ref unpack() or the integer variants of
+         *      @ref toSrgb() / @ref fromSrgb() instead. See class
+         *      documentation for more information.
          */
         template<class U> constexpr explicit Color3(const Vector<3, U>& other) noexcept: Vector3<T>(other) {}
 
@@ -489,7 +513,7 @@ template<class T> class Color3: public Vector3<T> {
 
         /**
          * @brief Hue
-         * @return Hue in range @f$ [0.0, 360.0] @f$.
+         * @return Hue in range @f$ [0.0\degree, 360.0\degree] @f$.
          *
          * @see @ref saturation(), @ref value(), @ref toHsv(), @ref fromHsv()
          */
@@ -542,6 +566,11 @@ template<class T> class Color3: public Vector3<T> {
          *
          * @snippet MagnumMath.cpp Color3-toSrgb
          *
+         * For conversion to a *linear* 24-bit representation (i.e, without
+         * applying the sRGB curve), use @ref pack():
+         *
+         * @snippet MagnumMath.cpp Color3-pack
+         *
          * @see @ref toSrgbInt(), @ref Color4::toSrgbAlpha()
          */
         template<class Integral> Vector3<Integral> toSrgb() const {
@@ -551,8 +580,10 @@ template<class T> class Color3: public Vector3<T> {
         /**
          * @brief Convert to 24-bit integral sRGB representation
          *
-         * See @ref toSrgb() const for more information and
-         * @ref fromSrgb(UnsignedInt) for an inverse operation.
+         * See @ref toSrgb() const for more information. Note that the integral
+         * value is endian-dependent (the red channel being in the *last* byte
+         * on little-endian platforms), for conversion to an endian-independent
+         * sRGB / linear representation use @ref toSrgb() const / @ref pack().
          * @see @ref Color4::toSrgbAlphaInt()
          */
         UnsignedInt toSrgbInt() const {
@@ -597,7 +628,8 @@ MAGNUM_VECTORn_OPERATOR_IMPLEMENTATION(3, Color3)
 See @ref Color3 for more information.
 @see @link operator""_rgba() @endlink, @link operator""_rgbaf() @endlink,
     @link operator""_srgba() @endlink, @link operator""_srgbaf() @endlink,
-    @ref Magnum::Color4, @ref Magnum::Color4ub
+    @ref Magnum::Color4, @ref Magnum::Color4h, @ref Magnum::Color4ub,
+    @ref Magnum::Color4us
 */
 /* Not using template specialization because some internal functions are
    impossible to explicitly instantiate */
@@ -613,7 +645,7 @@ class Color4: public Vector4<T> {
 
         #ifdef MAGNUM_BUILD_DEPRECATED
         /** @brief @copybrief ColorHsv
-         * @deprecated Use @ref ColorHsv instead.
+         * @m_deprecated_since{2019,10} Use @ref ColorHsv instead.
          */
         typedef CORRADE_DEPRECATED("use ColorHsv instead") std::tuple<Deg<FloatingPointType>, FloatingPointType, FloatingPointType> Hsv;
         #endif
@@ -694,7 +726,8 @@ class Color4: public Vector4<T> {
 
         #ifdef MAGNUM_BUILD_DEPRECATED
         /** @brief @copybrief fromHsv(const ColorHsv<FloatingPointType>&, T)
-         * @deprecated Use @ref fromHsv(const ColorHsv<FloatingPointType>&, T) instead.
+         * @m_deprecated_since{2019,10} Use @ref fromHsv(const ColorHsv<FloatingPointType>&, T)
+         *      instead.
          */
         static CORRADE_DEPRECATED("use fromHsv(const ColorHsv<FloatingPointType>&, T) instead") Color4<T> fromHsv(Deg<FloatingPointType> hue, FloatingPointType saturation, FloatingPointType value, T alpha = Implementation::fullChannel<T>()) {
             return fromHsv({hue, saturation, value}, alpha);
@@ -740,9 +773,14 @@ class Color4: public Vector4<T> {
          *
          * Useful in cases where you have for example an 8-bit sRGB + alpha
          * representation and want to create a floating-point linear RGBA color
-         * out of it. See @ref Color3::fromSrgb() for more information.
+         * out of it:
          *
          * @snippet MagnumMath.cpp Color4-fromSrgbAlpha
+         *
+         * For conversion from a *linear* 32-bit representation (i.e, without
+         * applying the sRGB curve), use @ref unpack():
+         *
+         * @snippet MagnumMath.cpp Color4-unpack
          *
          * @see @ref fromSrgbAlpha(UnsignedInt)
          */
@@ -755,16 +793,11 @@ class Color4: public Vector4<T> {
         /** @overload
          * @brief Create linear RGB color from integral sRGB representation
          * @param srgb      Color in sRGB color space
-         * @param a         Alpha value, defaults to @cpp 1.0 @ce for
+         * @param a         Linear alpha value, defaults to @cpp 1.0 @ce for
          *      floating-point types and maximum positive value for integral
          *      types
          *
-         * Useful in cases where you have for example an 8-bit sRGB
-         * representation and want to create a floating-point linear RGBA color
-         * out of it. See @ref Color3::fromSrgb() for more information.
-         *
-         * @snippet MagnumMath.cpp Color4-fromSrgb
-         *
+         * Same as above, but with alpha as a separate parameter.
          * @see @ref fromSrgb(UnsignedInt, T)
          */
         /* Input is a Vector3 to hint that it doesn't have any (additive,
@@ -780,9 +813,15 @@ class Color4: public Vector4<T> {
          * See @ref Color3::fromSrgb() for more information and
          * @ref toSrgbAlphaInt() for an inverse operation. There's also a
          * @link operator""_srgbaf() @endlink that does this conversion
-         * directly from hexadecimal literals.
+         * directly from hexadecimal literals. The following two statements are
+         * equivalent:
          *
          * @snippet MagnumMath.cpp Color4-fromSrgbAlpha-int
+         *
+         * Note that the integral value is endian-dependent (the red channel
+         * being in the *last* byte on little-endian platforms), for conversion
+         * from an endian-independent sRGB / linear representation use
+         * @ref fromSrgbAlpha(const Vector4<Integral>&) / @ref unpack().
          */
         static Color4<T> fromSrgbAlpha(UnsignedInt srgbAlpha) {
             return fromSrgbAlpha<UnsignedByte>({UnsignedByte(srgbAlpha >> 24),
@@ -794,17 +833,11 @@ class Color4: public Vector4<T> {
         /** @overload
          * @brief Create linear RGBA color from 32-bit sRGB + alpha representation
          * @param srgb      24-bit sRGB color
-         * @param a         Alpha value, defaults to @cpp 1.0 @ce for
+         * @param a         Linear alpha value, defaults to @cpp 1.0 @ce for
          *      floating-point types and maximum positive value for integral
          *      types
          *
-         * See @ref Color3::fromSrgb() for more information and
-         * @ref toSrgbAlphaInt() for an inverse operation. There's also a
-         * @link operator""_srgbaf() @endlink that does this conversion
-         * directly from hexadecimal literals. The following two statements are
-         * equivalent:
-         *
-         * @snippet MagnumMath.cpp Color4-fromSrgb-int
+         * Same as above, but with alpha as a separate parameter.
          */
         static Color4<T> fromSrgb(UnsignedInt srgb, T a = Implementation::fullChannel<T>()) {
             return fromSrgb<UnsignedByte>({UnsignedByte(srgb >> 16),
@@ -874,9 +907,10 @@ class Color4: public Vector4<T> {
         /**
          * @copydoc Vector::Vector(const Vector<size, U>&)
          *
-         * @attention This function doesn't do any (un)packing, use @ref pack)
-         *      and @ref unpack() instead. See @ref Color3 class documentation
-         *      for more information.
+         * @attention This function doesn't do any (un)packing, use either
+         *      @ref pack() / @ref unpack() or the integer variants of
+         *      @ref toSrgbAlpha() / @ref fromSrgbAlpha() instead. See
+         *      @ref Color3 class documentation for more information.
          */
         template<class U> constexpr explicit Color4(const Vector<4, U>& other) noexcept: Vector4<T>(other) {}
 
@@ -943,6 +977,11 @@ class Color4: public Vector4<T> {
          *
          * @snippet MagnumMath.cpp Color4-toSrgbAlpha
          *
+         * For conversion to a *linear* 32-bit representation (i.e, without
+         * applying the sRGB curve), use @ref pack():
+         *
+         * @snippet MagnumMath.cpp Color4-pack
+         *
          * @see @ref toSrgbAlphaInt()
          */
         template<class Integral> Vector4<Integral> toSrgbAlpha() const {
@@ -952,10 +991,12 @@ class Color4: public Vector4<T> {
         /**
          * @brief Convert to 32-bit integral sRGB + linear alpha representation
          *
-         * See @ref Color3::toSrgb() const for more information and
-         * @ref fromSrgbAlpha(UnsignedInt) for an inverse operation. Use
-         * @ref rgb() together with @ref Color3::toSrgbInt() to output a 24-bit
-         * sRGB color.
+         * See @ref Color3::toSrgb() const for more information. Use @ref rgb()
+         * together with @ref Color3::toSrgbInt() to output a 24-bit sRGB
+         * color. Note that the integral value is endian-dependent (the red
+         * channel being in the *last* byte on little-endian platforms), for
+         * conversion to an endian-independent sRGB / linear representation use
+         * @ref toSrgbAlpha() const / @ref pack().
          */
         UnsignedInt toSrgbAlphaInt() const {
             const auto srgbAlpha = toSrgbAlpha<UnsignedByte>();
@@ -1023,6 +1064,7 @@ template<class T> inline Vector3<T> xyzToXyY(const Vector3<T>& xyz) {
 
 /**
 @brief HSV color
+@m_since{2019,10}
 
 Storage-only type with just the usual constructors and (non-)equality
 comparison.
@@ -1061,14 +1103,16 @@ template<class T> struct ColorHsv {
     #ifdef MAGNUM_BUILD_DEPRECATED
     /**
      * @brief Construct from @ref Color3::Hsv
-     * @deprecated Use @ref ColorHsv instead of @ref Color3::Hsv
+     * @m_deprecated_since{2019,10} Use @ref ColorHsv instead of
+     *      @ref Color3::Hsv
      */
     constexpr CORRADE_DEPRECATED("use ColorHsv instead of Color3::Hsv") /*implicit*/ ColorHsv(std::tuple<Deg<T>, T, T> hsv) noexcept:
         hue{std::get<0>(hsv)}, saturation{std::get<1>(hsv)}, value{std::get<2>(hsv)} {}
 
     /**
      * @brief Convert to @ref Color3::Hsv
-     * @deprecated Use @ref ColorHsv instead of @ref Color3::Hsv
+     * @m_deprecated_since{2019,10} Use @ref ColorHsv instead of
+     *      @ref Color3::Hsv
      */
     constexpr CORRADE_DEPRECATED("use ColorHsv instead of Color3::Hsv") /*implicit*/ operator std::tuple<Deg<T>, T, T>() const {
         return std::make_tuple(hue, saturation, value);
@@ -1248,7 +1292,7 @@ Calls @ref Color3::fromSrgb(UnsignedInt) on the literal value. Example usage:
 @m_keywords{_srgbf srgbf}
 */
 inline Color3<Float> operator "" _srgbf(unsigned long long value) {
-    return Color3<Float>::fromSrgb(value);
+    return Color3<Float>::fromSrgb(UnsignedInt(value));
 }
 
 /** @relatesalso Magnum::Math::Color4
@@ -1283,7 +1327,7 @@ usage:
 @m_keywords{_srgbaf srgbaf}
 */
 inline Color4<Float> operator "" _srgbaf(unsigned long long value) {
-    return Color4<Float>::fromSrgbAlpha(value);
+    return Color4<Float>::fromSrgbAlpha(UnsignedInt(value));
 }
 
 }

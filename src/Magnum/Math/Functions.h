@@ -173,7 +173,11 @@ template<class T> inline Rad<T> acos(T value) { return Rad<T>(std::acos(value));
 /** @brief Arc tangent */
 template<class T> inline Rad<T> atan(T value) { return Rad<T>(std::atan(value)); }
 
-/*@}*/
+/* Since 1.8.17, the original short-hand group closing doesn't work anymore.
+   FFS. */
+/**
+ * @}
+ */
 
 /**
 @{ @name Scalar/vector functions
@@ -186,15 +190,19 @@ the operations component-wise.
 
 /**
 @brief If given number is a positive or negative infinity
+@m_since{2019,10}
 
 @see @ref isNan(), @ref Constants::inf(),
-    @ref isInf(Corrade::Containers::StridedArrayView1D<const T>)
+    @ref isInf(const Corrade::Containers::StridedArrayView1D<const T>&)
 */
 template<class T> inline typename std::enable_if<IsScalar<T>::value, bool>::type isInf(T value) {
     return std::isinf(UnderlyingTypeOf<T>(value));
 }
 
-/** @overload */
+/**
+@overload
+@m_since{2019,10}
+*/
 template<std::size_t size, class T> inline BoolVector<size> isInf(const Vector<size, T>& value) {
     BoolVector<size> out;
     for(std::size_t i = 0; i != size; ++i)
@@ -204,15 +212,19 @@ template<std::size_t size, class T> inline BoolVector<size> isInf(const Vector<s
 
 /**
 @brief If given number is a NaN
+@m_since{2019,10}
 
 Equivalent to @cpp value != value @ce.
 @see @ref isInf(), @ref Constants::nan(),
-    @ref isNan(Corrade::Containers::StridedArrayView1D<const T>)
+    @ref isNan(const Corrade::Containers::StridedArrayView1D<const T>&)
 */
 /* defined in Vector.h */
 template<class T> typename std::enable_if<IsScalar<T>::value, bool>::type isNan(T value);
 
-/** @overload */
+/**
+@overload
+@m_since{2019,10}
+*/
 template<std::size_t size, class T> inline BoolVector<size> isNan(const Vector<size, T>& value) {
     BoolVector<size> out;
     for(std::size_t i = 0; i != size; ++i)
@@ -225,7 +237,7 @@ template<std::size_t size, class T> inline BoolVector<size> isNan(const Vector<s
 
 <em>NaN</em>s passed in the @p value parameter are propagated.
 @see @ref max(), @ref minmax(), @ref clamp(),
-    @ref min(Corrade::Containers::StridedArrayView1D<const T>),
+    @ref min(const Corrade::Containers::StridedArrayView1D<const T>&),
     @ref Vector::min()
 */
 /* defined in Vector.h */
@@ -252,7 +264,7 @@ template<std::size_t size, class T> inline Vector<size, T> min(const Vector<size
 
 <em>NaN</em>s passed in the @p value parameter are propagated.
 @see @ref min(), @ref minmax(), @ref clamp(),
-    @ref max(Corrade::Containers::StridedArrayView1D<const T>),
+    @ref max(const Corrade::Containers::StridedArrayView1D<const T>&),
     @ref Vector::max()
 */
 /* defined in Vector.h */
@@ -278,7 +290,7 @@ template<std::size_t size, class T> inline Vector<size, T> max(const Vector<size
 @brief Minimum and maximum of two values
 
 @see @ref min(), @ref max(), @ref clamp(),
-    @ref minmax(Corrade::Containers::StridedArrayView1D<const T>),
+    @ref minmax(const Corrade::Containers::StridedArrayView1D<const T>&),
     @ref Vector::minmax(),
     @ref Range::Range(const std::pair<VectorType, VectorType>&)
 */
@@ -306,9 +318,8 @@ set to @p max. Equivalent to:
 <em>NaN</em>s passed in @p value parameter are propagated.
 @see @ref min(), @ref max()
 */
-template<class T> inline typename std::enable_if<IsScalar<T>::value, T>::type clamp(T value, T min, T max) {
-    return Math::min(Math::max(value, min), max);
-}
+/* defined in Vector.h */
+template<class T> constexpr typename std::enable_if<IsScalar<T>::value, T>::type clamp(T value, T min, T max);
 
 /** @overload */
 template<std::size_t size, class T> inline Vector<size, T> clamp(const Vector<size, T>& value, const Vector<size, T>& min, const Vector<size, T>& max) {
@@ -528,7 +539,11 @@ template<std::size_t size, class T> inline Vector<size, T> fma(const Vector<size
     return a*b + c;
 }
 
-/*@}*/
+/* Since 1.8.17, the original short-hand group closing doesn't work anymore.
+   FFS. */
+/**
+ * @}
+ */
 
 /**
 @{ @name Exponential and power functions
@@ -646,12 +661,64 @@ template<std::size_t size, class T> inline Vector<size, T> sqrtInverted(const Ve
     return Vector<size, T>(T(1))/Math::sqrt(a);
 }
 
-/*@}*/
+/**
+@brief Reflect a vector
+@m_since_latest
+
+Reflects the vector off a surface given the surface outward normal. Expects
+that the normal vector is normalized. For a vector @f$ \boldsymbol{v} @f$ and a
+normal @f$ \boldsymbol{n} @f$, the reflection vector @f$ \boldsymbol{r} @f$ is
+calculated as: @f[
+    \boldsymbol{r} = \boldsymbol{v} - 2 (\boldsymbol{n} \cdot \boldsymbol{v}) \boldsymbol{n}
+@f]
+@see @ref dot(const Vector<size, T>&, const Vector<size, T>&), @ref refract(),
+    @ref Vector::isNormalized(), @ref Matrix3::reflection(),
+    @ref Matrix4::reflection()
+*/
+template<std::size_t size, class T> inline Vector<size, T> reflect(const Vector<size, T>& vector, const Vector<size, T>& normal) {
+    CORRADE_ASSERT(normal.isNormalized(),
+        "Math::reflect(): normal" << normal << "is not normalized", {});
+    return vector - T(2.0)*dot(vector, normal)*normal;
+}
+
+/**
+@brief Refract a vector
+@m_since_latest
+
+Refracts a vector through a medium given the surface outward normal and ratio
+of indices of refraction eta. Expects that both @p vector and @p normal is
+normalized. For a vector @f$ \boldsymbol{v} @f$, normal @f$ \boldsymbol{n} @f$
+and a ratio of indices of refraction @f$ \eta @f$, the refraction vector
+@f$ \boldsymbol{r} @f$ is calculated as: @f[
+    \begin{array}{rcl}
+        \eta & = & \cfrac{\text{IOR}_\text{source}}{\text{IOR}_\text{destination}} \\[10pt]
+        k & = & 1 - \eta^2 (1 - (\boldsymbol{n} \cdot \boldsymbol{v})^2) \\
+        \boldsymbol{r} & = & \begin{cases}
+            \boldsymbol{0}, & \text{if} ~ k < 0 \\
+            \eta \boldsymbol{v} - (\eta (\boldsymbol{n} \cdot \boldsymbol{v}) + \sqrt{k}) \boldsymbol{n}, & \text{if} ~ k \ge 0
+        \end{cases}
+    \end{array}
+@f]
+
+Wikipedia has a [List of refractive indices](https://en.wikipedia.org/wiki/List_of_refractive_indices).
+@see @ref dot(const Vector<size, T>&, const Vector<size, T>&), @ref reflect(),
+    @ref Vector::isNormalized()
+*/
+template<std::size_t size, class T> inline Vector<size, T> refract(const Vector<size, T>& vector, const Vector<size, T>& normal, T eta) {
+    CORRADE_ASSERT(vector.isNormalized() && normal.isNormalized(),
+        "Math::refract(): vectors" << vector << "and" << normal << "are not normalized", {});
+    const T dot = Math::dot(vector, normal);
+    const T k  = T(1.0) - eta*eta*(T(1.0) - dot*dot);
+    if(k < T(0.0)) return {};
+    return eta*vector - (eta*dot + std::sqrt(k))*normal;
+}
+
+/* Since 1.8.17, the original short-hand group closing doesn't work anymore.
+   FFS. */
+/**
+ * @}
+ */
 
 }}
-
-#ifdef MAGNUM_BUILD_DEPRECATED
-#include "Magnum/Math/FunctionsBatch.h" /** @todo remove once compat is dropped */
-#endif
 
 #endif

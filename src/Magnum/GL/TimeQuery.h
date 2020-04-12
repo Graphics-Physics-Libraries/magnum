@@ -25,15 +25,12 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-#ifndef MAGNUM_TARGET_WEBGL
 /** @file
  * @brief Class @ref Magnum::GL::TimeQuery
  */
-#endif
 
 #include "Magnum/GL/AbstractQuery.h"
 
-#ifndef MAGNUM_TARGET_WEBGL
 namespace Magnum { namespace GL {
 
 /**
@@ -52,7 +49,8 @@ times are reported in nanoseconds.
 
 @requires_gl33 Extension @gl_extension{ARB,timer_query}
 @requires_es_extension Extension @gl_extension{EXT,disjoint_timer_query}
-@requires_gles Time query is not available in WebGL.
+@requires_webgl_extension Extension @webgl_extension{EXT,disjoint_timer_query}
+    on WebGL 1, @gl_extension{EXT,disjoint_timer_query_webgl2} on WebGL 2
 
 @see @ref PrimitiveQuery, @ref SampleQuery
 @todo timestamp with glGet + example usage
@@ -125,6 +123,8 @@ class TimeQuery: public AbstractQuery {
          *
          * This function can be safely used for constructing (and later
          * destructing) objects even without any OpenGL context being active.
+         * However note that this is a low-level and a potentially dangerous
+         * API, see the documentation of @ref NoCreate for alternatives.
          * @see @ref TimeQuery(Target), @ref wrap()
          */
         explicit TimeQuery(NoCreateT) noexcept: AbstractQuery{NoCreate, GLenum(Target::TimeElapsed)} {}
@@ -163,10 +163,8 @@ class TimeQuery: public AbstractQuery {
         void timestamp() {
             #ifndef MAGNUM_TARGET_GLES
             glQueryCounter(id(), GL_TIMESTAMP);
-            #elif !defined(CORRADE_TARGET_EMSCRIPTEN)
-            glQueryCounterEXT(id(), GL_TIMESTAMP_EXT);
             #else
-            CORRADE_ASSERT_UNREACHABLE(); /* LCOV_EXCL_LINE */
+            glQueryCounterEXT(id(), GL_TIMESTAMP_EXT);
             #endif
         }
 
@@ -175,8 +173,5 @@ class TimeQuery: public AbstractQuery {
 };
 
 }}
-#else
-#error this header is not available in WebGL build
-#endif
 
 #endif

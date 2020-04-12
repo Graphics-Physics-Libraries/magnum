@@ -43,11 +43,12 @@ namespace Magnum { namespace MeshTools {
 @brief Generate flat normals
 @param positions    Triangle vertex positions
 @return Per-vertex normals
+@m_since{2019,10}
 
 All vertices in each triangle face get the same normal vector. Expects that the
 position count is divisible by 3. If you need to generate flat normals for an
 indexed mesh, @ref duplicate() the vertices first, after the operation you
-might want to remove the duplicates again using @ref removeDuplicates().
+might want to remove the duplicates again using @ref removeDuplicatesInPlace().
 Example usage:
 
 @snippet MagnumMeshTools.cpp generateFlatNormals
@@ -61,6 +62,7 @@ MAGNUM_MESHTOOLS_EXPORT Containers::Array<Vector3> generateFlatNormals(const Con
 @brief Generate flat normals into an existing array
 @param[in]  positions   Triangle vertex positions
 @param[out] normals     Where to put the generated normals
+@m_since{2019,10}
 
 A variant of @ref generateFlatNormals() that fills existing memory instead of
 allocating a new array. The @p normals array is expected to have the same size
@@ -86,11 +88,11 @@ MAGNUM_MESHTOOLS_EXPORT void generateFlatNormalsInto(const Containers::StridedAr
 All vertices in each triangle face get the same normal vector. Removes
 duplicates before returning. Expects that the position count is divisible by 3.
 
-@deprecated This will generate index buffer that's different from the input
-    @p indices array, so you'll need to recombine them using
+@m_deprecated_since{2019,10} This will generate index buffer that's different
+    from the input @p indices array, so you'll need to recombine them using
     @ref combineIndexedArrays() in order to have a single index array for both
     vertices and normals. Because this makes the usage more complex than
-    strictly neccessary, this function is deprecated in favor of
+    strictly necessary, this function is deprecated in favor of
     @ref generateFlatNormals(const Containers::StridedArrayView1D<const Vector3>&).
 */
 CORRADE_DEPRECATED("use generateFlatNormals(const Containers::StridedArrayView1D<const Vector3>&) instead") std::pair<std::vector<UnsignedInt>, std::vector<Vector3>> MAGNUM_MESHTOOLS_EXPORT generateFlatNormals(const std::vector<UnsignedInt>& indices, const std::vector<Vector3>& positions);
@@ -101,6 +103,7 @@ CORRADE_DEPRECATED("use generateFlatNormals(const Containers::StridedArrayView1D
 @param indices      Triangle face indices
 @param positions    Triangle vertex positions
 @return Per-vertex normals
+@m_since{2019,10}
 
 Uses the @p indices array to discover adjacent triangles and then for each
 vertex position calculates a normal averaged from all triangles that share it.
@@ -115,19 +118,37 @@ Martijn Buijs.
 @see @ref generateSmoothNormalsInto(), @ref generateFlatNormals(),
     @ref MeshTools::CompileFlag::GenerateSmoothNormals
 */
-template<class T> MAGNUM_MESHTOOLS_EXPORT Containers::Array<Vector3> generateSmoothNormals(const Containers::StridedArrayView1D<const T>& indices, const Containers::StridedArrayView1D<const Vector3>& positions);
+MAGNUM_MESHTOOLS_EXPORT Containers::Array<Vector3> generateSmoothNormals(const Containers::StridedArrayView1D<const UnsignedInt>& indices, const Containers::StridedArrayView1D<const Vector3>& positions);
 
-#if defined(CORRADE_TARGET_WINDOWS) && !defined(__MINGW32__)
-extern template MAGNUM_MESHTOOLS_EXPORT Containers::Array<Vector3> generateSmoothNormals<UnsignedByte>(const Containers::StridedArrayView1D<const UnsignedByte>&, const Containers::StridedArrayView1D<const Vector3>&);
-extern template MAGNUM_MESHTOOLS_EXPORT Containers::Array<Vector3> generateSmoothNormals<UnsignedShort>(const Containers::StridedArrayView1D<const UnsignedShort>&, const Containers::StridedArrayView1D<const Vector3>&);
-extern template MAGNUM_MESHTOOLS_EXPORT Containers::Array<Vector3> generateSmoothNormals<UnsignedInt>(const Containers::StridedArrayView1D<const UnsignedInt>&, const Containers::StridedArrayView1D<const Vector3>&);
-#endif
+/**
+ * @overload
+ * @m_since{2019,10}
+ */
+MAGNUM_MESHTOOLS_EXPORT Containers::Array<Vector3> generateSmoothNormals(const Containers::StridedArrayView1D<const UnsignedShort>& indices, const Containers::StridedArrayView1D<const Vector3>& positions);
+
+/**
+ * @overload
+ * @m_since{2019,10}
+ */
+MAGNUM_MESHTOOLS_EXPORT Containers::Array<Vector3> generateSmoothNormals(const Containers::StridedArrayView1D<const UnsignedByte>& indices, const Containers::StridedArrayView1D<const Vector3>& positions);
+
+/**
+@brief Generate smooth normals using a type-erased index array
+@m_since_latest
+
+Expects that the second dimension of @p indices is contiguous and represents
+the actual 1/2/4-byte index type. Based on its size then calls one of the
+@ref generateSmoothNormals(const Containers::StridedArrayView1D<const UnsignedInt>&, const Containers::StridedArrayView1D<const Vector3>&)
+etc. overloads.
+*/
+MAGNUM_MESHTOOLS_EXPORT Containers::Array<Vector3> generateSmoothNormals(const Containers::StridedArrayView2D<const char>& indices, const Containers::StridedArrayView1D<const Vector3>& positions);
 
 /**
 @brief Generate smooth normals into an existing array
 @param[in] indices      Triangle face indices
 @param[in] positions    Triangle vertex positions
 @param[out] normals     Where to put the generated normals
+@m_since{2019,10}
 
 A variant of @ref generateSmoothNormals() that fills existing memory instead of
 allocating a new array. The @p normals array is expected to have the same size
@@ -143,13 +164,31 @@ conversions:
 
 @see @ref generateFlatNormalsInto()
 */
-template<class T> MAGNUM_MESHTOOLS_EXPORT void generateSmoothNormalsInto(const Containers::StridedArrayView1D<const T>& indices, const Containers::StridedArrayView1D<const Vector3>& positions, const Containers::StridedArrayView1D<Vector3>& normals);
+MAGNUM_MESHTOOLS_EXPORT void generateSmoothNormalsInto(const Containers::StridedArrayView1D<const UnsignedInt>& indices, const Containers::StridedArrayView1D<const Vector3>& positions, const Containers::StridedArrayView1D<Vector3>& normals);
 
-#if defined(CORRADE_TARGET_WINDOWS) && !defined(__MINGW32__)
-extern template MAGNUM_MESHTOOLS_EXPORT void generateSmoothNormalsInto<UnsignedByte>(const Containers::StridedArrayView1D<const UnsignedByte>&, const Containers::StridedArrayView1D<const Vector3>&, const Containers::StridedArrayView1D<Vector3>&);
-extern template MAGNUM_MESHTOOLS_EXPORT void generateSmoothNormalsInto<UnsignedShort>(const Containers::StridedArrayView1D<const UnsignedShort>&, const Containers::StridedArrayView1D<const Vector3>&, const Containers::StridedArrayView1D<Vector3>&);
-extern template MAGNUM_MESHTOOLS_EXPORT void generateSmoothNormalsInto<UnsignedInt>(const Containers::StridedArrayView1D<const UnsignedInt>&, const Containers::StridedArrayView1D<const Vector3>&, const Containers::StridedArrayView1D<Vector3>&);
-#endif
+/**
+ * @overload
+ * @m_since{2019,10}
+ */
+MAGNUM_MESHTOOLS_EXPORT void generateSmoothNormalsInto(const Containers::StridedArrayView1D<const UnsignedShort>& indices, const Containers::StridedArrayView1D<const Vector3>& positions, const Containers::StridedArrayView1D<Vector3>& normals);
+
+/**
+ * @overload
+ * @m_since{2019,10}
+ */
+MAGNUM_MESHTOOLS_EXPORT void generateSmoothNormalsInto(const Containers::StridedArrayView1D<const UnsignedByte>& indices, const Containers::StridedArrayView1D<const Vector3>& positions, const Containers::StridedArrayView1D<Vector3>& normals);
+
+/**
+@brief Generate smooth normals into an existing array using a type-erased index array
+@m_since_latest
+
+Expects that @p normals has the same size as @p positions and that the second
+dimension of @p indices is contiguous and represents the actual 1/2/4-byte
+index type. Based on its size then calls one of the
+@ref generateSmoothNormalsInto(const Containers::StridedArrayView1D<const UnsignedInt>&, const Containers::StridedArrayView1D<const Vector3>&, const Containers::StridedArrayView1D<Vector3>&)
+etc. overloads.
+*/
+MAGNUM_MESHTOOLS_EXPORT void generateSmoothNormalsInto(const Containers::StridedArrayView2D<const char>& indices, const Containers::StridedArrayView1D<const Vector3>& positions, const Containers::StridedArrayView1D<Vector3>& normals);
 
 }}
 

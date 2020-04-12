@@ -23,7 +23,11 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+#define _MAGNUM_NO_DEPRECATED_MESHDATA /* So it doesn't yell here */
+
 #include "MeshData2D.h"
+
+#include <Corrade/Containers/ArrayViewStl.h>
 
 #include "Magnum/Math/Color.h"
 
@@ -33,19 +37,52 @@ MeshData2D::MeshData2D(const MeshPrimitive primitive, std::vector<UnsignedInt> i
     CORRADE_ASSERT(!_positions.empty(), "Trade::MeshData2D: no position array specified", );
 }
 
+#ifdef MAGNUM_BUILD_DEPRECATED
+MeshData2D::MeshData2D(const MeshData& other): _primitive{other.primitive()}, _importerState{other.importerState()} {
+    /* Copy indices, if any */
+    if(other.isIndexed()) {
+        _indices.resize(other.indexCount());
+        other.indicesInto(_indices);
+    }
+
+    /* Copy attributes */
+    _positions.resize(other.attributeCount(MeshAttribute::Position));
+    for(UnsignedInt i = 0; i != _positions.size(); ++i) {
+        _positions[i].resize(other.vertexCount());
+        other.positions2DInto(_positions[i], i);
+    }
+    _textureCoords2D.resize(other.attributeCount(MeshAttribute::TextureCoordinates));
+    for(UnsignedInt i = 0; i != _textureCoords2D.size(); ++i) {
+        _textureCoords2D[i].resize(other.vertexCount());
+        other.textureCoordinates2DInto(_textureCoords2D[i], i);
+    }
+    _colors.resize(other.attributeCount(MeshAttribute::Color));
+    for(UnsignedInt i = 0; i != _colors.size(); ++i) {
+        _colors[i].resize(other.vertexCount());
+        other.colorsInto(_colors[i], i);
+    }
+
+    CORRADE_ASSERT(!_positions.empty(), "Trade::MeshData3D: no position array specified in MeshData", );
+}
+#endif
+
+CORRADE_IGNORE_DEPRECATED_PUSH /* MSVC warns here */
 MeshData2D::MeshData2D(MeshData2D&&)
     #if !defined(__GNUC__) || __GNUC__*100 + __GNUC_MINOR__ != 409
     noexcept
     #endif
     = default;
+CORRADE_IGNORE_DEPRECATED_POP
 
 MeshData2D::~MeshData2D() = default;
 
+CORRADE_IGNORE_DEPRECATED_PUSH /* GCC why you warn on return and not on param */
 MeshData2D& MeshData2D::operator=(MeshData2D&&)
     #if !defined(__GNUC__) || __GNUC__*100 + __GNUC_MINOR__ != 409
     noexcept
     #endif
     = default;
+CORRADE_IGNORE_DEPRECATED_POP
 
 std::vector<UnsignedInt>& MeshData2D::indices() {
     CORRADE_ASSERT(isIndexed(), "Trade::MeshData2D::indices(): the mesh is not indexed", _indices);

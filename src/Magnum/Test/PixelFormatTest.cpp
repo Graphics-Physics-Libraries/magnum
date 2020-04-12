@@ -25,17 +25,28 @@
 
 #include <sstream>
 #include <Corrade/TestSuite/Tester.h>
+#include <Corrade/TestSuite/Compare/Numeric.h>
 #include <Corrade/Utility/DebugStl.h>
+#include <Corrade/Utility/Configuration.h>
 
 #include "Magnum/PixelFormat.h"
+#include "Magnum/Math/Vector3.h"
 
 namespace Magnum { namespace Test { namespace {
 
 struct PixelFormatTest: TestSuite::Tester {
     explicit PixelFormatTest();
 
+    void mapping();
+    void compressedMapping();
+
     void size();
+    void sizeInvalid();
     void sizeImplementationSpecific();
+
+    void compressedBlockSize();
+    void compressedBlockSizeInvalid();
+    void compressedBlockSizeImplementationSpecific();
 
     void isImplementationSpecific();
     void wrap();
@@ -54,11 +65,22 @@ struct PixelFormatTest: TestSuite::Tester {
 
     void compressedDebug();
     void compressedDebugImplementationSpecific();
+
+    void configuration();
+    void compresedConfiguration();
 };
 
 PixelFormatTest::PixelFormatTest() {
-    addTests({&PixelFormatTest::size,
+    addTests({&PixelFormatTest::mapping,
+              &PixelFormatTest::compressedMapping,
+
+              &PixelFormatTest::size,
+              &PixelFormatTest::sizeInvalid,
               &PixelFormatTest::sizeImplementationSpecific,
+
+              &PixelFormatTest::compressedBlockSize,
+              &PixelFormatTest::compressedBlockSizeInvalid,
+              &PixelFormatTest::compressedBlockSizeImplementationSpecific,
 
               &PixelFormatTest::isImplementationSpecific,
               &PixelFormatTest::wrap,
@@ -76,7 +98,95 @@ PixelFormatTest::PixelFormatTest() {
               &PixelFormatTest::debugImplementationSpecific,
 
               &PixelFormatTest::compressedDebug,
-              &PixelFormatTest::compressedDebugImplementationSpecific});
+              &PixelFormatTest::compressedDebugImplementationSpecific,
+
+              &PixelFormatTest::configuration,
+              &PixelFormatTest::compresedConfiguration});
+}
+
+void PixelFormatTest::mapping() {
+    /* This goes through the first 16 bits, which should be enough. Going
+       through 32 bits takes 8 seconds, too much. */
+    UnsignedInt firstUnhandled = 0xffff;
+    UnsignedInt nextHandled = 1; /* 0 is an invalid format */
+    for(UnsignedInt i = 1; i <= 0xffff; ++i) {
+        const auto format = PixelFormat(i);
+        /* Each case verifies:
+           - that the entries are ordered by number by comparing a function to
+             expected result (so insertion here is done in proper place)
+           - that there was no gap (unhandled value inside the range) */
+        #ifdef __GNUC__
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic error "-Wswitch"
+        #endif
+        switch(format) {
+            #define _c(format) \
+                case PixelFormat::format: \
+                    CORRADE_COMPARE(Utility::ConfigurationValue<PixelFormat>::toString(PixelFormat::format, {}), #format); \
+                    CORRADE_COMPARE(nextHandled, i); \
+                    CORRADE_COMPARE(firstUnhandled, 0xffff); \
+                    ++nextHandled; \
+                    continue;
+            #include "Magnum/Implementation/pixelFormatMapping.hpp"
+            #undef _c
+        }
+        #ifdef __GNUC__
+        #pragma GCC diagnostic pop
+        #endif
+
+        /* Not handled by any value, remember -- we might either be at the end
+           of the enum range (which is okay) or some value might be unhandled
+           here */
+        firstUnhandled = i;
+    }
+
+    CORRADE_COMPARE(firstUnhandled, 0xffff);
+}
+
+void PixelFormatTest::compressedMapping() {
+    /* This goes through the first 16 bits, which should be enough. Going
+       through 32 bits takes 8 seconds, too much. */
+    UnsignedInt firstUnhandled = 0xffff;
+    UnsignedInt nextHandled = 1; /* 0 is an invalid format */
+    for(UnsignedInt i = 1; i <= 0xffff; ++i) {
+        const auto format = CompressedPixelFormat(i);
+        /* Each case verifies:
+           - that the entries are ordered by number by comparing a function to
+             expected result (so insertion here is done in proper place)
+           - that there was no gap (unhandled value inside the range) */
+        #ifdef __GNUC__
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic error "-Wswitch"
+        #endif
+        switch(format) {
+            #define _c(format, width, height, depth, size) \
+                case CompressedPixelFormat::format: \
+                    CORRADE_COMPARE(Utility::ConfigurationValue<CompressedPixelFormat>::toString(CompressedPixelFormat::format, {}), #format); \
+                    CORRADE_COMPARE(nextHandled, i); \
+                    CORRADE_COMPARE(firstUnhandled, 0xffff); \
+                    CORRADE_COMPARE(Magnum::compressedBlockSize(CompressedPixelFormat::format), (Vector3i{width, height, depth})); \
+                    CORRADE_COMPARE(compressedBlockDataSize(CompressedPixelFormat::format), size/8); \
+                    CORRADE_COMPARE(size % 8, 0); \
+                    CORRADE_COMPARE_AS(width, 16, TestSuite::Compare::LessOrEqual); \
+                    CORRADE_COMPARE_AS(height, 16, TestSuite::Compare::LessOrEqual); \
+                    CORRADE_COMPARE_AS(depth, 16, TestSuite::Compare::LessOrEqual); \
+                    CORRADE_COMPARE_AS(size/8, 16, TestSuite::Compare::LessOrEqual); \
+                    ++nextHandled; \
+                    continue;
+            #include "Magnum/Implementation/compressedPixelFormatMapping.hpp"
+            #undef _c
+        }
+        #ifdef __GNUC__
+        #pragma GCC diagnostic pop
+        #endif
+
+        /* Not handled by any value, remember -- we might either be at the end
+           of the enum range (which is okay) or some value might be unhandled
+           here */
+        firstUnhandled = i;
+    }
+
+    CORRADE_COMPARE(firstUnhandled, 0xffff);
 }
 
 void PixelFormatTest::size() {
@@ -90,13 +200,66 @@ void PixelFormatTest::size() {
     CORRADE_COMPARE(pixelSize(PixelFormat::RGBA32F), 16);
 }
 
+void PixelFormatTest::sizeInvalid() {
+    std::ostringstream out;
+    Error redirectError{&out};
+
+    pixelSize(PixelFormat{});
+    pixelSize(PixelFormat(0xdead));
+
+    CORRADE_COMPARE(out.str(),
+        "pixelSize(): invalid format PixelFormat(0x0)\n"
+        "pixelSize(): invalid format PixelFormat(0xdead)\n");
+}
+
 void PixelFormatTest::sizeImplementationSpecific() {
     std::ostringstream out;
     Error redirectError{&out};
 
     pixelSize(pixelFormatWrap(0xdead));
 
-    CORRADE_COMPARE(out.str(), "pixelSize(): can't determine pixel size of an implementation-specific format\n");
+    CORRADE_COMPARE(out.str(), "pixelSize(): can't determine size of an implementation-specific format 0xdead\n");
+}
+
+void PixelFormatTest::compressedBlockSize() {
+    CORRADE_COMPARE(Magnum::compressedBlockSize(CompressedPixelFormat::Etc2RGB8A1Srgb), (Vector3i{4, 4, 1}));
+    CORRADE_COMPARE(compressedBlockDataSize(CompressedPixelFormat::Etc2RGB8A1Srgb), 8);
+    CORRADE_COMPARE(Magnum::compressedBlockSize(CompressedPixelFormat::Astc5x4RGBAUnorm), (Vector3i{5, 4, 1}));
+    CORRADE_COMPARE(compressedBlockDataSize(CompressedPixelFormat::Astc5x4RGBAUnorm), 16);
+    CORRADE_COMPARE(Magnum::compressedBlockSize(CompressedPixelFormat::Astc12x10RGBAUnorm), (Vector3i{12, 10, 1}));
+    CORRADE_COMPARE(compressedBlockDataSize(CompressedPixelFormat::Astc12x10RGBAUnorm), 16);
+    CORRADE_COMPARE(Magnum::compressedBlockSize(CompressedPixelFormat::PvrtcRGBA2bppUnorm), (Vector3i{8, 4, 1}));
+    CORRADE_COMPARE(compressedBlockDataSize(CompressedPixelFormat::PvrtcRGBA2bppUnorm), 8);
+
+    /* The rest tested in compressedMapping() */
+}
+
+void PixelFormatTest::compressedBlockSizeInvalid() {
+    std::ostringstream out;
+    Error redirectError{&out};
+
+    Magnum::compressedBlockSize(CompressedPixelFormat{});
+    Magnum::compressedBlockSize(CompressedPixelFormat(0xdead));
+    compressedBlockDataSize(CompressedPixelFormat{});
+    compressedBlockDataSize(CompressedPixelFormat(0xdead));
+
+    CORRADE_COMPARE(out.str(),
+        "compressedBlockSize(): invalid format CompressedPixelFormat(0x0)\n"
+        "compressedBlockSize(): invalid format CompressedPixelFormat(0xdead)\n"
+        "compressedBlockDataSize(): invalid format CompressedPixelFormat(0x0)\n"
+        "compressedBlockDataSize(): invalid format CompressedPixelFormat(0xdead)\n");
+}
+
+void PixelFormatTest::compressedBlockSizeImplementationSpecific() {
+    std::ostringstream out;
+    Error redirectError{&out};
+
+    Magnum::compressedBlockSize(compressedPixelFormatWrap(0xdead));
+    compressedBlockDataSize(compressedPixelFormatWrap(0xdead));
+
+    CORRADE_COMPARE(out.str(),
+        "compressedBlockSize(): can't determine size of an implementation-specific format 0xdead\n"
+        "compressedBlockDataSize(): can't determine size of an implementation-specific format 0xdead\n");
 }
 
 void PixelFormatTest::isImplementationSpecific() {
@@ -117,7 +280,7 @@ void PixelFormatTest::wrapInvalid() {
 
     pixelFormatWrap(0xdeadbeef);
 
-    CORRADE_COMPARE(out.str(), "pixelFormatWrap(): implementation-specific value already wrapped or too large\n");
+    CORRADE_COMPARE(out.str(), "pixelFormatWrap(): implementation-specific value 0xdeadbeef already wrapped or too large\n");
 }
 
 void PixelFormatTest::unwrap() {
@@ -129,9 +292,9 @@ void PixelFormatTest::unwrapInvalid() {
     std::ostringstream out;
     Error redirectError{&out};
 
-    pixelFormatUnwrap(PixelFormat(0xdead));
+    pixelFormatUnwrap(PixelFormat::R8Snorm);
 
-    CORRADE_COMPARE(out.str(), "pixelFormatUnwrap(): format doesn't contain a wrapped implementation-specific value\n");
+    CORRADE_COMPARE(out.str(), "pixelFormatUnwrap(): PixelFormat::R8Snorm isn't a wrapped implementation-specific value\n");
 }
 
 void PixelFormatTest::compressedIsImplementationSpecific() {
@@ -149,7 +312,7 @@ void PixelFormatTest::compressedWrapInvalid() {
 
     compressedPixelFormatWrap(0xdeadbeef);
 
-    CORRADE_COMPARE(out.str(), "compressedPixelFormatWrap(): implementation-specific value already wrapped or too large\n");
+    CORRADE_COMPARE(out.str(), "compressedPixelFormatWrap(): implementation-specific value 0xdeadbeef already wrapped or too large\n");
 }
 
 void PixelFormatTest::compressedUnwrap() {
@@ -160,9 +323,9 @@ void PixelFormatTest::compressedUnwrapInvalid() {
     std::ostringstream out;
     Error redirectError{&out};
 
-    compressedPixelFormatUnwrap(CompressedPixelFormat(0xdead));
+    compressedPixelFormatUnwrap(CompressedPixelFormat::EacR11Snorm);
 
-    CORRADE_COMPARE(out.str(), "compressedPixelFormatUnwrap(): format doesn't contain a wrapped implementation-specific value\n");
+    CORRADE_COMPARE(out.str(), "compressedPixelFormatUnwrap(): CompressedPixelFormat::EacR11Snorm isn't a wrapped implementation-specific value\n");
 }
 
 void PixelFormatTest::debug() {
@@ -191,6 +354,38 @@ void PixelFormatTest::compressedDebugImplementationSpecific() {
     Debug{&out} << compressedPixelFormatWrap(0xdead);
 
     CORRADE_COMPARE(out.str(), "CompressedPixelFormat::ImplementationSpecific(0xdead)\n");
+}
+
+void PixelFormatTest::configuration() {
+    Utility::Configuration c;
+
+    c.setValue("format", PixelFormat::RGB8Srgb);
+    CORRADE_COMPARE(c.value("format"), "RGB8Srgb");
+    CORRADE_COMPARE(c.value<PixelFormat>("format"), PixelFormat::RGB8Srgb);
+
+    c.setValue("zero", PixelFormat(0));
+    CORRADE_COMPARE(c.value("zero"), "");
+    CORRADE_COMPARE(c.value<PixelFormat>("zero"), PixelFormat{});
+
+    c.setValue("invalid", PixelFormat(0xdead));
+    CORRADE_COMPARE(c.value("invalid"), "");
+    CORRADE_COMPARE(c.value<PixelFormat>("invalid"), PixelFormat{});
+}
+
+void PixelFormatTest::compresedConfiguration() {
+    Utility::Configuration c;
+
+    c.setValue("format", CompressedPixelFormat::Astc3x3x3RGBASrgb);
+    CORRADE_COMPARE(c.value("format"), "Astc3x3x3RGBASrgb");
+    CORRADE_COMPARE(c.value<CompressedPixelFormat>("format"), CompressedPixelFormat::Astc3x3x3RGBASrgb);
+
+    c.setValue("zero", CompressedPixelFormat(0));
+    CORRADE_COMPARE(c.value("zero"), "");
+    CORRADE_COMPARE(c.value<CompressedPixelFormat>("zero"), CompressedPixelFormat{});
+
+    c.setValue("invalid", CompressedPixelFormat(0xdead));
+    CORRADE_COMPARE(c.value("invalid"), "");
+    CORRADE_COMPARE(c.value<CompressedPixelFormat>("invalid"), CompressedPixelFormat{});
 }
 
 }}}

@@ -57,6 +57,17 @@ uniform mediump mat3 normalMatrix
     ;
 #endif
 
+#ifdef TEXTURE_TRANSFORMATION
+#ifdef EXPLICIT_UNIFORM_LOCATION
+layout(location = 3)
+#endif
+uniform mediump mat3 textureMatrix
+    #ifndef GL_ES
+    = mat3(1.0)
+    #endif
+    ;
+#endif
+
 #if LIGHT_COUNT
 /* Needs to be last because it uses locations 10 to 10 + LIGHT_COUNT - 1 */
 #ifdef EXPLICIT_UNIFORM_LOCATION
@@ -88,9 +99,9 @@ in mediump vec3 tangent;
 #ifdef EXPLICIT_ATTRIB_LOCATION
 layout(location = TEXTURECOORDINATES_ATTRIBUTE_LOCATION)
 #endif
-in mediump vec2 textureCoords;
+in mediump vec2 textureCoordinates;
 
-out mediump vec2 interpolatedTextureCoords;
+out mediump vec2 interpolatedTextureCoordinates;
 #endif
 
 #ifdef VERTEX_COLOR
@@ -100,6 +111,34 @@ layout(location = COLOR_ATTRIBUTE_LOCATION)
 in lowp vec4 vertexColor;
 
 out lowp vec4 interpolatedVertexColor;
+#endif
+
+#ifdef INSTANCED_OBJECT_ID
+#ifdef EXPLICIT_ATTRIB_LOCATION
+layout(location = OBJECT_ID_ATTRIBUTE_LOCATION)
+#endif
+in highp uint instanceObjectId;
+
+flat out highp uint interpolatedInstanceObjectId;
+#endif
+
+#ifdef INSTANCED_TRANSFORMATION
+#ifdef EXPLICIT_ATTRIB_LOCATION
+layout(location = TRANSFORMATION_MATRIX_ATTRIBUTE_LOCATION)
+#endif
+in highp mat4 instancedTransformationMatrix;
+
+#ifdef EXPLICIT_ATTRIB_LOCATION
+layout(location = NORMAL_MATRIX_ATTRIBUTE_LOCATION)
+#endif
+in highp mat3 instancedNormalMatrix;
+#endif
+
+#ifdef INSTANCED_TEXTURE_OFFSET
+#ifdef EXPLICIT_ATTRIB_LOCATION
+layout(location = TEXTURE_OFFSET_ATTRIBUTE_LOCATION)
+#endif
+in mediump vec2 instancedTextureOffset;
 #endif
 
 #if LIGHT_COUNT
@@ -113,14 +152,26 @@ out highp vec3 cameraDirection;
 
 void main() {
     /* Transformed vertex position */
-    highp vec4 transformedPosition4 = transformationMatrix*position;
+    highp vec4 transformedPosition4 = transformationMatrix*
+        #ifdef INSTANCED_TRANSFORMATION
+        instancedTransformationMatrix*
+        #endif
+        position;
     highp vec3 transformedPosition = transformedPosition4.xyz/transformedPosition4.w;
 
     #if LIGHT_COUNT
     /* Transformed normal and tangent vector */
-    transformedNormal = normalMatrix*normal;
+    transformedNormal = normalMatrix*
+        #ifdef INSTANCED_TRANSFORMATION
+        instancedNormalMatrix*
+        #endif
+        normal;
     #ifdef NORMAL_TEXTURE
-    transformedTangent = normalMatrix*tangent;
+    transformedTangent = normalMatrix*
+        #ifdef INSTANCED_TRANSFORMATION
+        instancedNormalMatrix*
+        #endif
+        tangent;
     #endif
 
     /* Direction to the light */
@@ -136,11 +187,26 @@ void main() {
 
     #ifdef TEXTURED
     /* Texture coordinates, if needed */
-    interpolatedTextureCoords = textureCoords;
+    interpolatedTextureCoordinates =
+        #ifdef TEXTURE_TRANSFORMATION
+        (textureMatrix*vec3(
+            #ifdef INSTANCED_TEXTURE_OFFSET
+            instancedTextureOffset +
+            #endif
+            textureCoordinates, 1.0)).xy
+        #else
+        textureCoordinates
+        #endif
+        ;
     #endif
 
     #ifdef VERTEX_COLOR
     /* Vertex colors, if enabled */
     interpolatedVertexColor = vertexColor;
+    #endif
+
+    #ifdef INSTANCED_OBJECT_ID
+    /* Instanced object ID, if enabled */
+    interpolatedInstanceObjectId = instanceObjectId;
     #endif
 }

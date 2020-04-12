@@ -25,11 +25,11 @@
 
 #include "TgaImporter.h"
 
-#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <Corrade/Containers/ArrayView.h>
 #include <Corrade/Containers/Optional.h>
+#include <Corrade/Utility/Algorithms.h>
 #include <Corrade/Utility/Endianness.h>
 
 #include "Magnum/PixelFormat.h"
@@ -46,7 +46,7 @@ TgaImporter::TgaImporter(PluginManager::AbstractManager& manager, const std::str
 
 TgaImporter::~TgaImporter() = default;
 
-auto TgaImporter::doFeatures() const -> Features { return Feature::OpenData; }
+ImporterFeatures TgaImporter::doFeatures() const { return ImporterFeature::OpenData; }
 
 bool TgaImporter::doIsOpened() const { return _in; }
 
@@ -71,10 +71,10 @@ void TgaImporter::doOpenData(const Containers::ArrayView<const char> data) {
 
 UnsignedInt TgaImporter::doImage2DCount() const { return 1; }
 
-Containers::Optional<ImageData2D> TgaImporter::doImage2D(UnsignedInt) {
+Containers::Optional<ImageData2D> TgaImporter::doImage2D(UnsignedInt, UnsignedInt) {
     /* Check if the file is long enough */
-    if(_in.size() < std::streamoff(sizeof(Implementation::TgaHeader))) {
-        Error() << "Trade::TgaImporter::image2D(): the file is too short:" << _in.size() << "bytes";
+    if(_in.size() < sizeof(Implementation::TgaHeader)) {
+        Error{} << "Trade::TgaImporter::image2D(): file too short, expected at least" << sizeof(Implementation::TgaHeader) << "bytes but got" << _in.size();
         return Containers::NullOpt;
     }
 
@@ -92,7 +92,10 @@ Containers::Optional<ImageData2D> TgaImporter::doImage2D(UnsignedInt) {
     }
 
     /* Color */
-    if(header.imageType == 2) {
+    bool rle = false;
+    if(header.imageType == 2 || header.imageType == 10) {
+        /* Reference: http://www.paulbourke.net/dataformats/tga/ */
+        rle = header.imageType == 10;
         switch(header.bpp) {
             case 24:
                 format = PixelFormat::RGB8Unorm;
@@ -106,27 +109,79 @@ Containers::Optional<ImageData2D> TgaImporter::doImage2D(UnsignedInt) {
         }
 
     /* Grayscale */
-    } else if(header.imageType == 3) {
+    } else if(header.imageType == 3 || header.imageType == 11) {
+        /* I only discovered this by accident when using ImageMagick's
+            mogrify -compression RunLengthEncoded file.tga
+           as far as I could find, it's not documented in any TGA specs */
+        rle = header.imageType == 11;
         format = PixelFormat::R8Unorm;
         if(header.bpp != 8) {
             Error() << "Trade::TgaImporter::image2D(): unsupported grayscale bits-per-pixel:" << header.bpp;
             return Containers::NullOpt;
         }
 
-    /* Compressed files */
+    /* Other? */
     } else {
-        Error() << "Trade::TgaImporter::image2D(): unsupported (compressed?) image type:" << header.imageType;
+        Error() << "Trade::TgaImporter::image2D(): unsupported image type:" << header.imageType;
         return Containers::NullOpt;
     }
 
-    std::size_t outputSize = std::size_t(size.product())*header.bpp/8;
-    if(outputSize + sizeof(Implementation::TgaHeader) > _in.size()) {
-        Error{} << "Trade::TgaImporter::image2D(): the file is too short: got" << _in.size() << "bytes but expected" << outputSize + sizeof(Implementation::TgaHeader);
-        return Containers::NullOpt;
-    }
+    const std::size_t pixelSize = header.bpp/8;
+    const std::size_t outputSize = std::size_t(size.product())*pixelSize;
 
+    /* Copy data directly if not RLE */
     Containers::Array<char> data{outputSize};
-    std::copy_n(_in + sizeof(Implementation::TgaHeader), outputSize, data.begin());
+    Containers::ArrayView<const char> srcPixels = _in.suffix(sizeof(Implementation::TgaHeader));
+    if(!rle) {
+        /* Files that are larger are allowed in this case (but not for RLE) */
+        if(srcPixels.size() < outputSize) {
+            Error{} << "Trade::TgaImporter::image2D(): file too short, expected" << outputSize + sizeof(Implementation::TgaHeader) << "bytes but got" << _in.size();
+            return Containers::NullOpt;
+        }
+
+        Utility::copy(srcPixels.prefix(data.size()), data);
+
+    /* Otherwise decode */
+    } else {
+        Containers::ArrayView<char> dstPixels = data;
+        while(!srcPixels.empty()) {
+            /* Reference: http://www.paulbourke.net/dataformats/tga/ */
+
+            /* 8-bit RLE header. First bit denotes the operation, last 7 bits
+               denotes operation count minus 1. */
+            const UnsignedByte rleHeader = srcPixels[0];
+            const std::size_t count = (rleHeader & ~0x80) + 1;
+
+            /* First bit set to 1 means copying the following pixel given
+               number of times, 0 means copying the following number of
+               pixels once. We represent that operation with a stride. */
+            const std::size_t dataSize = (rleHeader & 0x80 ? 1 : count)*pixelSize;
+            const std::ptrdiff_t stride = rleHeader & 0x80 ? 0 : pixelSize;
+
+            /* Check bounds */
+            if(1 + dataSize > srcPixels.size()) {
+                Error{} << "Trade::TgaImporter::image2D(): RLE file too short at pixel" << (dstPixels.begin() - data.begin())/pixelSize;
+                return Containers::NullOpt;
+            }
+            if(count*pixelSize > dstPixels.size()) {
+                Error{} << "Trade::TgaImporter::image2D(): RLE data larger than advertised" << size << "pixels at byte" << (srcPixels.data() - _in.data());
+                return Containers::NullOpt;
+            }
+
+            /* Copy the data */
+            Containers::StridedArrayView2D<const char> src{
+                srcPixels.slice(1, 1 + dataSize),
+                {count, pixelSize}, {stride, 1}};
+            Containers::StridedArrayView2D<char> dst{
+                dstPixels.prefix(count*pixelSize),
+                {count, pixelSize}};
+            Utility::copy(src, dst);
+
+            /* Update views for the next round */
+            srcPixels = srcPixels.suffix(1 + dataSize);
+            dstPixels = dstPixels.suffix(count*pixelSize);
+        }
+    }
 
     /* Adjust pixel storage if row size is not four byte aligned */
     PixelStorage storage;
@@ -134,13 +189,11 @@ Containers::Optional<ImageData2D> TgaImporter::doImage2D(UnsignedInt) {
         storage.setAlignment(1);
 
     if(format == PixelFormat::RGB8Unorm) {
-        auto pixels = reinterpret_cast<Math::Vector3<UnsignedByte>*>(data.data());
-        std::transform(pixels, pixels + size.product(), pixels,
-            [](Math::Vector3<UnsignedByte> pixel) { return Math::swizzle<'b', 'g', 'r'>(pixel); });
+        for(Vector3ub& pixel: Containers::arrayCast<Vector3ub>(data))
+            pixel = Math::gather<'b', 'g', 'r'>(pixel);
     } else if(format == PixelFormat::RGBA8Unorm) {
-        auto pixels = reinterpret_cast<Math::Vector4<UnsignedByte>*>(data.data());
-        std::transform(pixels, pixels + size.product(), pixels,
-            [](Math::Vector4<UnsignedByte> pixel) { return Math::swizzle<'b', 'g', 'r', 'a'>(pixel); });
+        for(Vector4ub& pixel: Containers::arrayCast<Vector4ub>(data))
+            pixel = Math::gather<'b', 'g', 'r', 'a'>(pixel);
     }
 
     return ImageData2D{storage, format, size, std::move(data)};
@@ -149,4 +202,4 @@ Containers::Optional<ImageData2D> TgaImporter::doImage2D(UnsignedInt) {
 }}
 
 CORRADE_PLUGIN_REGISTER(TgaImporter, Magnum::Trade::TgaImporter,
-    "cz.mosra.magnum.Trade.AbstractImporter/0.3")
+    "cz.mosra.magnum.Trade.AbstractImporter/0.3.1")

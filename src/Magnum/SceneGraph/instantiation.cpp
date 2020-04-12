@@ -30,11 +30,11 @@
 #include "Magnum/SceneGraph/DualComplexTransformation.h"
 #include "Magnum/SceneGraph/DualQuaternionTransformation.h"
 #include "Magnum/SceneGraph/FeatureGroup.hpp"
-#include "Magnum/SceneGraph/MatrixTransformation2D.h"
-#include "Magnum/SceneGraph/MatrixTransformation3D.h"
+#include "Magnum/SceneGraph/MatrixTransformation2D.hpp"
+#include "Magnum/SceneGraph/MatrixTransformation3D.hpp"
 #include "Magnum/SceneGraph/Object.hpp"
-#include "Magnum/SceneGraph/RigidMatrixTransformation2D.h"
-#include "Magnum/SceneGraph/RigidMatrixTransformation3D.h"
+#include "Magnum/SceneGraph/RigidMatrixTransformation2D.hpp"
+#include "Magnum/SceneGraph/RigidMatrixTransformation3D.hpp"
 #include "Magnum/SceneGraph/TranslationTransformation.h"
 #include "Magnum/SceneGraph/TranslationRotationScalingTransformation2D.h"
 #include "Magnum/SceneGraph/TranslationRotationScalingTransformation3D.h"
@@ -42,8 +42,9 @@
 namespace Magnum { namespace SceneGraph {
 
 /* On non-MinGW Windows the instantiations are already marked with extern
-   template */
-#if !defined(CORRADE_TARGET_WINDOWS) || defined(__MINGW32__)
+   template. However Clang-CL doesn't propagate the export from the extern
+   template, it seems. */
+#if !defined(CORRADE_TARGET_WINDOWS) || defined(CORRADE_TARGET_MINGW) || defined(CORRADE_TARGET_CLANG_CL)
 #define MAGNUM_SCENEGRAPH_EXPORT_HPP MAGNUM_SCENEGRAPH_EXPORT
 #else
 #define MAGNUM_SCENEGRAPH_EXPORT_HPP
@@ -70,6 +71,13 @@ template class MAGNUM_SCENEGRAPH_EXPORT_HPP Camera<3, Float>;
 
 template class MAGNUM_SCENEGRAPH_EXPORT_HPP Drawable<2, Float>;
 template class MAGNUM_SCENEGRAPH_EXPORT_HPP Drawable<3, Float>;
+
+/* These have rotation(const Complex&) and rotation(const Quaternion&) defined
+   in a hpp to avoid dragging in Complex / Quaternion for every user */
+template class MAGNUM_SCENEGRAPH_EXPORT_HPP BasicMatrixTransformation2D<Float>;
+template class MAGNUM_SCENEGRAPH_EXPORT_HPP BasicMatrixTransformation3D<Float>;
+template class MAGNUM_SCENEGRAPH_EXPORT_HPP BasicRigidMatrixTransformation2D<Float>;
+template class MAGNUM_SCENEGRAPH_EXPORT_HPP BasicRigidMatrixTransformation3D<Float>;
 
 template class MAGNUM_SCENEGRAPH_EXPORT_HPP Object<BasicDualComplexTransformation<Float>>;
 template class MAGNUM_SCENEGRAPH_EXPORT_HPP Object<BasicDualQuaternionTransformation<Float>>;

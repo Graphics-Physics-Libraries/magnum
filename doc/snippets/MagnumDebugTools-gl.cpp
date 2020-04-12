@@ -29,6 +29,7 @@
 #include "Magnum/Image.h"
 #include "Magnum/ImageView.h"
 #include "Magnum/PixelFormat.h"
+#include "Magnum/DebugTools/ColorMap.h"
 #include "Magnum/DebugTools/CompareImage.h"
 #include "Magnum/DebugTools/ForceRenderer.h"
 #include "Magnum/DebugTools/ResourceManager.h"
@@ -37,6 +38,7 @@
 #include "Magnum/GL/Framebuffer.h"
 #include "Magnum/GL/CubeMapTexture.h"
 #include "Magnum/GL/Texture.h"
+#include "Magnum/GL/TextureFormat.h"
 #include "Magnum/Math/Range.h"
 #include "Magnum/SceneGraph/Drawable.h"
 #include "Magnum/SceneGraph/Object.h"
@@ -58,43 +60,60 @@ DebugTools::ResourceManager manager;
 SceneGraph::DrawableGroup3D debugDrawables;
 
 // Create renderer options which will be referenced later by "my" resource key
-DebugTools::ResourceManager::instance().set("my",
-    DebugTools::ObjectRendererOptions{}.setSize(0.3f));
+manager.set("my", DebugTools::ObjectRendererOptions{}.setSize(0.3f));
 
 // Create debug renderer for given object, use "my" options for it. The
 // renderer is automatically added to the object features and also to
 // specified drawable group.
-new DebugTools::ObjectRenderer3D{*object, "my", &debugDrawables};
+new DebugTools::ObjectRenderer3D{manager, *object, "my", &debugDrawables};
 /* [debug-tools-renderers] */
 }
 
+#if !(defined(MAGNUM_TARGET_GLES2) && defined(MAGNUM_TARGET_WEBGL))
 {
+/* [ColorMap] */
+const auto map = DebugTools::ColorMap::turbo();
+const Vector2i size{Int(map.size()), 1};
+
+GL::Texture2D colorMapTexture;
+colorMapTexture
+    .setMinificationFilter(SamplerFilter::Linear)
+    .setMagnificationFilter(SamplerFilter::Linear)
+    .setWrapping(SamplerWrapping::ClampToEdge) // or Repeat
+    .setStorage(1, GL::TextureFormat::RGB8, size) // or SRGB8
+    .setSubImage(0, {}, ImageView2D{PixelFormat::RGB8Srgb, size, map});
+/* [ColorMap] */
+}
+#endif
+
+{
+DebugTools::ResourceManager manager;
 SceneGraph::Object<SceneGraph::MatrixTransformation3D>* object{};
 SceneGraph::DrawableGroup3D debugDrawables;
 /* [ForceRenderer] */
-DebugTools::ResourceManager::instance().set("my",
-    DebugTools::ForceRendererOptions{}
-        .setSize(5.0f)
-        .setColor(Color3::fromHsv({120.0_degf, 1.0f, 0.7f})));
+manager.set("my", DebugTools::ForceRendererOptions{}
+    .setSize(5.0f)
+    .setColor(Color3::fromHsv({120.0_degf, 1.0f, 0.7f})));
 
 Vector3 force; // taken as a reference, has to be kept in scope
 
 // Create debug renderer for given force, use "my" options for it
-new DebugTools::ForceRenderer3D(*object, {0.3f, 1.5f, -0.7f}, force, "my",
-        &debugDrawables);
+new DebugTools::ForceRenderer3D(manager, *object, {0.3f, 1.5f, -0.7f}, force,
+    "my", &debugDrawables);
 /* [ForceRenderer] */
 }
 
 {
 SceneGraph::Object<SceneGraph::MatrixTransformation3D>* object{};
-SceneGraph::DrawableGroup3D debugDrawables;
 /* [ObjectRenderer] */
+DebugTools::ResourceManager manager;
+SceneGraph::DrawableGroup3D debugDrawables;
+
 // Create some options
-DebugTools::ResourceManager::instance().set("my",
-    DebugTools::ObjectRendererOptions{}.setSize(0.3f));
+manager.set("my", DebugTools::ObjectRendererOptions{}.setSize(0.3f));
 
 // Create debug renderer for given object, use "my" options for it
-new DebugTools::ObjectRenderer3D(*object, "my", &debugDrawables);
+new DebugTools::ObjectRenderer3D{manager, *object, "my", &debugDrawables};
 /* [ObjectRenderer] */
 }
 {

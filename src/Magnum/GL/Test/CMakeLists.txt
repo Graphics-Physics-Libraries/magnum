@@ -23,7 +23,7 @@
 #   DEALINGS IN THE SOFTWARE.
 #
 
-corrade_add_test(GLAttributeTest AttributeTest.cpp LIBRARIES MagnumGL)
+corrade_add_test(GLAttributeTest AttributeTest.cpp LIBRARIES MagnumGLTestLib)
 corrade_add_test(GLAbstractShaderProgramTest AbstractShaderProgramTest.cpp LIBRARIES MagnumGL)
 corrade_add_test(GLBufferTest BufferTest.cpp LIBRARIES MagnumGL)
 corrade_add_test(GLContextTest ContextTest.cpp LIBRARIES MagnumGL)
@@ -37,6 +37,7 @@ corrade_add_test(GLRenderbufferTest RenderbufferTest.cpp LIBRARIES MagnumGL)
 corrade_add_test(GLSamplerTest SamplerTest.cpp LIBRARIES MagnumGLTestLib)
 corrade_add_test(GLShaderTest ShaderTest.cpp LIBRARIES MagnumGL)
 corrade_add_test(GLTextureTest TextureTest.cpp LIBRARIES MagnumGL)
+corrade_add_test(GLTimeQueryTest TimeQueryTest.cpp LIBRARIES MagnumGL)
 corrade_add_test(GLVersionTest VersionTest.cpp LIBRARIES MagnumGL)
 
 set_target_properties(
@@ -54,6 +55,7 @@ set_target_properties(
     GLSamplerTest
     GLShaderTest
     GLTextureTest
+    GLTimeQueryTest
     GLVersionTest
     PROPERTIES FOLDER "Magnum/GL/Test")
 
@@ -93,25 +95,23 @@ if(NOT (MAGNUM_TARGET_WEBGL AND MAGNUM_TARGET_GLES2))
     set_target_properties(GLSampleQueryTest PROPERTIES FOLDER "Magnum/GL/Test")
 endif()
 
-if(NOT MAGNUM_TARGET_WEBGL)
-    corrade_add_test(GLTimeQueryTest TimeQueryTest.cpp LIBRARIES MagnumGL)
-    set_target_properties(GLTimeQueryTest PROPERTIES FOLDER "Magnum/GL/Test")
-endif()
-
 if(NOT MAGNUM_TARGET_GLES)
     corrade_add_test(GLRectangleTextureTest RectangleTextureTest.cpp LIBRARIES MagnumGL)
     set_target_properties(GLRectangleTextureTest PROPERTIES FOLDER "Magnum/GL/Test")
 endif()
 
 if(BUILD_GL_TESTS)
+    # Otherwise CMake complains that Corrade::PluginManager is not found, wtf
+    find_package(Corrade REQUIRED PluginManager)
+
     corrade_add_test(GLAbstractTextureGLTest AbstractTextureGLTest.cpp LIBRARIES MagnumOpenGLTesterTestLib)
     corrade_add_test(GLBufferGLTest BufferGLTest.cpp LIBRARIES MagnumOpenGLTester)
     corrade_add_test(GLCubeMapTextureGLTest CubeMapTextureGLTest.cpp LIBRARIES MagnumOpenGLTesterTestLib)
     corrade_add_test(GLFramebufferGLTest FramebufferGLTest.cpp LIBRARIES MagnumOpenGLTesterTestLib)
     corrade_add_test(GLMeshGLTest MeshGLTest.cpp LIBRARIES MagnumOpenGLTesterTestLib)
-    corrade_add_test(GLRendererGLTest RendererGLTest.cpp LIBRARIES MagnumOpenGLTester)
     corrade_add_test(GLRenderbufferGLTest RenderbufferGLTest.cpp LIBRARIES MagnumOpenGLTester)
     corrade_add_test(GLTextureGLTest TextureGLTest.cpp LIBRARIES MagnumOpenGLTesterTestLib)
+    corrade_add_test(GLTimeQueryGLTest TimeQueryGLTest.cpp LIBRARIES MagnumOpenGLTester)
 
     corrade_add_resource(GLAbstractShaderProgramGLTest_RES AbstractShaderProgramGLTestFiles/resources.conf)
     corrade_add_test(GLAbstractShaderProgramGLTest
@@ -127,16 +127,49 @@ if(BUILD_GL_TESTS)
 
     if(CORRADE_TARGET_EMSCRIPTEN OR CORRADE_TARGET_ANDROID)
         set(SHADERGLTEST_FILES_DIR "ShaderGLTestFiles")
+        set(RENDERERGLTEST_FILES_DIR "RendererGLTestFiles")
     else()
         set(SHADERGLTEST_FILES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ShaderGLTestFiles)
+        set(RENDERERGLTEST_FILES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/RendererGLTestFiles)
     endif()
 
+    # CMake before 3.8 has broken $<TARGET_FILE*> expressions for iOS (see
+    # https://gitlab.kitware.com/cmake/cmake/merge_requests/404) and since
+    # Corrade doesn't support dynamic plugins on iOS, this sorta works around
+    # that. Should be revisited when updating Travis to newer Xcode (xcode7.3
+    # has CMake 3.6).
+    if(NOT BUILD_PLUGINS_STATIC)
+        if(WITH_ANYIMAGEIMPORTER)
+            set(ANYIMAGEIMPORTER_PLUGIN_FILENAME $<TARGET_FILE:AnyImageImporter>)
+        endif()
+        if(WITH_TGAIMPORTER)
+            set(TGAIMPORTER_PLUGIN_FILENAME $<TARGET_FILE:TgaImporter>)
+        endif()
+    endif()
+
+    # First replace ${} variables, then $<> generator expressions
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/configure.h.cmake
-                   ${CMAKE_CURRENT_BINARY_DIR}/configure.h)
+                   ${CMAKE_CURRENT_BINARY_DIR}/configure.h.in)
+    file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/configure.h
+        INPUT ${CMAKE_CURRENT_BINARY_DIR}/configure.h.in)
+
+    corrade_add_test(GLRendererGLTest RendererGLTest.cpp
+        LIBRARIES MagnumOpenGLTester MagnumDebugTools
+        FILES RendererGLTestFiles/pointcoord.tga)
+    target_include_directories(GLRendererGLTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>)
+    if(BUILD_PLUGINS_STATIC)
+        if(WITH_ANYIMAGEIMPORTER)
+            target_link_libraries(GLRendererGLTest PRIVATE AnyImageImporter)
+        endif()
+        if(WITH_TGAIMPORTER)
+            target_link_libraries(GLRendererGLTest PRIVATE TgaImporter)
+        endif()
+    endif()
+
     corrade_add_test(GLShaderGLTest ShaderGLTest.cpp
         LIBRARIES MagnumOpenGLTester
         FILES ShaderGLTestFiles/shader.glsl)
-    target_include_directories(GLShaderGLTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    target_include_directories(GLShaderGLTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>)
 
     set_target_properties(
         GLAbstractTextureGLTest
@@ -147,6 +180,7 @@ if(BUILD_GL_TESTS)
         GLMeshGLTest
         GLRenderbufferGLTest
         GLTextureGLTest
+        GLTimeQueryGLTest
 
         GLAbstractShaderProgramGLTest
         GLAbstractShaderProgramGLTest_RES-dependencies
@@ -157,12 +191,10 @@ if(BUILD_GL_TESTS)
     if(NOT MAGNUM_TARGET_WEBGL)
         corrade_add_test(GLAbstractObjectGLTest AbstractObjectGLTest.cpp LIBRARIES MagnumOpenGLTester)
         corrade_add_test(GLDebugOutputGLTest DebugOutputGLTest.cpp LIBRARIES MagnumOpenGLTester)
-        corrade_add_test(GLTimeQueryGLTest TimeQueryGLTest.cpp LIBRARIES MagnumOpenGLTester)
 
         set_target_properties(
             GLAbstractObjectGLTest
             GLDebugOutputGLTest
-            GLTimeQueryGLTest
             PROPERTIES FOLDER "Magnum/GL/Test")
     endif()
 
@@ -207,5 +239,19 @@ if(BUILD_GL_TESTS)
     if(NOT MAGNUM_TARGET_GLES)
         corrade_add_test(GLRectangleTextureGLTest RectangleTextureGLTest.cpp LIBRARIES MagnumOpenGLTester)
         set_target_properties(GLRectangleTextureGLTest PROPERTIES FOLDER "Magnum/GL/Test")
+    endif()
+
+    if(MAGNUM_BUILD_STATIC AND NOT CORRADE_TARGET_EMSCRIPTEN AND NOT CORRADE_TARGET_IOS AND NOT CORRADE_TARGET_ANDROID AND NOT CORRADE_TARGET_WINDOWS_RT)
+        add_library(GLGlobalStateAcrossLibrariesLibrary SHARED
+            GlobalStateAcrossLibrariesLibrary.cpp)
+        target_link_libraries(GLGlobalStateAcrossLibrariesLibrary PUBLIC MagnumGL)
+
+        corrade_add_test(GLGlobalStateAcrossLibrariesGLTest
+            GlobalStateAcrossLibrariesGLTest.cpp
+            LIBRARIES GLGlobalStateAcrossLibrariesLibrary MagnumOpenGLTester)
+        set_target_properties(
+            GLGlobalStateAcrossLibrariesLibrary
+            GLGlobalStateAcrossLibrariesGLTest
+            PROPERTIES FOLDER "Magnum/GL/Test")
     endif()
 endif()

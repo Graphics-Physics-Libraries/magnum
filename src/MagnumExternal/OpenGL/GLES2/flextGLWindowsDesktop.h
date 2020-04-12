@@ -29,6 +29,7 @@
 
 #include "Magnum/configure.h"
 #include "Magnum/GL/GL.h"
+#include "MagnumExternal/OpenGL/KHR/khrplatform.h"
 
 /* Defensive include guards */
 
@@ -82,7 +83,6 @@ void flextGLInit(Magnum::GL::Context& context);
 
 /* Data types */
 
-#include <KHR/khrplatform.h>
 typedef unsigned int GLenum;
 typedef unsigned char GLboolean;
 typedef unsigned int GLbitfield;
@@ -1337,6 +1337,8 @@ GLAPI FLEXTGL_EXPORT void(APIENTRY *flextglDiscardFramebufferEXT)(GLenum, GLsize
 
 /* GL_EXT_disjoint_timer_query */
 
+GLAPI FLEXTGL_EXPORT void(APIENTRY *flextglGetInteger64vEXT)(GLenum, GLint64 *);
+#define glGetInteger64vEXT flextglGetInteger64vEXT
 GLAPI FLEXTGL_EXPORT void(APIENTRY *flextglGetQueryObjecti64vEXT)(GLuint, GLenum, GLint64 *);
 #define glGetQueryObjecti64vEXT flextglGetQueryObjecti64vEXT
 GLAPI FLEXTGL_EXPORT void(APIENTRY *flextglGetQueryObjectivEXT)(GLuint, GLenum, GLint *);

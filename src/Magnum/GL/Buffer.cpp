@@ -38,6 +38,10 @@
 #endif
 #include "Magnum/GL/Implementation/MeshState.h"
 
+#if defined(CORRADE_TARGET_APPLE) && !defined(CORRADE_TARGET_IOS)
+#include "Magnum/GL/Implementation/TextureState.h"
+#endif
+
 namespace Magnum { namespace GL {
 
 #ifndef MAGNUM_TARGET_GLES
@@ -458,18 +462,6 @@ void Buffer::dataImplementationDefault(GLsizeiptr size, const GLvoid* data, Buff
 void Buffer::dataImplementationDSA(const GLsizeiptr size, const GLvoid* const data, const BufferUsage usage) {
     glNamedBufferData(_id, size, data, GLenum(usage));
 }
-
-#ifdef CORRADE_TARGET_WINDOWS
-void Buffer::dataImplementationDSAIntelWindows(const GLsizeiptr size, const GLvoid* const data, const BufferUsage usage) {
-    glNamedBufferData(_id, size, data, GLenum(usage));
-    /* See the "intel-windows-buggy-dsa-bufferdata-for-index-buffers"
-       workaround for more information */
-    if(_targetHint == TargetHint::ElementArray) {
-        bindInternal(TargetHint::ElementArray, nullptr);
-        bindInternal(TargetHint::ElementArray, this);
-    }
-}
-#endif
 #endif
 
 void Buffer::subDataImplementationDefault(GLintptr offset, GLsizeiptr size, const GLvoid* data) {
@@ -558,11 +550,62 @@ bool Buffer::unmapImplementationDSA() {
 #endif
 #endif
 
+#if defined(CORRADE_TARGET_APPLE) && !defined(CORRADE_TARGET_IOS)
+/* See apple-buffer-texture-detach-on-data-modify for the gory details. */
+void Buffer::textureWorkaroundAppleBefore() {
+    /* Apple "fortunately" supports just 16 texture units, so this doesn't take
+       too long. */
+    Implementation::TextureState& textureState = *Context::current().state().texture;
+    for(GLint textureUnit = 0; textureUnit != GLint(textureState.bindings.size()); ++textureUnit) {
+        std::pair<GLenum, GLuint>& binding = textureState.bindings[textureUnit];
+        if(binding.first != GL_TEXTURE_BUFFER) continue;
+
+        /* Activate given texture unit if not already active, update state
+           tracker */
+        if(textureState.currentTextureUnit != textureUnit)
+            glActiveTexture(GL_TEXTURE0 + (textureState.currentTextureUnit = textureUnit));
+
+        /* Unbind the texture, reset state tracker */
+        glBindTexture(GL_TEXTURE_BUFFER, 0);
+        /* libstdc++ since GCC 6.3 can't handle just = {} (ambiguous overload
+           of operator=) */
+        binding = std::pair<GLenum, GLuint>{};
+    }
+}
+
+void Buffer::dataImplementationApple(const GLsizeiptr size, const GLvoid* const data, const BufferUsage usage) {
+    textureWorkaroundAppleBefore();
+    dataImplementationDefault(size, data, usage);
+}
+
+void Buffer::subDataImplementationApple(const GLintptr offset, const GLsizeiptr size, const GLvoid* const data) {
+    textureWorkaroundAppleBefore();
+    subDataImplementationDefault(offset, size, data);
+}
+
+void* Buffer::mapImplementationApple(const MapAccess access) {
+    textureWorkaroundAppleBefore();
+    return mapImplementationDefault(access);
+}
+
+void* Buffer::mapRangeImplementationApple(const GLintptr offset, const GLsizeiptr length, const MapFlags access) {
+    textureWorkaroundAppleBefore();
+    return mapRangeImplementationDefault(offset, length, access);
+}
+
+bool Buffer::unmapImplementationApple() {
+    textureWorkaroundAppleBefore();
+    return unmapImplementationDefault();
+}
+#endif
+
 #ifndef DOXYGEN_GENERATING_OUTPUT
-Debug& operator<<(Debug& debug, Buffer::TargetHint value) {
+Debug& operator<<(Debug& debug, const Buffer::TargetHint value) {
+    debug << "GL::Buffer::TargetHint" << Debug::nospace;
+
     switch(value) {
         /* LCOV_EXCL_START */
-        #define _c(value) case Buffer::TargetHint::value: return debug << "GL::Buffer::TargetHint::" #value;
+        #define _c(value) case Buffer::TargetHint::value: return debug << "::" #value;
         _c(Array)
         #ifndef MAGNUM_TARGET_GLES2
         #ifndef MAGNUM_TARGET_WEBGL
@@ -594,13 +637,15 @@ Debug& operator<<(Debug& debug, Buffer::TargetHint value) {
         /* LCOV_EXCL_STOP */
     }
 
-    return debug << "GL::Buffer::TargetHint(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
 }
 
 #ifndef MAGNUM_TARGET_GLES2
-Debug& operator<<(Debug& debug, Buffer::Target value) {
+Debug& operator<<(Debug& debug, const Buffer::Target value) {
+    debug << "GL::Buffer::Target" << Debug::nospace;
+
     switch(value) {
-        #define _c(value) case Buffer::Target::value: return debug << "GL::Buffer::Target::" #value;
+        #define _c(value) case Buffer::Target::value: return debug << "::" #value;
         #ifndef MAGNUM_TARGET_WEBGL
         _c(AtomicCounter)
         _c(ShaderStorage)
@@ -609,7 +654,7 @@ Debug& operator<<(Debug& debug, Buffer::Target value) {
         #undef _c
     }
 
-    return debug << "GL::Buffer::Target(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
 }
 #endif
 #endif

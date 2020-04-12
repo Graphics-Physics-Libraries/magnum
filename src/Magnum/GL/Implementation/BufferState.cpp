@@ -88,25 +88,21 @@ BufferState::BufferState(Context& context, std::vector<std::string>& extensions)
     , uniformOffsetAlignment{0}, maxUniformBindings{0}
     #endif
 {
-    /* Create implementation */
+    /* DSA, except Intel Windows, because I have no patience for that anymore */
     #ifndef MAGNUM_TARGET_GLES
-    if(context.isExtensionSupported<Extensions::ARB::direct_state_access>()) {
+    if(context.isExtensionSupported<Extensions::ARB::direct_state_access>()
+        #ifdef CORRADE_TARGET_WINDOWS
+        && (!(context.detectedDriver() & Context::DetectedDriver::IntelWindows) ||
+        context.isDriverWorkaroundDisabled("intel-windows-crazy-broken-buffer-dsa"))
+        #endif
+    ) {
         extensions.emplace_back(Extensions::ARB::direct_state_access::string());
+
         createImplementation = &Buffer::createImplementationDSA;
-
-    } else
-    #endif
-    {
-        createImplementation = &Buffer::createImplementationDefault;
-    }
-
-    #ifndef MAGNUM_TARGET_GLES
-    if(context.isExtensionSupported<Extensions::ARB::direct_state_access>()) {
-        extensions.emplace_back(Extensions::ARB::direct_state_access::string());
-
         copyImplementation = &Buffer::copyImplementationDSA;
         getParameterImplementation = &Buffer::getParameterImplementationDSA;
         getSubDataImplementation = &Buffer::getSubDataImplementationDSA;
+        dataImplementation = &Buffer::dataImplementationDSA;
         subDataImplementation = &Buffer::subDataImplementationDSA;
         mapImplementation = &Buffer::mapImplementationDSA;
         mapRangeImplementation = &Buffer::mapRangeImplementationDSA;
@@ -115,6 +111,7 @@ BufferState::BufferState(Context& context, std::vector<std::string>& extensions)
     } else
     #endif
     {
+        createImplementation = &Buffer::createImplementationDefault;
         #ifndef MAGNUM_TARGET_GLES2
         copyImplementation = &Buffer::copyImplementationDefault;
         #endif
@@ -122,6 +119,7 @@ BufferState::BufferState(Context& context, std::vector<std::string>& extensions)
         #ifndef MAGNUM_TARGET_GLES
         getSubDataImplementation = &Buffer::getSubDataImplementationDefault;
         #endif
+        dataImplementation = &Buffer::dataImplementationDefault;
         subDataImplementation = &Buffer::subDataImplementationDefault;
         #ifndef MAGNUM_TARGET_WEBGL
         mapImplementation = &Buffer::mapImplementationDefault;
@@ -179,23 +177,18 @@ BufferState::BufferState(Context& context, std::vector<std::string>& extensions)
         setTargetHintImplementation = &Buffer::setTargetHintImplementationDefault;
     }
 
-    #ifndef MAGNUM_TARGET_GLES
-    if(context.isExtensionSupported<Extensions::ARB::direct_state_access>()) {
-        #ifdef CORRADE_TARGET_WINDOWS
-        if((context.detectedDriver() & Context::DetectedDriver::IntelWindows) &&
-           !context.isDriverWorkaroundDisabled("intel-windows-buggy-dsa-bufferdata-for-index-buffers"))
-        {
-            dataImplementation = &Buffer::dataImplementationDSAIntelWindows;
-        } else
-        #endif
-        {
-            dataImplementation = &Buffer::dataImplementationDSA;
-        }
-    } else
-    #endif
-    {
-        dataImplementation = &Buffer::dataImplementationDefault;
+    #if defined(CORRADE_TARGET_APPLE) && !defined(MAGNUM_TARGET_GLES)
+    if(!context.isDriverWorkaroundDisabled("apple-buffer-texture-unbind-on-buffer-modify")) {
+        dataImplementation = &Buffer::dataImplementationApple;
+        subDataImplementation = &Buffer::subDataImplementationApple;
+        mapImplementation = &Buffer::mapImplementationApple;
+        mapRangeImplementation = &Buffer::mapRangeImplementationApple;
+        unmapImplementation = &Buffer::unmapImplementationApple;
+        /* No need for Apple-specific invalidate*Implementation, as the
+           extension isn't supported anyway */
+        CORRADE_INTERNAL_ASSERT(!context.isExtensionSupported<Extensions::ARB::invalidate_subdata>());
     }
+    #endif
 
     #ifdef MAGNUM_TARGET_GLES
     static_cast<void>(context);

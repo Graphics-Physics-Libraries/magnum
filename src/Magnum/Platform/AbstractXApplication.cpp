@@ -114,8 +114,8 @@ AbstractXApplication::~AbstractXApplication() {
     _contextHandler.reset();
 
     /* Shut down X */
-    XDestroyWindow(_display, _window);
-    XCloseDisplay(_display);
+    if(_window) XDestroyWindow(_display, _window);
+    if(_display) XCloseDisplay(_display);
 }
 
 void AbstractXApplication::swapBuffers() {
@@ -123,58 +123,70 @@ void AbstractXApplication::swapBuffers() {
 }
 
 int AbstractXApplication::exec() {
+    /* If exit was requested directly in the constructor, exit immediately
+       without calling anything else */
+    if(_flags & Flag::Exit) return _exitCode;
+
     /* Show window */
     XMapWindow(_display, _window);
 
-    while(!(_flags & Flag::Exit)) {
-        XEvent event;
+    while(mainLoopIteration()) {}
 
-        /* Closed window */
-        if(XCheckTypedWindowEvent(_display, _window, ClientMessage, &event) &&
-           Atom(event.xclient.data.l[0]) == _deleteWindow) {
-            return 0;
-        }
+    return _exitCode;
+}
 
-        while(XCheckWindowEvent(_display, _window, INPUT_MASK, &event)) {
-            switch(event.type) {
-                /* Window resizing */
-                case ConfigureNotify: {
-                    Vector2i size(event.xconfigure.width, event.xconfigure.height);
-                    if(size != _windowSize) {
-                        _windowSize = size;
-                        ViewportEvent e{size};
-                        viewportEvent(e);
-                        _flags |= Flag::Redraw;
-                    }
-                } break;
+bool AbstractXApplication::mainLoopIteration() {
+    /* If exit was requested directly in the constructor, exit immediately
+       without calling anything else */
+    if(_flags & Flag::Exit) return false;
 
-                /* Key/mouse events */
-                case KeyPress:
-                case KeyRelease: {
-                    KeyEvent e(static_cast<KeyEvent::Key>(XLookupKeysym(&event.xkey, 0)), static_cast<InputEvent::Modifier>(event.xkey.state), {event.xkey.x, event.xkey.y});
-                    event.type == KeyPress ? keyPressEvent(e) : keyReleaseEvent(e);
-                } break;
-                case ButtonPress:
-                case ButtonRelease: {
-                    MouseEvent e(static_cast<MouseEvent::Button>(event.xbutton.button), static_cast<InputEvent::Modifier>(event.xkey.state), {event.xbutton.x, event.xbutton.y});
-                    event.type == ButtonPress ? mousePressEvent(e) : mouseReleaseEvent(e);
-                } break;
+    XEvent event;
 
-                /* Mouse move events */
-                case MotionNotify: {
-                    MouseMoveEvent e(static_cast<InputEvent::Modifier>(event.xmotion.state), {event.xmotion.x, event.xmotion.y});
-                    mouseMoveEvent(e);
-                } break;
-            }
-        }
-
-        if(_flags & Flag::Redraw) {
-            _flags &= ~Flag::Redraw;
-            drawEvent();
-        } else Utility::System::sleep(5);
+    /* Closed window */
+    if(XCheckTypedWindowEvent(_display, _window, ClientMessage, &event) &&
+        Atom(event.xclient.data.l[0]) == _deleteWindow) {
+        return false;
     }
 
-    return 0;
+    while(XCheckWindowEvent(_display, _window, INPUT_MASK, &event)) {
+        switch(event.type) {
+            /* Window resizing */
+            case ConfigureNotify: {
+                Vector2i size(event.xconfigure.width, event.xconfigure.height);
+                if(size != _windowSize) {
+                    _windowSize = size;
+                    ViewportEvent e{size};
+                    viewportEvent(e);
+                    _flags |= Flag::Redraw;
+                }
+            } break;
+
+            /* Key/mouse events */
+            case KeyPress:
+            case KeyRelease: {
+                KeyEvent e(static_cast<KeyEvent::Key>(XLookupKeysym(&event.xkey, 0)), static_cast<InputEvent::Modifier>(event.xkey.state), {event.xkey.x, event.xkey.y});
+                event.type == KeyPress ? keyPressEvent(e) : keyReleaseEvent(e);
+            } break;
+            case ButtonPress:
+            case ButtonRelease: {
+                MouseEvent e(static_cast<MouseEvent::Button>(event.xbutton.button), static_cast<InputEvent::Modifier>(event.xkey.state), {event.xbutton.x, event.xbutton.y});
+                event.type == ButtonPress ? mousePressEvent(e) : mouseReleaseEvent(e);
+            } break;
+
+            /* Mouse move events */
+            case MotionNotify: {
+                MouseMoveEvent e(static_cast<InputEvent::Modifier>(event.xmotion.state), {event.xmotion.x, event.xmotion.y});
+                mouseMoveEvent(e);
+            } break;
+        }
+    }
+
+    if(_flags & Flag::Redraw) {
+        _flags &= ~Flag::Redraw;
+        drawEvent();
+    } else Utility::System::sleep(5);
+
+    return !(_flags & Flag::Exit);
 }
 
 void AbstractXApplication::viewportEvent(ViewportEvent& event) {

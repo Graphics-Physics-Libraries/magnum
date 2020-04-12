@@ -23,18 +23,73 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+#include <tuple> /* for std::tie() :( */
+#include <Corrade/Containers/StridedArrayView.h>
+
 #include "Magnum/GL/Buffer.h"
 #include "Magnum/GL/Mesh.h"
 #include "Magnum/Math/Vector3.h"
+#include "Magnum/MeshTools/Compile.h"
 #include "Magnum/MeshTools/CompressIndices.h"
 #include "Magnum/MeshTools/Interleave.h"
+#include "Magnum/Trade/MeshData.h"
 
 using namespace Magnum;
 
 int main() {
 
 {
+Trade::MeshData meshData{MeshPrimitive::Lines, 5};
+/* [compile-external] */
+GL::Buffer indices, vertices;
+indices.setData(meshData.indexData());
+vertices.setData(meshData.vertexData());
+
+GL::Mesh mesh = MeshTools::compile(meshData, indices, vertices);
+/* [compile-external] */
+}
+
+{
+Trade::MeshData meshData{MeshPrimitive::Lines, 5};
+Trade::MeshAttribute myCustomAttribute{};
+/* [compile-external-attributes] */
+GL::Buffer indices, vertices;
+indices.setData(meshData.indexData());
+vertices.setData(meshData.vertexData());
+
+/* Let compile() handle the usual attributes and configure custom ones after */
+GL::Mesh mesh = MeshTools::compile(meshData, std::move(indices), vertices);
+mesh.addVertexBuffer(std::move(vertices),
+    meshData.attributeOffset(myCustomAttribute),
+    meshData.attributeStride(myCustomAttribute),
+    GL::DynamicAttribute{
+        GL::DynamicAttribute::Kind::Generic, 7,
+        GL::DynamicAttribute::Components::One,
+        GL::DynamicAttribute::DataType::Float});
+/* [compile-external-attributes] */
+}
+
+{
 /* [compressIndices] */
+Containers::Array<UnsignedInt> indices;
+
+Containers::Array<char> indexData;
+MeshIndexType indexType;
+std::tie(indexData, indexType) = MeshTools::compressIndices(indices);
+
+GL::Buffer indexBuffer;
+indexBuffer.setData(indexData);
+
+GL::Mesh mesh;
+mesh.setCount(indices.size())
+    .setIndexBuffer(indexBuffer, 0, indexType);
+/* [compressIndices] */
+}
+
+#ifdef MAGNUM_BUILD_DEPRECATED
+{
+CORRADE_IGNORE_DEPRECATED_PUSH
+/* [compressIndices-stl] */
 std::vector<UnsignedInt> indices;
 
 Containers::Array<char> indexData;
@@ -49,8 +104,10 @@ indexBuffer.setData(indexData, GL::BufferUsage::StaticDraw);
 GL::Mesh mesh;
 mesh.setCount(indices.size())
     .setIndexBuffer(indexBuffer, 0, indexType, indexStart, indexEnd);
-/* [compressIndices] */
+/* [compressIndices-stl] */
 }
+CORRADE_IGNORE_DEPRECATED_POP
+#endif
 
 {
 struct MyShader {
@@ -58,15 +115,16 @@ struct MyShader {
     typedef GL::Attribute<0, Vector2> TextureCoordinates;
 };
 /* [interleave1] */
-std::vector<Vector3> positions;
-std::vector<Vector2> textureCoordinates;
+Containers::ArrayView<const Vector3> positions;
+Containers::ArrayView<const Vector2> textureCoordinates;
 
 GL::Buffer vertexBuffer;
-vertexBuffer.setData(MeshTools::interleave(positions, textureCoordinates), GL::BufferUsage::StaticDraw);
+vertexBuffer.setData(MeshTools::interleave(positions, textureCoordinates));
 
 GL::Mesh mesh;
 mesh.setCount(positions.size())
-    .addVertexBuffer(vertexBuffer, 0, MyShader::Position{}, MyShader::TextureCoordinates{});
+    .addVertexBuffer(vertexBuffer, 0, MyShader::Position{},
+                                      MyShader::TextureCoordinates{});
 /* [interleave1] */
 }
 

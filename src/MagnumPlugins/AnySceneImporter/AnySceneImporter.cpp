@@ -36,12 +36,18 @@
 #include "Magnum/Trade/CameraData.h"
 #include "Magnum/Trade/ImageData.h"
 #include "Magnum/Trade/LightData.h"
-#include "Magnum/Trade/MeshData2D.h"
-#include "Magnum/Trade/MeshData3D.h"
+#include "Magnum/Trade/MeshData.h"
 #include "Magnum/Trade/ObjectData2D.h"
 #include "Magnum/Trade/ObjectData3D.h"
 #include "Magnum/Trade/SceneData.h"
 #include "Magnum/Trade/TextureData.h"
+
+#ifdef MAGNUM_BUILD_DEPRECATED
+#define _MAGNUM_NO_DEPRECATED_MESHDATA /* So it doesn't yell here */
+
+#include "Magnum/Trade/MeshData2D.h"
+#include "Magnum/Trade/MeshData3D.h"
+#endif
 
 namespace Magnum { namespace Trade {
 
@@ -51,7 +57,7 @@ AnySceneImporter::AnySceneImporter(PluginManager::AbstractManager& manager, cons
 
 AnySceneImporter::~AnySceneImporter() = default;
 
-auto AnySceneImporter::doFeatures() const -> Features { return {}; }
+ImporterFeatures AnySceneImporter::doFeatures() const { return {}; }
 
 bool AnySceneImporter::doIsOpened() const { return !!_in; }
 
@@ -86,10 +92,9 @@ void AnySceneImporter::doOpenFile(const std::string& filename) {
         plugin = "DxfImporter";
     else if(Utility::String::endsWith(normalized, ".fbx"))
         plugin = "FbxImporter";
-    else if(Utility::String::endsWith(normalized, ".gltf"))
+    else if(Utility::String::endsWith(normalized, ".gltf") ||
+            Utility::String::endsWith(normalized, ".glb"))
         plugin = "GltfImporter";
-    else if(Utility::String::endsWith(normalized, ".glb"))
-        plugin = "GlbImporter";
     else if(Utility::String::endsWith(normalized, ".ifc"))
         plugin = "IfcImporter";
     else if(Utility::String::endsWith(normalized, ".irrmesh") ||
@@ -175,6 +180,16 @@ Int AnySceneImporter::doObject3DForName(const std::string& name) { return _in->o
 std::string AnySceneImporter::doObject3DName(const UnsignedInt id) { return _in->object3DName(id); }
 Containers::Pointer<ObjectData3D> AnySceneImporter::doObject3D(const UnsignedInt id) { return _in->object3D(id); }
 
+UnsignedInt AnySceneImporter::doMeshCount() const { return _in->meshCount(); }
+Int AnySceneImporter::doMeshForName(const std::string& name) { return _in->meshForName(name); }
+std::string AnySceneImporter::doMeshName(const UnsignedInt id) { return _in->meshName(id); }
+Containers::Optional<MeshData> AnySceneImporter::doMesh(const UnsignedInt id, const UnsignedInt level) { return _in->mesh(id, level); }
+
+MeshAttribute AnySceneImporter::doMeshAttributeForName(const std::string& name) { return _in->meshAttributeForName(name); }
+std::string AnySceneImporter::doMeshAttributeName(const UnsignedShort id) { return _in->meshAttributeName(meshAttributeCustom(id)); }
+
+#ifdef MAGNUM_BUILD_DEPRECATED
+CORRADE_IGNORE_DEPRECATED_PUSH
 UnsignedInt AnySceneImporter::doMesh2DCount() const { return _in->mesh2DCount(); }
 Int AnySceneImporter::doMesh2DForName(const std::string& name) { return _in->mesh2DForName(name); }
 std::string AnySceneImporter::doMesh2DName(const UnsignedInt id) { return _in->mesh2DName(id); }
@@ -184,6 +199,8 @@ UnsignedInt AnySceneImporter::doMesh3DCount() const { return _in->mesh3DCount();
 Int AnySceneImporter::doMesh3DForName(const std::string& name) { return _in->mesh3DForName(name); }
 std::string AnySceneImporter::doMesh3DName(const UnsignedInt id) { return _in->mesh3DName(id); }
 Containers::Optional<MeshData3D> AnySceneImporter::doMesh3D(const UnsignedInt id) { return _in->mesh3D(id); }
+CORRADE_IGNORE_DEPRECATED_POP
+#endif
 
 UnsignedInt AnySceneImporter::doMaterialCount() const { return _in->materialCount(); }
 Int AnySceneImporter::doMaterialForName(const std::string& name) { return _in->materialForName(name); }
@@ -196,21 +213,24 @@ std::string AnySceneImporter::doTextureName(const UnsignedInt id) { return _in->
 Containers::Optional<TextureData> AnySceneImporter::doTexture(const UnsignedInt id) { return _in->texture(id); }
 
 UnsignedInt AnySceneImporter::doImage1DCount() const { return _in->image1DCount(); }
+UnsignedInt AnySceneImporter::doImage1DLevelCount(UnsignedInt id) { return _in->image1DLevelCount(id); }
 Int AnySceneImporter::doImage1DForName(const std::string& name) { return _in->image1DForName(name); }
 std::string AnySceneImporter::doImage1DName(const UnsignedInt id) { return _in->image1DName(id); }
-Containers::Optional<ImageData1D> AnySceneImporter::doImage1D(const UnsignedInt id) { return _in->image1D(id); }
+Containers::Optional<ImageData1D> AnySceneImporter::doImage1D(const UnsignedInt id, const UnsignedInt level) { return _in->image1D(id, level); }
 
 UnsignedInt AnySceneImporter::doImage2DCount() const { return _in->image2DCount(); }
+UnsignedInt AnySceneImporter::doImage2DLevelCount(UnsignedInt id) { return _in->image2DLevelCount(id); }
 Int AnySceneImporter::doImage2DForName(const std::string& name) { return _in->image2DForName(name); }
 std::string AnySceneImporter::doImage2DName(const UnsignedInt id) { return _in->image2DName(id); }
-Containers::Optional<ImageData2D> AnySceneImporter::doImage2D(const UnsignedInt id) { return _in->image2D(id); }
+Containers::Optional<ImageData2D> AnySceneImporter::doImage2D(const UnsignedInt id, const UnsignedInt level) { return _in->image2D(id, level); }
 
 UnsignedInt AnySceneImporter::doImage3DCount() const { return _in->image3DCount(); }
+UnsignedInt AnySceneImporter::doImage3DLevelCount(UnsignedInt id) { return _in->image3DLevelCount(id); }
 Int AnySceneImporter::doImage3DForName(const std::string& name) { return _in->image3DForName(name); }
 std::string AnySceneImporter::doImage3DName(const UnsignedInt id) { return _in->image3DName(id); }
-Containers::Optional<ImageData3D> AnySceneImporter::doImage3D(const UnsignedInt id) { return _in->image3D(id); }
+Containers::Optional<ImageData3D> AnySceneImporter::doImage3D(const UnsignedInt id, const UnsignedInt level) { return _in->image3D(id, level); }
 
 }}
 
 CORRADE_PLUGIN_REGISTER(AnySceneImporter, Magnum::Trade::AnySceneImporter,
-    "cz.mosra.magnum.Trade.AbstractImporter/0.3")
+    "cz.mosra.magnum.Trade.AbstractImporter/0.3.1")

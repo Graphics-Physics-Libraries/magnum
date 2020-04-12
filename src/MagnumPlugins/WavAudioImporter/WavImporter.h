@@ -73,13 +73,37 @@ Supports mono and stereo files of the following formats:
 -   A-Law, imported as @ref BufferFormat::MonoALaw / @ref BufferFormat::StereoALaw
 -   μ-Law, imported as @ref BufferFormat::MonoMuLaw / @ref BufferFormat::StereoMuLaw
 
+Both Little-Endian files (with a `RIFF` header) and Big-Endian files (with
+a `RIFX` header) are supported, data is converted to machine endian on import.
+
+@section Audio-WavImporter-usage Usage
+
 This plugin is built if `WITH_WAVAUDIOIMPORTER` is enabled when building
-Magnum. To use dynamic plugin, you need to load the @cpp "WavAudioImporter" @ce
-plugin from `MAGNUM_PLUGINS_AUDIOIMPORTER_DIR`. To use as a static plugin or as
-a dependency of another plugin with CMake, you need to request the
-`WavAudioImporter` component of the `Magnum` package and link to the
-`Magnum::WavAudioImporter` target. See @ref building, @ref cmake and
-@ref plugins for more information.
+Magnum. To use dynamic plugin, load @cpp "WavAudioImporter" @ce
+via @ref Corrade::PluginManager::Manager.
+
+Additionally, if you're using Magnum as a CMake subproject, do the following:
+
+@code{.cmake}
+set(WITH_WAVAUDIOIMPORTER ON CACHE BOOL "" FORCE)
+add_subdirectory(magnum EXCLUDE_FROM_ALL)
+
+# So the dynamically loaded plugin gets built implicitly
+add_dependencies(your-app Magnum::WavAudioImporter)
+@endcode
+
+To use as a static plugin or as a dependency of another plugin with CMake, you
+need to request the `WavAudioImporter` component of the `Magnum` package and
+link to the `Magnum::WavAudioImporter` target:
+
+@code{.cmake}
+find_package(Magnum REQUIRED WavAudioImporter)
+
+# ...
+target_link_libraries(your-app PRIVATE Magnum::WavAudioImporter)
+@endcode
+
+See @ref building, @ref cmake and @ref plugins for more information.
 
 @section Audio-WavImporter-limitations Behavior and limitations
 
@@ -94,7 +118,7 @@ class MAGNUM_WAVAUDIOIMPORTER_EXPORT WavImporter: public AbstractImporter {
         explicit WavImporter(PluginManager::AbstractManager& manager, const std::string& plugin);
 
     private:
-        MAGNUM_WAVAUDIOIMPORTER_LOCAL Features doFeatures() const override;
+        MAGNUM_WAVAUDIOIMPORTER_LOCAL ImporterFeatures doFeatures() const override;
         MAGNUM_WAVAUDIOIMPORTER_LOCAL bool doIsOpened() const override;
         MAGNUM_WAVAUDIOIMPORTER_LOCAL void doOpenData(Containers::ArrayView<const char> data) override;
         MAGNUM_WAVAUDIOIMPORTER_LOCAL void doClose() override;

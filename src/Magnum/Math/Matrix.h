@@ -54,7 +54,12 @@ namespace Implementation {
 See @ref matrix-vector for brief introduction.
 
 @configurationvalueref{Magnum::Math::Matrix}
-@see @ref Matrix2x2, @ref Matrix3x3, @ref Matrix4x4
+@see @ref Matrix2x2, @ref Matrix3x3, @ref Matrix4x4, @ref Magnum::Matrix2x2,
+    @ref Magnum::Matrix2x2d, @ref Magnum::Matrix2x2h, @ref Magnum::Matrix2x2b,
+    @ref Magnum::Matrix2x2s, @ref Magnum::Matrix3x3, @ref Magnum::Matrix3x3d,
+    @ref Magnum::Matrix3x3h, @ref Magnum::Matrix3x3b, @ref Magnum::Matrix3x3s,
+    @ref Magnum::Matrix4x4, @ref Magnum::Matrix4x4d, @ref Magnum::Matrix4x4h,
+    @ref Magnum::Matrix4x4b, @ref Magnum::Matrix4x4s
  */
 template<std::size_t size, class T> class Matrix: public RectangularMatrix<size, size, T> {
     public:
@@ -135,33 +140,122 @@ template<std::size_t size, class T> class Matrix: public RectangularMatrix<size,
          */
         T trace() const { return RectangularMatrix<size, size, T>::diagonal().sum(); }
 
-        /** @brief Matrix without given column and row */
+        /**
+         * @brief Matrix without given column and row
+         *
+         * For the following matrix @f$ \boldsymbol{M} @f$,
+         * @f$ \boldsymbol{M}_{3,2} @f$ is defined as: @f[
+         *  \begin{array}{rcl}
+         *      \boldsymbol{M} & = & \begin{pmatrix}
+         *          \,\,\,1 & 4 & 7 \\
+         *          \,\,\,3 & 0 & 5 \\
+         *          -1 & 9 & \!11 \\
+         *      \end{pmatrix} \\[2em]
+         *      \boldsymbol{M}_{2,3} & = & \begin{pmatrix}
+         *          \,\,1 & 4 & \Box\, \\
+         *          \,\Box & \Box & \Box\, \\
+         *          -1 & 9 & \Box\, \\
+         *      \end{pmatrix} = \begin{pmatrix}
+         *          \,\,\,1 & 4\, \\
+         *          -1 & 9\, \\
+         *      \end{pmatrix}
+         *  \end{array}
+         * @f]
+         *
+         * @see @ref cofactor(), @ref adjugate(), @ref determinant()
+         */
         Matrix<size-1, T> ij(std::size_t skipCol, std::size_t skipRow) const;
+
+        /**
+         * @brief Cofactor
+         * @m_since{2019,10}
+         *
+         * Cofactor @f$ C_{i,j} @f$ of a matrix @f$ \boldsymbol{M} @f$ is
+         * defined as @f$ C_{i,j} = (-1)^{i + j} \det \boldsymbol{M}_{i,j} @f$,
+         * with @f$ \boldsymbol{M}_{i,j} @f$ being @f$ \boldsymbol{M} @f$
+         * without the i-th column and j-th row. For example, calculating
+         * @f$ C_{3,2} @f$ of @f$ \boldsymbol{M} @f$ defined as @f[
+         *  \boldsymbol{M} = \begin{pmatrix}
+         *      \,\,\,1 & 4 & 7 \\
+         *      \,\,\,3 & 0 & 5 \\
+         *      -1 & 9 & \!11 \\
+         *  \end{pmatrix}
+         * @f]
+         *
+         * @m_class{m-noindent}
+         *
+         * would be @f[
+         *  C_{3,2} = (-1)^{2 + 3} \det \begin{pmatrix}
+         *      \,\,1 & 4 & \Box\, \\
+         *      \,\Box & \Box & \Box\, \\
+         *      -1 & 9 & \Box\, \\
+         *  \end{pmatrix} = -\det \begin{pmatrix}
+         *      \,\,\,1 & 4\, \\
+         *      -1 & 9\, \\
+         *  \end{pmatrix} = -(9-(-4)) = -13
+         * @f]
+         *
+         * @see @ref ij(), @ref comatrix(), @ref adjugate()
+         */
+        T cofactor(std::size_t col, std::size_t row) const;
+
+        /**
+         * @brief Matrix of cofactors
+         * @m_since{2019,10}
+         *
+         * A cofactor matrix @f$ \boldsymbol{C} @f$ of a matrix
+         * @f$ \boldsymbol{M} @f$ is defined as the following, with each
+         * @f$ C_{i,j} @f$ calculated as in @ref cofactor(). @f[
+         *  \boldsymbol C = \begin{pmatrix}
+         *      C_{1,1}  & C_{2,1} & \cdots &   C_{n,1} \\
+         *      C_{1,2}  & C_{2,2} & \cdots &   C_{n,2} \\
+         *      \vdots & \vdots & \ddots & \vdots \\
+         *      C_{1,n}  & C_{2,n} & \cdots &  C_{n,n}
+         *  \end{pmatrix}
+         * @f]
+         *
+         * @see @ref Matrix4::normalMatrix(), @ref ij(), @ref adjugate()
+         */
+        Matrix<size, T> comatrix() const;
+
+        /**
+         * @brief Adjugate matrix
+         * @m_since{2019,10}
+         *
+         * @f$ adj(A) @f$. Transpose of a @ref comatrix(), used for example to
+         * calculate an @ref inverted() matrix.
+         */
+        Matrix<size, T> adjugate() const;
 
         /**
          * @brief Determinant
          *
-         * Returns `0` if the matrix is noninvertible and `1` if the matrix is
-         * orthogonal. Computed recursively using Laplace's formula: @f[
-         *      \det(A) = \sum_{j=1}^n (-1)^{i+j} a_{i,j} \det(A^{i,j})
-         * @f] @f$ A^{i, j} @f$ is matrix without i-th row and j-th column, see
-         * @ref ij(). The formula is expanded down to 2x2 matrix, where the
-         * determinant is computed directly: @f[
-         *      \det(A) = a_{0, 0} a_{1, 1} - a_{1, 0} a_{0, 1}
+         * Returns 0 if the matrix is noninvertible and 1 if the matrix is
+         * orthogonal. Computed recursively using
+         * <a href="https://en.wikipedia.org/wiki/Determinant#Laplace's_formula_and_the_adjugate_matrix">Laplace's formula</a>: @f[
+         *      \det \boldsymbol{A} = \sum_{j=1}^n (-1)^{i+j} a_{i,j} \det \boldsymbol{A}_{i,j}
+         * @f] @f$ \boldsymbol{A}_{i,j} @f$ is @f$ \boldsymbol{A} @f$ without
+         * the i-th column and j-th row. The formula is recursed down to a 2x2
+         * matrix, where the determinant is calculated directly: @f[
+         *      \det \boldsymbol{A} = a_{0, 0} a_{1, 1} - a_{1, 0} a_{0, 1}
          * @f]
+         *
+         * @see @ref ij()
          */
         T determinant() const { return Implementation::MatrixDeterminant<size, T>()(*this); }
 
         /**
          * @brief Inverted matrix
          *
-         * Computed using Cramer's rule: @f[
-         *      A^{-1} = \frac{1}{\det(A)} Adj(A)
+         * Calculated using <a href="https://en.wikipedia.org/wiki/Cramer's_rule">Cramer's rule</a> and @ref adjugate(), or equivalently
+         * using a @ref comatrix(): @f[
+         *      \boldsymbol{A}^{-1} = \frac{1}{\det \boldsymbol{A}} adj(\boldsymbol{A}) = \frac{1}{\det \boldsymbol{A}} \boldsymbol{C}^T
          * @f]
          * See @ref invertedOrthogonal(), @ref Matrix3::invertedRigid() and
          * @ref Matrix4::invertedRigid() which are faster alternatives for
          * particular matrix types.
-         * @see @ref Algorithms::gaussJordanInverted()
+         * @see @ref Algorithms::gaussJordanInverted(),
+         *      @ref Matrix4::normalMatrix()
          * @m_keyword{inverse(),GLSL inverse(),}
          */
         Matrix<size, T> inverted() const;
@@ -171,7 +265,7 @@ template<std::size_t size, class T> class Matrix: public RectangularMatrix<size,
          *
          * Equivalent to @ref transposed(), expects that the matrix is
          * orthogonal. @f[
-         *      A^{-1} = A^T
+         *      \boldsymbol{A}^{-1} = \boldsymbol{A}^T
          * @f]
          * @see @ref inverted(), @ref isOrthogonal(),
          *      @ref Matrix3::invertedRigid(),
@@ -212,7 +306,8 @@ template<std::size_t size, class T> class Matrix: public RectangularMatrix<size,
 
 Convenience alternative to `Matrix<2, T>`. See @ref Matrix for more
 information.
-@see @ref Magnum::Matrix2x2, @ref Magnum::Matrix2x2d
+@see @ref Magnum::Matrix2x2, @ref Magnum::Matrix2x2d, @ref Magnum::Matrix2x2h,
+    @ref Magnum::Matrix2x2b, @ref Magnum::Matrix2x2s
 */
 #ifndef CORRADE_MSVC2015_COMPATIBILITY /* Multiple definitions still broken */
 template<class T> using Matrix2x2 = Matrix<2, T>;
@@ -224,7 +319,8 @@ template<class T> using Matrix2x2 = Matrix<2, T>;
 Convenience alternative to `Matrix<3, T>`. See @ref Matrix for more
 information. Note that this is different from @ref Matrix3, which contains
 additional functions for transformations in 2D.
-@see @ref Magnum::Matrix3x3, @ref Magnum::Matrix3x3d
+@see @ref Magnum::Matrix3x3, @ref Magnum::Matrix3x3d, @ref Magnum::Matrix3x3h,
+    @ref Magnum::Matrix3x3b, @ref Magnum::Matrix3x3s
 */
 #ifndef CORRADE_MSVC2015_COMPATIBILITY /* Multiple definitions still broken */
 template<class T> using Matrix3x3 = Matrix<3, T>;
@@ -236,7 +332,8 @@ template<class T> using Matrix3x3 = Matrix<3, T>;
 Convenience alternative to `Matrix<4, T>`. See @ref Matrix for more
 information. Note that this is different from @ref Matrix4, which contains
 additional functions for transformations in 3D.
-@see @ref Magnum::Matrix4x4, @ref Magnum::Matrix4x4d
+@see @ref Magnum::Matrix4x4, @ref Magnum::Matrix4x4d, @ref Magnum::Matrix4x4h,
+    @ref Magnum::Matrix4x4b, @ref Magnum::Matrix4x4s
 */
 #ifndef CORRADE_MSVC2015_COMPATIBILITY /* Multiple definitions still broken */
 template<class T> using Matrix4x4 = Matrix<4, T>;
@@ -282,9 +379,13 @@ template<std::size_t size, class T> struct MatrixDeterminant {
         /* Using ._data[] instead of [] to avoid function call indirection on
            debug builds (saves a lot, yet doesn't obfuscate too much) */
         for(std::size_t col = 0; col != size; ++col)
-            out += ((col & 1) ? -1 : 1)*m._data[col]._data[0]*m.ij(col, 0).determinant();
+            out += m._data[col]._data[0]*m.cofactor(col, 0);
 
         return out;
+    }
+
+    T operator()(const Matrix<size + 1, T>& m, const std::size_t skipCol, const std::size_t skipRow) {
+        return m.ij(skipCol, skipRow).determinant();
     }
 };
 
@@ -300,6 +401,19 @@ template<class T> struct MatrixDeterminant<3, T> {
             m._data[0]._data[1]*(m._data[1]._data[0]*m._data[2]._data[2] - m._data[2]._data[0]*m._data[1]._data[2]) +
             m._data[0]._data[2]*(m._data[1]._data[0]*m._data[2]._data[1] - m._data[2]._data[0]*m._data[1]._data[1]);
     }
+
+    /* Used internally by cofactor(), basically just an inlined variant of
+       ij(skipCol, skipRow).determinant() */
+    constexpr T operator()(const Matrix<4, T>& m, const std::size_t skipCol, const std::size_t skipRow) const {
+        #define _col(i) _data[i + (i >= skipCol)]
+        #define _row(i) _data[i + (i >= skipRow)]
+        return
+            m._col(0)._row(0)*((m._col(1)._row(1)*m._col(2)._row(2)) - (m._col(2)._row(1)*m._col(1)._row(2))) -
+            m._col(0)._row(1)*(m._col(1)._row(0)*m._col(2)._row(2) - m._col(2)._row(0)*m._col(1)._row(2)) +
+            m._col(0)._row(2)*(m._col(1)._row(0)*m._col(2)._row(1) - m._col(2)._row(0)*m._col(1)._row(1));
+        #undef _col
+        #undef _row
+    }
 };
 
 template<class T> struct MatrixDeterminant<2, T> {
@@ -308,6 +422,16 @@ template<class T> struct MatrixDeterminant<2, T> {
            on debug builds (saves a lot, yet doesn't obfuscate too much) */
         return m._data[0]._data[0]*m._data[1]._data[1] - m._data[1]._data[0]*m._data[0]._data[1];
     }
+
+    /* Used internally by cofactor(), basically just an inlined variant of
+       ij(skipCol, skipRow).determinant() */
+    constexpr T operator()(const Matrix<3, T>& m, const std::size_t skipCol, const std::size_t skipRow) const {
+        #define _col(i) _data[i + (i >= skipCol)]
+        #define _row(i) _data[i + (i >= skipRow)]
+        return m._col(0)._row(0)*m._col(1)._row(1) - m._col(1)._row(0)*m._col(0)._row(1);
+        #undef _col
+        #undef _row
+    }
 };
 
 template<class T> struct MatrixDeterminant<1, T> {
@@ -315,6 +439,12 @@ template<class T> struct MatrixDeterminant<1, T> {
         /* Using ._data[] instead of [] to avoid function call indirection
            on debug builds (saves a lot, yet doesn't obfuscate too much) */
         return m._data[0]._data[0];
+    }
+
+    /* Used internally by cofactor(), basically just an inlined variant of
+       ij(skipCol, skipRow).determinant() */
+    constexpr T operator()(const Matrix<2, T>& m, const std::size_t skipCol, const std::size_t skipRow) const {
+        return m._data[0 + (0 >= skipCol)]._data[0 + (0 >= skipRow)];
     }
 };
 
@@ -354,18 +484,37 @@ template<std::size_t size, class T> Matrix<size-1, T> Matrix<size, T>::ij(const 
     return out;
 }
 
-template<std::size_t size, class T> Matrix<size, T> Matrix<size, T>::inverted() const {
-    Matrix<size, T> out{NoInit};
+template<std::size_t size, class T> T Matrix<size, T>::cofactor(std::size_t col, std::size_t row) const {
+    return (((row+col) & 1) ? -1 : 1)*Implementation::MatrixDeterminant<size - 1, T>()(*this, col, row);
+}
 
-    const T _determinant = determinant();
+template<std::size_t size, class T> Matrix<size, T> Matrix<size, T>::comatrix() const {
+    Matrix<size, T> out{NoInit};
 
     /* Using ._data[] instead of [] to avoid function call indirection on debug
        builds (saves a lot, yet doesn't obfuscate too much) */
     for(std::size_t col = 0; col != size; ++col)
         for(std::size_t row = 0; row != size; ++row)
-            out._data[col]._data[row] = (((row+col) & 1) ? -1 : 1)*ij(row, col).determinant()/_determinant;
+            out._data[col]._data[row] = cofactor(col, row);
 
     return out;
+}
+
+template<std::size_t size, class T> Matrix<size, T> Matrix<size, T>::adjugate() const {
+    Matrix<size, T> out{NoInit};
+
+    /* Same as comatrix(), except using cofactor(row, col) instead of
+       cofactor(col, row). Could also be just comatrix().transpose() but since
+       this is used in inverted(), each extra operation hurts. */
+    for(std::size_t col = 0; col != size; ++col)
+        for(std::size_t row = 0; row != size; ++row)
+            out._data[col]._data[row] = cofactor(row, col);
+
+    return out;
+}
+
+template<std::size_t size, class T> Matrix<size, T> Matrix<size, T>::inverted() const {
+    return adjugate()/determinant();
 }
 
 }}

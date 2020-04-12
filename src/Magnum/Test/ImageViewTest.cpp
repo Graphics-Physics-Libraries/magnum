@@ -23,14 +23,18 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+/* Included as first to check that we *really* don't need the StridedArrayView
+   header for definition of pixels(). We actually need, but just for the
+   arrayCast() template, which is forward-declared. */
+#include "Magnum/ImageView.h"
+
 #include <sstream>
 #include <Corrade/Containers/StridedArrayView.h>
 #include <Corrade/TestSuite/Tester.h>
 #include <Corrade/Utility/DebugStl.h>
 
-#include "Magnum/Math/Color.h"
-#include "Magnum/ImageView.h"
 #include "Magnum/PixelFormat.h"
+#include "Magnum/Math/Color.h"
 
 namespace Magnum { namespace Test { namespace {
 
@@ -45,6 +49,11 @@ struct ImageViewTest: TestSuite::Tester {
     template<class T> void constructCompressedGenericEmpty();
     template<class T> void constructCompressedImplementationSpecific();
     template<class T> void constructCompressedImplementationSpecificEmpty();
+
+    void construct3DFrom1D();
+    void construct3DFrom2D();
+    void constructCompressed3DFrom1D();
+    void constructCompressed3DFrom2D();
 
     void constructFromMutable();
     void constructCompressedFromMutable();
@@ -93,6 +102,11 @@ ImageViewTest::ImageViewTest() {
               &ImageViewTest::constructCompressedImplementationSpecific<char>,
               &ImageViewTest::constructCompressedImplementationSpecificEmpty<const char>,
               &ImageViewTest::constructCompressedImplementationSpecificEmpty<char>,
+
+              &ImageViewTest::construct3DFrom1D,
+              &ImageViewTest::construct3DFrom2D,
+              &ImageViewTest::constructCompressed3DFrom1D,
+              &ImageViewTest::constructCompressed3DFrom2D,
 
               &ImageViewTest::constructFromMutable,
               &ImageViewTest::constructCompressedFromMutable,
@@ -431,6 +445,118 @@ template<class T> void ImageViewTest::constructCompressedImplementationSpecificE
     /* Manual properties not implemented yet */
 }
 
+void ImageViewTest::construct3DFrom1D() {
+    /* Copy of "Manual pixel size" in constructImplementationSpecific(), as
+       that exposes most fields */
+    const char data[3*6]{};
+    ImageView1D a{PixelStorage{}.setAlignment(1), 666, 1337, 6, 3, data};
+    CORRADE_COMPARE(a.storage().alignment(), 1);
+    CORRADE_COMPARE(a.format(), pixelFormatWrap(GL::PixelFormat::RGB));
+    CORRADE_COMPARE(a.formatExtra(), UnsignedInt(GL::PixelType::UnsignedShort));
+    CORRADE_COMPARE(a.pixelSize(), 6);
+    CORRADE_COMPARE(a.size(), 3);
+    CORRADE_COMPARE(a.data(), &data[0]);
+    CORRADE_COMPARE(a.data().size(), 3*6);
+
+    ImageView3D b = a; /* implicit conversion allowed */
+    CORRADE_COMPARE(b.storage().alignment(), 1);
+    CORRADE_COMPARE(b.format(), pixelFormatWrap(GL::PixelFormat::RGB));
+    CORRADE_COMPARE(b.formatExtra(), UnsignedInt(GL::PixelType::UnsignedShort));
+    CORRADE_COMPARE(b.pixelSize(), 6);
+    CORRADE_COMPARE(b.size(), (Vector3i{3, 1, 1}));
+    CORRADE_COMPARE(b.data(), &data[0]);
+    CORRADE_COMPARE(b.data().size(), 3*6);
+
+    /* Conversion the other way is not allowed (will be later, but explicitly
+       via a slice<1>() like with StridedArrayView); conversion from const to
+       mutable is not possible either */
+    CORRADE_VERIFY((std::is_convertible<ImageView1D, ImageView3D>::value));
+    CORRADE_VERIFY(!(std::is_convertible<ImageView3D, ImageView1D>::value));
+    CORRADE_VERIFY(!(std::is_convertible<ImageView1D, MutableImageView3D>::value));
+}
+
+void ImageViewTest::construct3DFrom2D() {
+    /* Copy of "Manual pixel size" in constructImplementationSpecific(), as
+       that exposes most fields */
+    char data[3*6]{};
+    MutableImageView2D a{PixelStorage{}.setAlignment(1), 666, 1337, 6, {1, 3}, data};
+    CORRADE_COMPARE(a.storage().alignment(), 1);
+    CORRADE_COMPARE(a.format(), pixelFormatWrap(GL::PixelFormat::RGB));
+    CORRADE_COMPARE(a.formatExtra(), UnsignedInt(GL::PixelType::UnsignedShort));
+    CORRADE_COMPARE(a.pixelSize(), 6);
+    CORRADE_COMPARE(a.size(), (Vector2i{1, 3}));
+    CORRADE_COMPARE(a.data(), &data[0]);
+    CORRADE_COMPARE(a.data().size(), 3*6);
+
+    MutableImageView3D b = a;
+    CORRADE_COMPARE(b.storage().alignment(), 1);
+    CORRADE_COMPARE(b.format(), pixelFormatWrap(GL::PixelFormat::RGB));
+    CORRADE_COMPARE(b.formatExtra(), UnsignedInt(GL::PixelType::UnsignedShort));
+    CORRADE_COMPARE(b.pixelSize(), 6);
+    CORRADE_COMPARE(b.size(), (Vector3i{1, 3, 1}));
+    CORRADE_COMPARE(b.data(), &data[0]);
+    CORRADE_COMPARE(b.data().size(), 3*6);
+
+    /* Conversion the other way is not allowed (will be later, but explicitly
+       via a slice<1>() like with StridedArrayView) */
+    CORRADE_VERIFY((std::is_convertible<MutableImageView1D, MutableImageView3D>::value));
+    CORRADE_VERIFY(!(std::is_convertible<MutableImageView3D, MutableImageView1D>::value));
+}
+
+void ImageViewTest::constructCompressed3DFrom1D() {
+    /* Copied from constructCompressedImplementationSpecific(), as that exposes
+       most fields */
+    /** @todo S3TC doesn't have 1D compression so this might blow up once we
+        check for block sizes */
+    const char data[8]{};
+    CompressedImageView1D a{CompressedPixelStorage{}.setCompressedBlockSize(Vector3i{4}),
+        GL::CompressedPixelFormat::RGBS3tcDxt1, 4, data};
+    CORRADE_COMPARE(a.storage().compressedBlockSize(), Vector3i{4});
+    CORRADE_COMPARE(a.format(), compressedPixelFormatWrap(GL::CompressedPixelFormat::RGBS3tcDxt1));
+    CORRADE_COMPARE(a.size(), 4);
+    CORRADE_COMPARE(a.data(), &data[0]);
+    CORRADE_COMPARE(a.data().size(), 8);
+
+    CompressedImageView3D b = a;
+    CORRADE_COMPARE(b.storage().compressedBlockSize(), Vector3i{4});
+    CORRADE_COMPARE(b.format(), compressedPixelFormatWrap(GL::CompressedPixelFormat::RGBS3tcDxt1));
+    CORRADE_COMPARE(b.size(), (Vector3i{4, 1, 1}));
+    CORRADE_COMPARE(b.data(), &data[0]);
+    CORRADE_COMPARE(b.data().size(), 8);
+
+    /* Conversion the other way is not allowed (will be later, but explicitly
+       via a slice<1>() like with StridedArrayView); conversion from const to
+       mutable is not possible either */
+    CORRADE_VERIFY((std::is_convertible<CompressedImageView1D, CompressedImageView3D>::value));
+    CORRADE_VERIFY(!(std::is_convertible<CompressedImageView3D, CompressedImageView1D>::value));
+    CORRADE_VERIFY(!(std::is_convertible<CompressedImageView1D, MutableCompressedImageView3D>::value));
+}
+
+void ImageViewTest::constructCompressed3DFrom2D() {
+    /* Copied from constructCompressedImplementationSpecific(), as that exposes
+       most fields */
+    char data[8*2]{};
+    MutableCompressedImageView2D a{CompressedPixelStorage{}.setCompressedBlockSize(Vector3i{4}),
+        GL::CompressedPixelFormat::RGBS3tcDxt1, {4, 8}, data};
+    CORRADE_COMPARE(a.storage().compressedBlockSize(), Vector3i{4});
+    CORRADE_COMPARE(a.format(), compressedPixelFormatWrap(GL::CompressedPixelFormat::RGBS3tcDxt1));
+    CORRADE_COMPARE(a.size(), (Vector2i{4, 8}));
+    CORRADE_COMPARE(a.data(), &data[0]);
+    CORRADE_COMPARE(a.data().size(), 8*2);
+
+    MutableCompressedImageView3D b = a;
+    CORRADE_COMPARE(b.storage().compressedBlockSize(), Vector3i{4});
+    CORRADE_COMPARE(b.format(), compressedPixelFormatWrap(GL::CompressedPixelFormat::RGBS3tcDxt1));
+    CORRADE_COMPARE(b.size(), (Vector3i{4, 8, 1}));
+    CORRADE_COMPARE(b.data(), &data[0]);
+    CORRADE_COMPARE(b.data().size(), 8*2);
+
+    /* Conversion the other way is not allowed (will be later, but explicitly
+       via a slice<1>() like with StridedArrayView) */
+    CORRADE_VERIFY((std::is_convertible<MutableCompressedImageView1D, MutableCompressedImageView3D>::value));
+    CORRADE_VERIFY(!(std::is_convertible<MutableCompressedImageView3D, MutableCompressedImageView1D>::value));
+}
+
 void ImageViewTest::constructFromMutable() {
     /* Copy of "Manual pixel size" in constructImplementationSpecific(), as
        that exposes most fields */
@@ -482,7 +608,7 @@ void ImageViewTest::constructNullptr() {
     std::ostringstream out;
     Error redirectError{&out};
     ImageView2D{PixelFormat::RGB8Unorm, {1, 3},  nullptr};
-    CORRADE_COMPARE(out.str(), "ImageView::ImageView(): data too small, got 0 but expected at least 12 bytes\n");
+    CORRADE_COMPARE(out.str(), "ImageView: data too small, got 0 but expected at least 12 bytes\n");
 }
 
 void ImageViewTest::constructInvalidSize() {
@@ -492,7 +618,7 @@ void ImageViewTest::constructInvalidSize() {
     /* Doesn't consider alignment */
     const char data[3*3]{};
     ImageView2D{PixelFormat::RGB8Unorm, {1, 3}, data};
-    CORRADE_COMPARE(out.str(), "ImageView::ImageView(): data too small, got 9 but expected at least 12 bytes\n");
+    CORRADE_COMPARE(out.str(), "ImageView: data too small, got 9 but expected at least 12 bytes\n");
 }
 
 void ImageViewTest::constructCompressedInvalidSize() {
@@ -505,14 +631,14 @@ void ImageViewTest::constructCompressedInvalidSize() {
         std::ostringstream out;
         Error redirectError{&out};
         CompressedImageView2D{CompressedPixelFormat::Bc2RGBAUnorm, {4, 4}, data};
-        CORRADE_COMPARE(out.str(), "CompressedImageView::CompressedImageView(): data too small, got 2 but expected at least 4 bytes\n");
+        CORRADE_COMPARE(out.str(), "CompressedImageView: data too small, got 2 but expected at least 4 bytes\n");
 
     /* Size should be rounded up even if the image size is not full block */
     } {
         std::ostringstream out;
         Error redirectError{&out};
         CompressedImageView2D{CompressedPixelFormat::Bc2RGBAUnorm, {2, 2}, data};
-        CORRADE_COMPARE(out.str(), "CompressedImageView::CompressedImageView(): data too small, got 2 but expected at least 4 bytes\n");
+        CORRADE_COMPARE(out.str(), "CompressedImageView: data too small, got 2 but expected at least 4 bytes\n");
     }
 }
 

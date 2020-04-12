@@ -72,6 +72,20 @@ void Renderer::setFeature(const Feature feature, const bool enabled) {
     enabled ? enable(feature) : disable(feature);
 }
 
+#if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
+void Renderer::enable(const Feature feature, const UnsignedInt drawBuffer) {
+    Context::current().state().renderer->enableiImplementation(GLenum(feature), drawBuffer);
+}
+
+void Renderer::disable(const Feature feature, const UnsignedInt drawBuffer) {
+    Context::current().state().renderer->disableiImplementation(GLenum(feature), drawBuffer);
+}
+
+void Renderer::setFeature(const Feature feature, const UnsignedInt drawBuffer, const bool enabled) {
+    enabled ? enable(feature, drawBuffer) : disable(feature, drawBuffer);
+}
+#endif
+
 void Renderer::setHint(const Hint target, const HintMode mode) {
     glHint(GLenum(target), GLenum(mode));
 }
@@ -149,6 +163,40 @@ void Renderer::minSampleShadingImplementationOES(const GLfloat value) {
 #endif
 #endif
 
+#if !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
+UnsignedInt Renderer::maxPatchVertexCount() {
+    #ifndef MAGNUM_TARGET_GLES
+    if(!Context::current().isExtensionSupported<Extensions::ARB::tessellation_shader>())
+        return 0;
+    #else
+    if(!Context::current().isExtensionSupported<Extensions::EXT::tessellation_shader>())
+        return 0;
+    #endif
+
+    GLint& value = Context::current().state().renderer->maxPatchVertexCount;
+
+    /* Get the value, if not already cached */
+    if(value == 0)
+        glGetIntegerv(GL_MAX_PATCH_VERTICES, &value);
+
+    return value;
+}
+
+void Renderer::setPatchVertexCount(UnsignedInt count) {
+    Context::current().state().renderer->patchParameteriImplementation(GL_PATCH_VERTICES, count);
+}
+#endif
+
+#ifndef MAGNUM_TARGET_GLES
+void Renderer::setPatchDefaultInnerLevel(const Vector2& levels) {
+    glPatchParameterfv(GL_PATCH_DEFAULT_INNER_LEVEL, levels.data());
+}
+
+void Renderer::setPatchDefaultOuterLevel(const Vector4& levels) {
+    glPatchParameterfv(GL_PATCH_DEFAULT_OUTER_LEVEL, levels.data());
+}
+#endif
+
 void Renderer::setScissor(const Range2Di& rectangle) {
     glScissor(rectangle.left(), rectangle.bottom(), rectangle.sizeX(), rectangle.sizeY());
 }
@@ -177,6 +225,12 @@ void Renderer::setColorMask(const GLboolean allowRed, const GLboolean allowGreen
     glColorMask(allowRed, allowGreen, allowBlue, allowAlpha);
 }
 
+#if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
+void Renderer::setColorMask(const UnsignedInt drawBuffer, const GLboolean allowRed, const GLboolean allowGreen, const GLboolean allowBlue, const GLboolean allowAlpha) {
+    Context::current().state().renderer->colorMaskiImplementation(drawBuffer, allowRed, allowGreen, allowBlue, allowAlpha);
+}
+#endif
+
 void Renderer::setDepthMask(const GLboolean allow) {
     glDepthMask(allow);
 }
@@ -204,6 +258,24 @@ void Renderer::setBlendFunction(const BlendFunction source, const BlendFunction 
 void Renderer::setBlendFunction(const BlendFunction sourceRgb, const BlendFunction destinationRgb, const BlendFunction sourceAlpha, const BlendFunction destinationAlpha) {
     glBlendFuncSeparate(GLenum(sourceRgb), GLenum(destinationRgb), GLenum(sourceAlpha), GLenum(destinationAlpha));
 }
+
+#if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
+void Renderer::setBlendEquation(const UnsignedInt drawBuffer, const BlendEquation equation) {
+    Context::current().state().renderer->blendEquationiImplementation(drawBuffer, GLenum(equation));
+}
+
+void Renderer::setBlendEquation(const UnsignedInt drawBuffer, const BlendEquation rgb, const BlendEquation alpha) {
+    Context::current().state().renderer->blendEquationSeparateiImplementation(drawBuffer, GLenum(rgb), GLenum(alpha));
+}
+
+void Renderer::setBlendFunction(const UnsignedInt drawBuffer, const BlendFunction source, const BlendFunction destination) {
+    Context::current().state().renderer->blendFunciImplementation(drawBuffer, GLenum(source), GLenum(destination));
+}
+
+void Renderer::setBlendFunction(const UnsignedInt drawBuffer, const BlendFunction sourceRgb, const BlendFunction destinationRgb, const BlendFunction sourceAlpha, const BlendFunction destinationAlpha) {
+    Context::current().state().renderer->blendFuncSeparateiImplementation(drawBuffer, GLenum(sourceRgb), GLenum(destinationRgb), GLenum(sourceAlpha), GLenum(destinationAlpha));
+}
+#endif
 
 void Renderer::setBlendColor(const Color4& color) {
     glBlendColor(color.r(), color.g(), color.b(), color.a());
@@ -274,9 +346,11 @@ Renderer::GraphicsResetStatus Renderer::graphicsResetStatusImplementationRobustn
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
 Debug& operator<<(Debug& debug, const Renderer::Error value) {
+    debug << "GL::Renderer::Error" << Debug::nospace;
+
     switch(value) {
         /* LCOV_EXCL_START */
-        #define _c(value) case Renderer::Error::value: return debug << "GL::Renderer::Error::" #value;
+        #define _c(value) case Renderer::Error::value: return debug << "::" #value;
         _c(NoError)
         _c(InvalidEnum)
         _c(InvalidValue)
@@ -291,27 +365,31 @@ Debug& operator<<(Debug& debug, const Renderer::Error value) {
         /* LCOV_EXCL_STOP */
     }
 
-    return debug << "GL::Renderer::Error(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
 }
 
 #ifndef MAGNUM_TARGET_WEBGL
 Debug& operator<<(Debug& debug, const Renderer::ResetNotificationStrategy value) {
+    debug << "GL::Renderer::ResetNotificationStrategy" << Debug::nospace;
+
     switch(value) {
         /* LCOV_EXCL_START */
-        #define _c(value) case Renderer::ResetNotificationStrategy::value: return debug << "GL::Renderer::ResetNotificationStrategy::" #value;
+        #define _c(value) case Renderer::ResetNotificationStrategy::value: return debug << "::" #value;
         _c(NoResetNotification)
         _c(LoseContextOnReset)
         #undef _c
         /* LCOV_EXCL_STOP */
     }
 
-    return debug << "GL::Renderer::ResetNotificationStrategy(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
 }
 
 Debug& operator<<(Debug& debug, const Renderer::GraphicsResetStatus value) {
+    debug << "GL::Renderer::GraphicsResetStatus" << Debug::nospace;
+
     switch(value) {
         /* LCOV_EXCL_START */
-        #define _c(value) case Renderer::GraphicsResetStatus::value: return debug << "GL::Renderer::GraphicsResetStatus::" #value;
+        #define _c(value) case Renderer::GraphicsResetStatus::value: return debug << "::" #value;
         _c(NoError)
         _c(GuiltyContextReset)
         _c(InnocentContextReset)
@@ -320,7 +398,7 @@ Debug& operator<<(Debug& debug, const Renderer::GraphicsResetStatus value) {
         /* LCOV_EXCL_STOP */
     }
 
-    return debug << "GL::Renderer::GraphicsResetStatus(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
 }
 #endif
 #endif

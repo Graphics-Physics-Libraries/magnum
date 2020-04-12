@@ -189,6 +189,7 @@ template<class Application> class BasicScreen:
         #ifdef DOXYGEN_GENERATING_OUTPUT
         /**
          * @brief Mouse scroll event
+         * @m_since{2019,10}
          *
          * Defined only if the application has a
          * @ref Sdl2Application::MouseScrollEvent "MouseScrollEvent".
@@ -197,6 +198,7 @@ template<class Application> class BasicScreen:
 
         /**
          * @brief Text input event
+         * @m_since{2019,10}
          *
          * Defined only if the application has a
          * @ref Sdl2Application::TextInputEvent "TextInputEvent".
@@ -205,6 +207,7 @@ template<class Application> class BasicScreen:
 
         /**
          * @brief Text editing event
+         * @m_since{2019,10}
          *
          * Defined only if the application has a
          * @ref Sdl2Application::TextEditingEvent "TextEditingEvent".
@@ -224,6 +227,7 @@ template<class Application> class BasicScreen:
 
         /**
          * @brief Construct a screen and attach it to an application
+         * @m_since{2019,10}
          *
          * Unlike with @ref BasicScreen(), the screen is added to the
          * application already during the construction, removing the need to
@@ -352,9 +356,9 @@ template<class Application> class BasicScreen:
 
         #ifdef MAGNUM_BUILD_DEPRECATED
         /** @brief @copybrief viewportEvent(ViewportEvent&)
-         * @deprecated Use @ref viewportEvent(ViewportEvent&) instead.
-         *      To preserve backwards compatibility, this function is called
-         *      from @ref viewportEvent(ViewportEvent&) with
+         * @m_deprecated_since{2018,10} Use @ref viewportEvent(ViewportEvent&)
+         *      instead. To preserve backwards compatibility, this function is
+         *      called from @ref viewportEvent(ViewportEvent&) with
          *      @ref Sdl2Application::ViewportEvent::windowSize() "*Application::ViewportEvent::windowSize()"
          *      passed to @p size. Overriding the new function will cause this
          *      function to not be called anymore.
@@ -372,7 +376,11 @@ template<class Application> class BasicScreen:
          */
         virtual void drawEvent() = 0;
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Keyboard handling */
 
@@ -398,7 +406,11 @@ template<class Application> class BasicScreen:
         virtual void keyReleaseEvent(KeyEvent& event);
         #endif
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Mouse handling */
 
@@ -432,6 +444,7 @@ template<class Application> class BasicScreen:
         #ifdef DOXYGEN_GENERATING_OUTPUT
         /**
          * @brief Mouse scroll event
+         * @m_since{2019,10}
          *
          * Called when @ref PropagatedEvent::Input is enabled and mouse wheel
          * is rotated. See @ref Sdl2Application::mouseScrollEvent() "*Application::mouseScrollEvent()"
@@ -441,13 +454,18 @@ template<class Application> class BasicScreen:
         virtual void mouseScrollEvent(MouseScrollEvent& event);
         #endif
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Text input handling */
 
         #ifdef DOXYGEN_GENERATING_OUTPUT
         /**
          * @brief Text input event
+         * @m_since{2019,10}
          *
          * Called when @ref PropagatedEvent::Input is enabled and text is being
          * input. Defined only if the application has a
@@ -457,6 +475,7 @@ template<class Application> class BasicScreen:
 
         /**
          * @brief Text editing event
+         * @m_since{2019,10}
          *
          * Called when @ref PropagatedEvent::Input and the text is being
          * edited. Defined only if the application has a
@@ -465,7 +484,11 @@ template<class Application> class BasicScreen:
         virtual void textEditingEvent(TextEditingEvent& event);
         #endif
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
     private:
         #ifndef DOXYGEN_GENERATING_OUTPUT /* https://bugzilla.gnome.org/show_bug.cgi?id=776986 */

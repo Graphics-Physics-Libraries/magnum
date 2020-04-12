@@ -144,12 +144,18 @@ Arguments:
     to be enabled for context creation for both windowed and windowless
     applications on supported platforms
 -   `--magnum-log default|quiet|verbose` --- console logging
-    (environment: `MAGNUM_LOG`) (default: `default`)
+    (environment: `MAGNUM_LOG`) (default: `default`). If you need to suppress
+    the engine startup log from code, the recommended way is to redirect
+    @ref Utility-Debug-scoped-output "debug output to null" during context creation.
 
 Note that all options are prefixed with `--magnum-` to avoid conflicts with
 options passed to the application itself. Options that don't have this prefix
 are completely ignored, see documentation of the
 @ref Utility-Arguments-delegating "Utility::Arguments" class for details.
+
+Particular application implementations add more options for DPI scaling or
+GPU selection, see @ref Platform::Sdl2Application, @ref Platform::GlfwApplication
+and @ref Platform::WindowlessEglApplication for details.
 
 @section GL-Context-multithreading Thread safety
 
@@ -261,11 +267,23 @@ class MAGNUM_GL_EXPORT Context {
             /** Reset tracked buffer-related bindings and state */
             Buffers = 1 << 0,
 
+            #ifndef MAGNUM_TARGET_GLES2
+            /**
+             * Unbind currently bound PBO.
+             *
+             * Not all third-party code is aware of PBOs, and if a PBO is bound
+             * when Magnum transfers control to an unaware code, it can cause
+             * various issues with textures. This is a similar, but rarer,
+             * case to @ref State::MeshVao / @ref State::BindScratchVao.
+             */
+            UnbindPixelBuffer = 1 << 1,
+            #endif
+
             /** Reset tracked framebuffer-related bindings and state */
-            Framebuffers = 1 << 1,
+            Framebuffers = 1 << 2,
 
             /** Reset tracked mesh-related bindings */
-            Meshes = 1 << 2,
+            Meshes = 1 << 3,
 
             /**
              * Unbind currently bound VAO.
@@ -279,7 +297,7 @@ class MAGNUM_GL_EXPORT Context {
              * with @ref State::MeshVao included unbounds any currently bound
              * VAO to fix such case.
              */
-            MeshVao = 1 << 3,
+            MeshVao = 1 << 4,
 
             /**
              * Bind a "scratch" VAO on core profile.
@@ -292,40 +310,47 @@ class MAGNUM_GL_EXPORT Context {
              * Does nothing on compatibility profile and ES / WebGL platforms,
              * as using the default VAO is allowed there.
              */
-            BindScratchVao = 1 << 4,
+            BindScratchVao = 1 << 5,
 
             /** Reset tracked pixel storage-related state */
-            PixelStorage = 1 << 5,
+            PixelStorage = 1 << 6,
 
             /** Reset tracked renderer-related state */
-            Renderer = 1 << 6,
+            Renderer = 1 << 7,
 
             /** Reset tracked shader-related bindings */
-            Shaders = 1 << 7,
+            Shaders = 1 << 8,
 
             /** Reset tracked texture-related bindings and state */
-            Textures = 1 << 8,
+            Textures = 1 << 9,
 
             #ifndef MAGNUM_TARGET_GLES2
             /** Reset tracked transform feedback-related bindings */
-            TransformFeedback = 1 << 9,
+            TransformFeedback = 1 << 10,
             #endif
 
             /**
              * Reset state on entering section with external OpenGL code.
              *
              * Resets all state that could cause external code to accidentally
-             * modify Magnum objects. This includes only @ref State::MeshVao.
-             * In some pathological cases you may want to enable
-             * @ref State::BindScratchVao as well.
+             * modify Magnum objects. This includes @ref State::MeshVao and
+             * @ref State::UnbindPixelBuffer. In some pathological cases you
+             * may want to enable @ref State::BindScratchVao as well.
              */
-            EnterExternal = MeshVao,
+            EnterExternal = MeshVao
+                #ifndef MAGNUM_TARGET_GLES2
+                |UnbindPixelBuffer
+                #endif
+                ,
 
             /**
              * Reset state on exiting section with external OpenGL code.
              *
              * Resets Magnum state tracker to avoid being confused by external
-             * state changes. This resets all states.
+             * state changes. This resets all states, however
+             * @ref State::UnbindPixelBuffer is excluded as Magnum's state
+             * tracker will ensure no PBO is bound when calling related OpenGL
+             * APIs.
              */
             ExitExternal = Buffers|Framebuffers|Meshes|MeshVao|PixelStorage|Renderer|Shaders|Textures
                 #ifndef MAGNUM_TARGET_GLES2
@@ -411,6 +436,7 @@ class MAGNUM_GL_EXPORT Context {
              * @requires_gles SwiftShader doesn't support desktop OpenGL
              *      contexts. Not detectable on WebGL, as browsers
              *      intentionally hide most of the driver information.
+             * @m_since{2019,10}
              */
             SwiftShader = 1 << 6,
             #endif
@@ -421,6 +447,7 @@ class MAGNUM_GL_EXPORT Context {
              * ARM Mali drivers on OpenGL ES.
              * @partialsupport Available only on
              *      @ref CORRADE_TARGET_ANDROID "Android".
+             * @m_since{2019,10}
              */
             ArmMali = 1 << 7
             #endif
@@ -454,6 +481,7 @@ class MAGNUM_GL_EXPORT Context {
 
         /**
          * @brief Make a context current
+         * @m_since{2019,10}
          *
          * To be used when you need to manage multiple OpenGL contexts. See
          * @ref GL-Context-multiple for more information.

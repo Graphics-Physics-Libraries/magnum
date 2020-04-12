@@ -29,44 +29,88 @@
  * @brief Function @ref Magnum::Primitives::squareSolid(), @ref Magnum::Primitives::squareWireframe()
  */
 
+#include <Corrade/Containers/EnumSet.h>
+#include <Corrade/Utility/Macros.h>
+
 #include "Magnum/Primitives/visibility.h"
 #include "Magnum/Trade/Trade.h"
 
 namespace Magnum { namespace Primitives {
 
 /**
-@brief Whether to generate square texture coordinates
+@brief Square flag
+@m_since_latest
+
+@see @ref SquareFlags, @ref squareSolid()
+*/
+enum class SquareFlag: UnsignedByte {
+    /** Generate texture coordinates with origin in bottom left corner */
+    TextureCoordinates = 1 << 0
+};
+
+/**
+@brief Square flags
+@m_since_latest
 
 @see @ref squareSolid()
 */
-enum class SquareTextureCoords: UnsignedByte {
+typedef Containers::EnumSet<SquareFlag> SquareFlags;
+
+CORRADE_ENUMSET_OPERATORS(SquareFlags)
+
+#ifdef MAGNUM_BUILD_DEPRECATED
+/**
+@brief Whether to generate square texture coordinates
+@m_deprecated_since_latest Use @ref SquareFlags instead.
+*/
+enum class CORRADE_DEPRECATED_ENUM("use SquareFlags instead") SquareTextureCoords: UnsignedByte {
     DontGenerate,       /**< Don't generate texture coordinates */
 
     /** Generate texture coordinates with origin in bottom left corner. */
     Generate
 };
+#endif
 
 /**
 @brief Solid 2D square
+@param flags        Flags
+@m_since_latest
 
-2x2 square. Non-indexed @ref MeshPrimitive::TriangleStrip.
+2x2 square, centered at origin. Non-indexed @ref MeshPrimitive::TriangleStrip
+with interleaved @ref VertexFormat::Vector2 positions and optional
+@ref VertexFormat::Vector2 texture coordinates. The returned instance
+references data stored in constant memory.
 
 @image html primitives-squaresolid.png width=256px
 
-@see @ref squareWireframe(), @ref planeSolid(), @ref gradient2D()
+@see @ref squareWireframe(), @ref planeSolid(), @ref gradient2D(),
+    @ref MeshTools::generateTriangleStripIndices()
 */
-MAGNUM_PRIMITIVES_EXPORT Trade::MeshData2D squareSolid(SquareTextureCoords textureCoords = SquareTextureCoords::DontGenerate);
+MAGNUM_PRIMITIVES_EXPORT Trade::MeshData squareSolid(SquareFlags flags = {});
+
+#ifdef MAGNUM_BUILD_DEPRECATED
+/**
+@brief @copybrief planeSolid(PlaneFlags)
+@m_deprecated_since_latest Use @ref planeSolid(PlaneFlags) instead.
+*/
+CORRADE_IGNORE_DEPRECATED_PUSH
+MAGNUM_PRIMITIVES_EXPORT CORRADE_DEPRECATED("use squareSolid(SquareFlags) instead") Trade::MeshData squareSolid(SquareTextureCoords textureCoords);
+CORRADE_IGNORE_DEPRECATED_POP
+#endif
 
 /**
 @brief Wireframe 2D square
 
-2x2 square. Non-indexed @ref MeshPrimitive::LineLoop.
+2x2 square, centered at origin. Non-indexed @ref MeshPrimitive::LineLoop with
+@ref VertexFormat::Vector2 positions. The returned instance references data
+stored in constant memory.
 
 @image html primitives-squarewireframe.png width=256px
 
-@see @ref squareSolid(), @ref planeWireframe()
+@see @ref squareSolid(), @ref planeWireframe(),
+    @ref MeshTools::generateLineLoopIndices()
 */
-MAGNUM_PRIMITIVES_EXPORT Trade::MeshData2D squareWireframe();
+MAGNUM_PRIMITIVES_EXPORT Trade::MeshData squareWireframe();
 
 }}
 

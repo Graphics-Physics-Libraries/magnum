@@ -33,20 +33,22 @@
 #include "Magnum/GL/Extensions.h"
 #include "Magnum/GL/Shader.h"
 #include "Magnum/GL/Texture.h"
+#include "Magnum/Math/Color.h"
+#include "Magnum/Math/Matrix3.h"
+#include "Magnum/Math/Matrix4.h"
 
 #include "Magnum/Shaders/Implementation/CreateCompatibilityShader.h"
 
 namespace Magnum { namespace Shaders {
 
 namespace {
-    enum: Int { TextureLayer = 0 };
-
-    template<UnsignedInt> constexpr const char* vertexShaderName();
-    template<> constexpr const char* vertexShaderName<2>() { return "Flat2D.vert"; }
-    template<> constexpr const char* vertexShaderName<3>() { return "Flat3D.vert"; }
+    enum: Int { TextureUnit = 0 };
 }
 
 template<UnsignedInt dimensions> Flat<dimensions>::Flat(const Flags flags): _flags(flags) {
+    CORRADE_ASSERT(!(flags & Flag::TextureTransformation) || (flags & Flag::Textured),
+        "Shaders::Flat: texture transformation enabled but the shader is not textured", );
+
     #ifdef MAGNUM_BUILD_STATIC
     /* Import resources on static build, if not already */
     if(!Utility::Resource::hasGroup("MagnumShaders"))
@@ -65,13 +67,21 @@ template<UnsignedInt dimensions> Flat<dimensions>::Flat(const Flags flags): _fla
 
     vert.addSource(flags & Flag::Textured ? "#define TEXTURED\n" : "")
         .addSource(flags & Flag::VertexColor ? "#define VERTEX_COLOR\n" : "")
+        .addSource(flags & Flag::TextureTransformation ? "#define TEXTURE_TRANSFORMATION\n" : "")
+        .addSource(dimensions == 2 ? "#define TWO_DIMENSIONS\n" : "#define THREE_DIMENSIONS\n")
+        #ifndef MAGNUM_TARGET_GLES2
+        .addSource(flags >= Flag::InstancedObjectId ? "#define INSTANCED_OBJECT_ID\n" : "")
+        #endif
+        .addSource(flags & Flag::InstancedTransformation ? "#define INSTANCED_TRANSFORMATION\n" : "")
+        .addSource(flags >= Flag::InstancedTextureOffset ? "#define INSTANCED_TEXTURE_OFFSET\n" : "")
         .addSource(rs.get("generic.glsl"))
-        .addSource(rs.get(vertexShaderName<dimensions>()));
+        .addSource(rs.get("Flat.vert"));
     frag.addSource(flags & Flag::Textured ? "#define TEXTURED\n" : "")
         .addSource(flags & Flag::AlphaMask ? "#define ALPHA_MASK\n" : "")
         .addSource(flags & Flag::VertexColor ? "#define VERTEX_COLOR\n" : "")
         #ifndef MAGNUM_TARGET_GLES2
         .addSource(flags & Flag::ObjectId ? "#define OBJECT_ID\n" : "")
+        .addSource(flags >= Flag::InstancedObjectId ? "#define INSTANCED_OBJECT_ID\n" : "")
         #endif
         .addSource(rs.get("generic.glsl"))
         .addSource(rs.get("Flat.frag"));
@@ -97,6 +107,12 @@ template<UnsignedInt dimensions> Flat<dimensions>::Flat(const Flags flags): _fla
             bindFragmentDataLocation(ColorOutput, "color");
             bindFragmentDataLocation(ObjectIdOutput, "objectId");
         }
+        if(flags >= Flag::InstancedObjectId)
+            bindAttributeLocation(ObjectId::Location, "instanceObjectId");
+        if(flags & Flag::InstancedTransformation)
+            bindAttributeLocation(TransformationMatrix::Location, "instancedTransformationMatrix");
+        if(flags >= Flag::InstancedTextureOffset)
+            bindAttributeLocation(TextureOffset::Location, "instancedTextureOffset");
         #endif
     }
     #endif
@@ -108,6 +124,8 @@ template<UnsignedInt dimensions> Flat<dimensions>::Flat(const Flags flags): _fla
     #endif
     {
         _transformationProjectionMatrixUniform = uniformLocation("transformationProjectionMatrix");
+        if(flags & Flag::TextureTransformation)
+            _textureMatrixUniform = uniformLocation("textureMatrix");
         _colorUniform = uniformLocation("color");
         if(flags & Flag::AlphaMask) _alphaMaskUniform = uniformLocation("alphaMask");
         #ifndef MAGNUM_TARGET_GLES2
@@ -119,22 +137,40 @@ template<UnsignedInt dimensions> Flat<dimensions>::Flat(const Flags flags): _fla
     if(!GL::Context::current().isExtensionSupported<GL::Extensions::ARB::shading_language_420pack>(version))
     #endif
     {
-        if(flags & Flag::Textured) setUniform(uniformLocation("textureData"), TextureLayer);
+        if(flags & Flag::Textured) setUniform(uniformLocation("textureData"), TextureUnit);
     }
 
     /* Set defaults in OpenGL ES (for desktop they are set in shader code itself) */
     #ifdef MAGNUM_TARGET_GLES
     setTransformationProjectionMatrix({});
+    if(flags & Flag::TextureTransformation) setTextureMatrix({});
     setColor(Magnum::Color4{1.0f});
     if(flags & Flag::AlphaMask) setAlphaMask(0.5f);
     /* Object ID is zero by default */
     #endif
 }
 
+template<UnsignedInt dimensions> Flat<dimensions>& Flat<dimensions>::setTransformationProjectionMatrix(const MatrixTypeFor<dimensions, Float>& matrix) {
+    setUniform(_transformationProjectionMatrixUniform, matrix);
+    return *this;
+}
+
+template<UnsignedInt dimensions> Flat<dimensions>& Flat<dimensions>::setTextureMatrix(const Matrix3& matrix) {
+    CORRADE_ASSERT(_flags & Flag::TextureTransformation,
+        "Shaders::Flat::setTextureMatrix(): the shader was not created with texture transformation enabled", *this);
+    setUniform(_textureMatrixUniform, matrix);
+    return *this;
+}
+
+template<UnsignedInt dimensions> Flat<dimensions>& Flat<dimensions>::setColor(const Magnum::Color4& color) {
+    setUniform(_colorUniform, color);
+    return *this;
+}
+
 template<UnsignedInt dimensions> Flat<dimensions>& Flat<dimensions>::bindTexture(GL::Texture2D& texture) {
     CORRADE_ASSERT(_flags & Flag::Textured,
         "Shaders::Flat::bindTexture(): the shader was not created with texturing enabled", *this);
-    texture.bind(TextureLayer);
+    texture.bind(TextureUnit);
     return *this;
 }
 
@@ -160,20 +196,26 @@ template class Flat<3>;
 namespace Implementation {
 
 Debug& operator<<(Debug& debug, const FlatFlag value) {
+    debug << "Shaders::Flat::Flag" << Debug::nospace;
+
     switch(value) {
         /* LCOV_EXCL_START */
-        #define _c(v) case FlatFlag::v: return debug << "Shaders::Flat::Flag::" #v;
+        #define _c(v) case FlatFlag::v: return debug << "::" #v;
         _c(Textured)
         _c(AlphaMask)
         _c(VertexColor)
+        _c(TextureTransformation)
         #ifndef MAGNUM_TARGET_GLES2
         _c(ObjectId)
+        _c(InstancedObjectId)
         #endif
+        _c(InstancedTransformation)
+        _c(InstancedTextureOffset)
         #undef _c
         /* LCOV_EXCL_STOP */
     }
 
-    return debug << "Shaders::Flat::Flag(" << Debug::nospace << reinterpret_cast<void*>(UnsignedByte(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(UnsignedByte(value)) << Debug::nospace << ")";
 }
 
 Debug& operator<<(Debug& debug, const FlatFlags value) {
@@ -181,10 +223,13 @@ Debug& operator<<(Debug& debug, const FlatFlags value) {
         FlatFlag::Textured,
         FlatFlag::AlphaMask,
         FlatFlag::VertexColor,
+        FlatFlag::InstancedTextureOffset, /* Superset of TextureTransformation */
+        FlatFlag::TextureTransformation,
         #ifndef MAGNUM_TARGET_GLES2
-        FlatFlag::ObjectId
+        FlatFlag::InstancedObjectId, /* Superset of ObjectId */
+        FlatFlag::ObjectId,
         #endif
-        });
+        FlatFlag::InstancedTransformation});
 }
 
 }

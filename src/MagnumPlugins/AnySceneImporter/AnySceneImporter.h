@@ -54,17 +54,7 @@ namespace Magnum { namespace Trade {
 @brief Any scene importer plugin
 
 Detects file type based on file extension, loads corresponding plugin and then
-tries to open the file with it.
-
-This plugin depends on the @ref Trade library and is built if
-`WITH_ANYSCENEIMPORTER` is enabled when building Magnum. To use as a dynamic
-plugin, you need to load the @cpp "AnySceneImporter" @ce plugin from
-`MAGNUM_PLUGINS_IMPORTER_DIR`. To use as a static plugin or as a dependency of
-another plugin with CMake, you need to request the `AnySceneImporter` component
-of the `Magnum` package in CMake and link to the `Magnum::AnySceneImporter`
-target. See @ref building, @ref cmake and @ref plugins for more information.
-
-Supported formats:
+tries to open the file with it. Supported formats:
 
 -   3ds Max 3DS and ASE (`*.3ds`, `*.ase`), loaded with any plugin that
     provides `3dsImporter`
@@ -78,8 +68,8 @@ Supported formats:
 -   DirectX X (`*.x`), loaded with any plugin that provides `DirectXImporter`
 -   AutoCAD DXF (`*.dxf`), loaded with any plugin that provides `DxfImporter`
 -   Autodesk FBX (`*.fbx`), loaded with any plugin that provides `FbxImporter`
--   glTF (`*.gltf`), loaded with any plugin that provides `GltfImporter`
--   Binary glTF (`*.glb`), loaded with any plugin that provides `GlbImporter`
+-   glTF (`*.gltf`, `*.glb`), loaded with any plugin that provides
+    `GltfImporter`
 -   Industry Foundation Classes (IFC/Step) (`*.ifc`), loaded with any plugin
     that provides `IfcImporter`
 -   Irrlicht Mesh and Scene (`*.irrmesh`, `*.irr`), loaded with any plugin that
@@ -106,6 +96,36 @@ Supported formats:
 -   XGL (`*.xgl`, `*.zgl`), loaded with any plugin that provides `XglImporter`
 
 Only loading from files is supported.
+
+@section Trade-AnySceneImporter-usage Usage
+
+This plugin depends on the @ref Trade library and is built if
+`WITH_ANYSCENEIMPORTER` is enabled when building Magnum. To use as a dynamic
+plugin, load @cpp "AnySceneImporter" @ce via
+@ref Corrade::PluginManager::Manager.
+
+Additionally, if you're using Magnum as a CMake subproject, do the following:
+
+@code{.cmake}
+set(WITH_ANYSCENEIMPORTER ON CACHE BOOL "" FORCE)
+add_subdirectory(magnum EXCLUDE_FROM_ALL)
+
+# So the dynamically loaded plugin gets built implicitly
+add_dependencies(your-app Magnum::AnySceneImporter)
+@endcode
+
+To use as a static plugin or as a dependency of another plugin with CMake, you
+need to request the `AnySceneImporter` component of the `Magnum` package in
+CMake and link to the `Magnum::AnySceneImporter` target:
+
+@code{.cmake}
+find_package(Magnum REQUIRED AnySceneImporter)
+
+# ...
+target_link_libraries(your-app PRIVATE Magnum::AnySceneImporter)
+@endcode
+
+See @ref building, @ref cmake and @ref plugins for more information.
 */
 class MAGNUM_ANYSCENEIMPORTER_EXPORT AnySceneImporter: public AbstractImporter {
     public:
@@ -118,7 +138,7 @@ class MAGNUM_ANYSCENEIMPORTER_EXPORT AnySceneImporter: public AbstractImporter {
         ~AnySceneImporter();
 
     private:
-        MAGNUM_ANYSCENEIMPORTER_LOCAL Features doFeatures() const override;
+        MAGNUM_ANYSCENEIMPORTER_LOCAL ImporterFeatures doFeatures() const override;
         MAGNUM_ANYSCENEIMPORTER_LOCAL bool doIsOpened() const override;
         MAGNUM_ANYSCENEIMPORTER_LOCAL void doClose() override;
         MAGNUM_ANYSCENEIMPORTER_LOCAL void doOpenFile(const std::string& filename) override;
@@ -155,15 +175,29 @@ class MAGNUM_ANYSCENEIMPORTER_EXPORT AnySceneImporter: public AbstractImporter {
         MAGNUM_ANYSCENEIMPORTER_LOCAL std::string doObject3DName(UnsignedInt id) override;
         MAGNUM_ANYSCENEIMPORTER_LOCAL Containers::Pointer<ObjectData3D> doObject3D(UnsignedInt id) override;
 
+        MAGNUM_ANYSCENEIMPORTER_LOCAL UnsignedInt doMeshCount() const override;
+        MAGNUM_ANYSCENEIMPORTER_LOCAL Int doMeshForName(const std::string& name) override;
+        MAGNUM_ANYSCENEIMPORTER_LOCAL std::string doMeshName(UnsignedInt id) override;
+        MAGNUM_ANYSCENEIMPORTER_LOCAL Containers::Optional<MeshData> doMesh(UnsignedInt id, UnsignedInt level) override;
+
+        MAGNUM_ANYSCENEIMPORTER_LOCAL MeshAttribute doMeshAttributeForName(const std::string& name) override;
+        MAGNUM_ANYSCENEIMPORTER_LOCAL std::string doMeshAttributeName(UnsignedShort id) override;
+
+        #ifdef MAGNUM_BUILD_DEPRECATED
         MAGNUM_ANYSCENEIMPORTER_LOCAL UnsignedInt doMesh2DCount() const override;
         MAGNUM_ANYSCENEIMPORTER_LOCAL Int doMesh2DForName(const std::string& name) override;
         MAGNUM_ANYSCENEIMPORTER_LOCAL std::string doMesh2DName(UnsignedInt id) override;
+        CORRADE_IGNORE_DEPRECATED_PUSH
         MAGNUM_ANYSCENEIMPORTER_LOCAL Containers::Optional<MeshData2D> doMesh2D(UnsignedInt id) override;
+        CORRADE_IGNORE_DEPRECATED_POP
 
         MAGNUM_ANYSCENEIMPORTER_LOCAL UnsignedInt doMesh3DCount() const override;
         MAGNUM_ANYSCENEIMPORTER_LOCAL Int doMesh3DForName(const std::string& name) override;
         MAGNUM_ANYSCENEIMPORTER_LOCAL std::string doMesh3DName(UnsignedInt id) override;
+        CORRADE_IGNORE_DEPRECATED_PUSH
         MAGNUM_ANYSCENEIMPORTER_LOCAL Containers::Optional<MeshData3D> doMesh3D(UnsignedInt id) override;
+        CORRADE_IGNORE_DEPRECATED_POP
+        #endif
 
         MAGNUM_ANYSCENEIMPORTER_LOCAL UnsignedInt doMaterialCount() const override;
         MAGNUM_ANYSCENEIMPORTER_LOCAL Int doMaterialForName(const std::string& name) override;
@@ -176,19 +210,22 @@ class MAGNUM_ANYSCENEIMPORTER_EXPORT AnySceneImporter: public AbstractImporter {
         MAGNUM_ANYSCENEIMPORTER_LOCAL Containers::Optional<TextureData> doTexture(UnsignedInt id) override;
 
         MAGNUM_ANYSCENEIMPORTER_LOCAL UnsignedInt doImage1DCount() const override;
+        MAGNUM_ANYSCENEIMPORTER_LOCAL UnsignedInt doImage1DLevelCount(UnsignedInt id) override;
         MAGNUM_ANYSCENEIMPORTER_LOCAL Int doImage1DForName(const std::string& name) override;
         MAGNUM_ANYSCENEIMPORTER_LOCAL std::string doImage1DName(UnsignedInt id) override;
-        MAGNUM_ANYSCENEIMPORTER_LOCAL Containers::Optional<ImageData1D> doImage1D(UnsignedInt id) override;
+        MAGNUM_ANYSCENEIMPORTER_LOCAL Containers::Optional<ImageData1D> doImage1D(UnsignedInt id, UnsignedInt level) override;
 
         MAGNUM_ANYSCENEIMPORTER_LOCAL UnsignedInt doImage2DCount() const override;
+        MAGNUM_ANYSCENEIMPORTER_LOCAL UnsignedInt doImage2DLevelCount(UnsignedInt id) override;
         MAGNUM_ANYSCENEIMPORTER_LOCAL Int doImage2DForName(const std::string& name) override;
         MAGNUM_ANYSCENEIMPORTER_LOCAL std::string doImage2DName(UnsignedInt id) override;
-        MAGNUM_ANYSCENEIMPORTER_LOCAL Containers::Optional<ImageData2D> doImage2D(UnsignedInt id) override;
+        MAGNUM_ANYSCENEIMPORTER_LOCAL Containers::Optional<ImageData2D> doImage2D(UnsignedInt id, UnsignedInt level) override;
 
         MAGNUM_ANYSCENEIMPORTER_LOCAL UnsignedInt doImage3DCount() const override;
+        MAGNUM_ANYSCENEIMPORTER_LOCAL UnsignedInt doImage3DLevelCount(UnsignedInt id) override;
         MAGNUM_ANYSCENEIMPORTER_LOCAL Int doImage3DForName(const std::string& name) override;
         MAGNUM_ANYSCENEIMPORTER_LOCAL std::string doImage3DName(UnsignedInt id) override;
-        MAGNUM_ANYSCENEIMPORTER_LOCAL Containers::Optional<ImageData3D> doImage3D(UnsignedInt id) override;
+        MAGNUM_ANYSCENEIMPORTER_LOCAL Containers::Optional<ImageData3D> doImage3D(UnsignedInt id, UnsignedInt level) override;
 
         Containers::Pointer<AbstractImporter> _in;
 };

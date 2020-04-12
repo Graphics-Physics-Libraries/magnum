@@ -44,9 +44,50 @@
 
 namespace Magnum { namespace Trade {
 
+/**
+@brief Features supported by an importer
+@m_since_latest
+
+@see @ref ImporterFeatures, @ref AbstractImporter::features()
+*/
+enum class ImporterFeature: UnsignedByte {
+    /** Opening files from raw data using @ref AbstractImporter::openData() */
+    OpenData = 1 << 0,
+
+    /** Opening already loaded state using @ref AbstractImporter::openState() */
+    OpenState = 1 << 1,
+
+    /**
+     * Specifying callbacks for loading additional files referenced
+     * from the main file using @ref AbstractImporter::setFileCallback(). If
+     * the importer * doesn't expose this feature, the format is either
+     * single-file or loading via callbacks is not supported.
+     *
+     * See @ref Trade-AbstractImporter-usage-callbacks and particular importer
+     * documentation for more information.
+     */
+    FileCallback = 1 << 2
+};
+
+/**
+@brief Set of features supported by an importer
+@m_since_latest
+
+@see @ref AbstractImporter::features()
+*/
+typedef Containers::EnumSet<ImporterFeature> ImporterFeatures;
+
+CORRADE_ENUMSET_OPERATORS(ImporterFeatures)
+
+/** @debugoperatorenum{ImporterFeatures} */
+MAGNUM_TRADE_EXPORT Debug& operator<<(Debug& debug, ImporterFeature value);
+
+/** @debugoperatorenum{ImporterFeatures} */
+MAGNUM_TRADE_EXPORT Debug& operator<<(Debug& debug, ImporterFeatures value);
+
 #ifdef MAGNUM_BUILD_DEPRECATED
 /** @brief @copybrief InputFileCallbackPolicy
- * @deprecated Use @ref InputFileCallbackPolicy instead.
+ * @m_deprecated_since{2019,10} Use @ref InputFileCallbackPolicy instead.
  */
 typedef CORRADE_DEPRECATED("use InputFileCallbackPolicy instead") InputFileCallbackPolicy ImporterFileCallbackPolicy;
 #endif
@@ -73,14 +114,15 @@ See @ref plugins for more information about general plugin usage and
 Besides loading data directly from the filesystem using @ref openFile() like
 shown above, it's possible to use @ref openData() to import data from memory.
 Note that the particular importer implementation must support
-@ref Feature::OpenData for this method to work.
+@ref ImporterFeature::OpenData for this method to work.
 
 Complex scene files often reference other files such as images and in that case
 you may want to intercept those references and load them in a custom way as
-well. For importers that advertise support for this with @ref Feature::FileCallback
-this is done by specifying a file loading callback using @ref setFileCallback().
-The callback gets a filename, @ref InputFileCallbackPolicy and an user
-pointer as parameters; returns a non-owning view on the loaded data or a
+well. For importers that advertise support for this with
+@ref ImporterFeature::FileCallback this is done by specifying a file loading
+callback using @ref setFileCallback(). The callback gets a filename,
+@ref InputFileCallbackPolicy and an user pointer as parameters; returns a
+non-owning view on the loaded data or a
 @ref Corrade::Containers::NullOpt "Containers::NullOpt" to indicate the file
 loading failed. For example, loading a scene from memory-mapped files could
 look like below. Note that the file loading callback affects @ref openFile() as
@@ -90,12 +132,12 @@ correctly.
 
 @snippet MagnumTrade.cpp AbstractImporter-usage-callbacks
 
-For importers that don't support @ref Feature::FileCallback directly, the base
-@ref openFile() implementation will use the file callback to pass the loaded
-data through to @ref openData(), in case the importer supports at least
-@ref Feature::OpenData. If the importer supports neither @ref Feature::FileCallback
-nor @ref Feature::OpenData, @ref setFileCallback() doesn't allow the callbacks
-to be set.
+For importers that don't support @ref ImporterFeature::FileCallback directly,
+the base @ref openFile() implementation will use the file callback to pass the
+loaded data through to @ref openData(), in case the importer supports at least
+@ref ImporterFeature::OpenData. If the importer supports neither
+@ref ImporterFeature::FileCallback nor @ref ImporterFeature::OpenData,
+@ref setFileCallback() doesn't allow the callbacks to be set.
 
 The input file callback signature is the same for @ref Trade::AbstractImporter
 and @ref Text::AbstractFont to allow code reuse.
@@ -117,8 +159,8 @@ expose internal state through various accessors:
     imported by @ref image1D(), @ref image2D() or @ref image3D()
 -   @ref LightData::importerState() can expose importer state for a light
     imported by @ref light()
--   @ref MeshData3D::importerState() can expose importer state for a mesh
-    imported by @ref mesh2D() or @ref mesh3D()
+-   @ref MeshData::importerState() can expose importer state for a mesh
+    imported by @ref mesh()
 -   @ref ObjectData3D::importerState() can expose importer state for an object
     imported by @ref object2D() or @ref object3D()
 -   @ref SceneData::importerState() can expose importer state for a scene
@@ -127,9 +169,9 @@ expose internal state through various accessors:
     imported by @ref texture()
 
 Besides exposing internal state, importers that support the
-@ref Feature::OpenState feature can also attach to existing importer state
-using @ref openState(). See documentation of a particular importer for details
-about concrete types returned and accepted by these functions.
+@ref ImporterFeature::OpenState feature can also attach to existing importer
+state using @ref openState(). See documentation of a particular importer for
+details about concrete types returned and accepted by these functions.
 
 @subsection Trade-AbstractImporter-usage-casting Polymorphic imported data types
 
@@ -145,6 +187,26 @@ Another option is making use of the @ref Containers::pointerCast() utility, but
 note that in that case the original @ref Corrade::Containers::Pointer will be
 * *moved into* a new instance and that might not be desirable.
 
+@section Trade-AbstractImporter-data-dependency Data dependency
+
+The `*Data` instances returned from various functions *by design* have no
+dependency on the importer instance and neither on the dynamic plugin module.
+In other words, you don't need to keep the importer instance (or the plugin
+manager instance) around in order to have the `*Data` instances valid.
+Moreover, all @ref Corrade::Containers::Array instances returned through
+@ref ImageData, @ref AnimationData and @ref MeshData are only allowed to have
+default deleters (or be non-owning instances created from
+@ref Corrade::Containers::ArrayView) --- this is to avoid potential dangling
+function pointer calls when destructing such instances after the plugin module
+has been unloaded.
+
+The only exception are various `importerState()` functions
+@ref Trade-AbstractImporter-usage-state "described above", but in that case the
+relation is *weak* --- these are valid only as long as the currently opened
+file is kept open. If the file gets closed or the importer instance deleted,
+the state pointers become dangling, and that's fine as long as you don't access
+them.
+
 @section Trade-AbstractImporter-subclassing Subclassing
 
 The plugin needs to implement the @ref doFeatures(), @ref doIsOpened()
@@ -152,11 +214,11 @@ functions, at least one of @ref doOpenData() / @ref doOpenFile() /
 @ref doOpenState() functions, function @ref doClose() and one or more tuples of
 data access functions, based on what features are supported in given format.
 
-In order to support @ref Feature::FileCallback, the importer needs to properly
-use the callbacks to both load the top-level file in @ref doOpenFile() and also
-load any external files when needed. The @ref doOpenFile() can delegate back
-into the base implementation, but it should remember at least the base file
-path to pass correct paths to subsequent file callbacks. The
+In order to support @ref ImporterFeature::FileCallback, the importer needs to
+properly use the callbacks to both load the top-level file in @ref doOpenFile()
+and also load any external files when needed. The @ref doOpenFile() can
+delegate back into the base implementation, but it should remember at least the
+base file path to pass correct paths to subsequent file callbacks. The
 @ref doSetFileCallback() can be overriden in case it's desired to respond to
 file loading callback setup, but doesn't have to be.
 
@@ -172,69 +234,61 @@ checked by the implementation:
 -   The @ref doOpenData(), @ref doOpenFile() and @ref doOpenState() functions
     are called after the previous file was closed, function @ref doClose() is
     called only if there is any file opened.
--   The @ref doOpenData() function is called only if @ref Feature::OpenData is
-    supported.
--   The @ref doOpenState() function is called only if @ref Feature::OpenState
-    is supported.
+-   The @ref doOpenData() function is called only if
+    @ref ImporterFeature::OpenData is supported.
+-   The @ref doOpenState() function is called only if
+    @ref ImporterFeature::OpenState is supported.
 -   The @ref doSetFileCallback() function is called only if
-    @ref Feature::FileCallback is supported and there is no file opened.
+    @ref ImporterFeature::FileCallback is supported and there is no file
+    opened.
 -   All `do*()` implementations working on an opened file are called only if
     there is any file opened.
 -   All `do*()` implementations taking data ID as parameter are called only if
     the ID is from valid range.
+-   For @ref doMesh() and `doImage*()` and @p level parameter being nonzero,
+    implementations are called only if it is from valid range. Level zero is
+    always expected to be present and thus no check is done in that case.
 
-@attention
-    @ref Corrade::Containers::Array instances returned from the plugin
-    should *not* use anything else than the default deleter, otherwise this can
-    cause dangling function pointer call on array destruction if the plugin
-    gets unloaded before the array is destroyed.
-@attention
+@m_class{m-block m-warning}
+
+@par Dangling function pointers on plugin unload
+    As @ref Trade-AbstractImporter-data-dependency "mentioned above",
+    @ref Corrade::Containers::Array instances returned from plugin
+    implementations are not allowed to use anything else than the default
+    deleter or the deleter used by @ref Trade::ArrayAllocator, otherwise this
+    could cause dangling function pointer call on array destruction if the
+    plugin gets unloaded before the array is destroyed. This is asserted by the
+    base implementation on return.
+@par
     Similarly for interpolator functions passed through
     @ref Animation::TrackView instances to @ref AnimationData --- to avoid
     dangling pointers, be sure to always include an interpolator returned from
     @ref animationInterpolatorFor(), which guarantees the function is *not*
     instantiated in the plugin binary. Avoid using
-    @ref Animation::interpolatorFor() (or indirectly it by specifying
-    just @ref Animation::Interpolation), as it doesn't have such guarantee.
+    @ref Animation::interpolatorFor() (or indirectly using it by specifying
+    just @ref Animation::Interpolation), as it doesn't have such a guarantee.
+    Note that unlike with array instances, the base implementation can't easily
+    check for this.
 */
 class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagingPlugin<AbstractImporter> {
     public:
-        /**
-         * @brief Features supported by this importer
-         *
-         * @see @ref Features, @ref features()
+        #ifdef MAGNUM_BUILD_DEPRECATED
+        /** @brief @copybrief ImporterFeature
+         * @m_deprecated_since_latest Use @ref ImporterFeature instead.
          */
-        enum class Feature: UnsignedByte {
-            /** Opening files from raw data using @ref openData() */
-            OpenData = 1 << 0,
+        typedef CORRADE_DEPRECATED("use ImporterFeature instead") ImporterFeature Feature;
 
-            /** Opening already loaded state using @ref openState() */
-            OpenState = 1 << 1,
-
-            /**
-             * Specifying callbacks for loading additional files referenced
-             * from the main file using @ref setFileCallback(). If the importer
-             * doesn't expose this feature, the format is either single-file or
-             * loading via callbacks is not supported.
-             *
-             * See @ref Trade-AbstractImporter-usage-callbacks and particular
-             * importer documentation for more information.
-             */
-            FileCallback = 1 << 2
-        };
-
-        /**
-         * @brief Set of features supported by this importer
-         *
-         * @see @ref features()
+        /** @brief @copybrief ImporterFeatures
+         * @m_deprecated_since_latest Use @ref ImporterFeatures instead.
          */
-        typedef Containers::EnumSet<Feature> Features;
+        typedef CORRADE_DEPRECATED("use ImporterFeature instead") ImporterFeatures Features;
+        #endif
 
         /**
          * @brief Plugin interface
          *
          * @code{.cpp}
-         * "cz.mosra.magnum.Trade.AbstractImporter/0.3"
+         * "cz.mosra.magnum.Trade.AbstractImporter/0.3.1"
          * @endcode
          */
         static std::string pluginInterface();
@@ -244,8 +298,8 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          * @brief Plugin search paths
          *
          * First looks in `magnum/importers/` or `magnum-d/importers/` next to
-         * the executable (or, in case of Windows and a non-static build, next
-         * to the DLL of the @ref Trade library) and as a fallback in
+         * the dynamic @ref Trade library (unless it's a static build), then in
+         * the same location next to the executable and as a fallback in
          * `magnum/importers/` or `magnum-d/importers/` in the runtime install
          * location (`lib[64]/` on Unix-like systems, `bin/` on Windows). The
          * system-wide plugin search directory is configurable using the
@@ -268,7 +322,7 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
         explicit AbstractImporter(PluginManager::AbstractManager& manager, const std::string& plugin);
 
         /** @brief Features supported by this importer */
-        Features features() const { return doFeatures(); }
+        ImporterFeatures features() const { return doFeatures(); }
 
         /**
          * @brief File opening callback function
@@ -287,22 +341,22 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
         /**
          * @brief Set file opening callback
          *
-         * In case the importer supports @ref Feature::FileCallback, files
-         * opened through @ref openFile() will be loaded through the provided
-         * callback. Besides that, all external files referenced by the
-         * top-level file will be loaded through the callback function as well,
-         * usually on demand. The callback function gets a filename,
+         * In case the importer supports @ref ImporterFeature::FileCallback,
+         * files opened through @ref openFile() will be loaded through the
+         * provided callback. Besides that, all external files referenced by
+         * the top-level file will be loaded through the callback function as
+         * well, usually on demand. The callback function gets a filename,
          * @ref InputFileCallbackPolicy and the @p userData pointer as input
          * and returns a non-owning view on the loaded data as output or a
          * @ref Corrade::Containers::NullOpt if loading failed --- because
          * empty files might also be valid in some circumstances, @cpp nullptr @ce
          * can't be used to indicate a failure.
          *
-         * In case the importer doesn't support @ref Feature::FileCallback but
-         * supports at least @ref Feature::OpenData, a file opened through
-         * @ref openFile() will be internally loaded through the provided
-         * callback and then passed to @ref openData(). First the file is
-         * loaded with @ref InputFileCallbackPolicy::LoadTemporary passed to
+         * In case the importer doesn't support @ref ImporterFeature::FileCallback
+         * but supports at least @ref ImporterFeature::OpenData, a file opened
+         * through @ref openFile() will be internally loaded through the
+         * provided callback and then passed to @ref openData(). First the file
+         * is loaded with @ref InputFileCallbackPolicy::LoadTemporary passed to
          * the callback, then the returned memory view is passed to
          * @ref openData() (sidestepping the potential @ref openFile()
          * implementation of that particular importer) and after that the
@@ -313,8 +367,9 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * In case @p callback is @cpp nullptr @ce, the current callback (if
          * any) is reset. This function expects that the importer supports
-         * either @ref Feature::FileCallback or @ref Feature::OpenData. If an
-         * importer supports neither, callbacks can't be used.
+         * either @ref ImporterFeature::FileCallback or
+         * @ref ImporterFeature::OpenData. If an importer supports neither,
+         * callbacks can't be used.
          *
          * It's expected that this function is called *before* a file is
          * opened. It's also expected that the loaded data are kept in scope
@@ -361,9 +416,9 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          * @brief Open raw data
          *
          * Closes previous file, if it was opened, and tries to open given raw
-         * data. Available only if @ref Feature::OpenData is supported. Returns
-         * @cpp true @ce on success, @cpp false @ce otherwise. The @p data is
-         * not expected to be alive after the function exits.
+         * data. Available only if @ref ImporterFeature::OpenData is supported.
+         * Returns @cpp true @ce on success, @cpp false @ce otherwise. The
+         * @p data is not expected to be alive after the function exits.
          * @see @ref features(), @ref openFile()
          */
         bool openData(Containers::ArrayView<const char> data);
@@ -375,8 +430,9 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *      textures and materials.
          *
          * Closes previous file, if it was opened, and tries to open given
-         * state. Available only if @ref Feature::OpenState is supported. Returns
-         * @cpp true @ce on success, @cpp false @ce otherwise.
+         * state. Available only if @ref ImporterFeature::OpenState is
+         * supported. Returns @cpp true @ce on success, @cpp false @ce
+         * otherwise.
          *
          * See documentation of a particular plugin for more information about
          * type and contents of the @p state parameter.
@@ -390,9 +446,10 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          * Closes previous file, if it was opened, and tries to open given
          * file. Returns @cpp true @ce on success, @cpp false @ce otherwise.
          * If file loading callbacks are set via @ref setFileCallback() and
-         * @ref Feature::OpenData is supported, this function uses the callback
-         * to load the file and passes the memory view to @ref openData()
-         * instead. See @ref setFileCallback() for more information.
+         * @ref ImporterFeature::OpenData is supported, this function uses the
+         * callback to load the file and passes the memory view to
+         * @ref openData() instead. See @ref setFileCallback() for more
+         * information.
          * @see @ref features(), @ref openData()
          */
         bool openFile(const std::string& filename);
@@ -434,7 +491,7 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * If no scene for given name exists, returns @cpp -1 @ce. Expects that
          * a file is opened.
-         * @see @ref sceneName()
+         * @see @ref sceneName(), @ref scene(const std::string&)
          */
         Int sceneForName(const std::string& name);
 
@@ -453,8 +510,21 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * Returns given scene or @ref Containers::NullOpt if import failed.
          * Expects that a file is opened.
+         * @see @ref scene(const std::string&)
          */
         Containers::Optional<SceneData> scene(UnsignedInt id);
+
+        /**
+         * @brief Scene for given name
+         * @m_since_latest
+         *
+         * A convenience API combining @ref sceneForName() and
+         * @ref scene(UnsignedInt). If @ref sceneForName() returns @cpp -1 @ce,
+         * prints an error message and returns @ref Containers::NullOpt,
+         * otherwise propagates the result from @ref scene(UnsignedInt).
+         * Expects that a file is opened.
+         */
+        Containers::Optional<SceneData> scene(const std::string& name);
 
         /**
          * @brief Animation count
@@ -468,7 +538,7 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * If no animation for given name exists, returns @cpp -1 @ce. Expects
          * that a file is opened.
-         * @see @ref animationName()
+         * @see @ref animationName(), @ref animation(const std::string&)
          */
         Int animationForName(const std::string& name);
 
@@ -487,8 +557,21 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * Returns given animation or @ref Containers::NullOpt if importing
          * failed. Expects that a file is opened.
+         * @see @ref animation(const std::string&)
          */
         Containers::Optional<AnimationData> animation(UnsignedInt id);
+
+        /**
+         * @brief Animation for given name
+         * @m_since_latest
+         *
+         * A convenience API combining @ref animationForName() and
+         * @ref animation(UnsignedInt). If @ref animationForName() returns
+         * @cpp -1 @ce, prints an error message and returns
+         * @ref Containers::NullOpt, otherwise propagates the result from
+         * @ref animation(UnsignedInt). Expects that a file is opened.
+         */
+        Containers::Optional<AnimationData> animation(const std::string& name);
 
         /**
          * @brief Light count
@@ -502,7 +585,7 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * If no light for given name exists, returns @cpp -1 @ce. Expects that
          * a file is opened.
-         * @see @ref lightName()
+         * @see @ref lightName(), @ref light(const std::string&)
          */
         Int lightForName(const std::string& name);
 
@@ -521,8 +604,21 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * Returns given light or @ref Containers::NullOpt if importing failed.
          * Expects that a file is opened.
+         * @see @ref light(const std::string&)
          */
         Containers::Optional<LightData> light(UnsignedInt id);
+
+        /**
+         * @brief Light for given name
+         * @m_since_latest
+         *
+         * A convenience API combining @ref lightForName() and
+         * @ref light(UnsignedInt). If @ref lightForName() returns @cpp -1 @ce,
+         * prints an error message and returns @ref Containers::NullOpt,
+         * otherwise propagates the result from @ref light(UnsignedInt).
+         * Expects that a file is opened.
+         */
+        Containers::Optional<LightData> light(const std::string& name);
 
         /**
          * @brief Camera count
@@ -536,7 +632,7 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * If no camera for given name exists, returns @cpp -1 @ce. Expects
          * that a file is opened.
-         * @see @ref cameraName()
+         * @see @ref cameraName(), @ref camera(const std::string&)
          */
         Int cameraForName(const std::string& name);
 
@@ -555,8 +651,21 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * Returns given camera or @ref Containers::NullOpt if importing
          * failed. Expects that a file is opened.
+         * @see @ref camera(const std::string&)
          */
         Containers::Optional<CameraData> camera(UnsignedInt id);
+
+        /**
+         * @brief Camera for given name
+         * @m_since_latest
+         *
+         * A convenience API combining @ref cameraForName() and
+         * @ref camera(UnsignedInt). If @ref cameraForName() returns
+         * @cpp -1 @ce, prints an error message and returns
+         * @ref Containers::NullOpt, otherwise propagates the result from
+         * @ref camera(UnsignedInt). Expects that a file is opened.
+         */
+        Containers::Optional<CameraData> camera(const std::string& name);
 
         /**
          * @brief Two-dimensional object count
@@ -570,7 +679,7 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * If no scene for given name exists, returns @cpp -1 @ce. Expects that
          * a file is opened.
-         * @see @ref object2DName()
+         * @see @ref object2DName(), @ref object2D(const std::string&)
          */
         Int object2DForName(const std::string& name);
 
@@ -589,8 +698,21 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * Returns given object or @cpp nullptr @ce if importing failed.
          * Expects that a file is opened.
+         * @see @ref object2D(const std::string&)
          */
         Containers::Pointer<ObjectData2D> object2D(UnsignedInt id);
+
+        /**
+         * @brief Two-dimensional object for given name
+         * @m_since_latest
+         *
+         * A convenience API combining @ref object2DForName() and
+         * @ref object2D(UnsignedInt). If @ref object2DForName() returns
+         * @cpp -1 @ce, prints an error message and returns
+         * @ref Containers::NullOpt, otherwise propagates the result from
+         * @ref object2D(UnsignedInt). Expects that a file is opened.
+         */
+        Containers::Pointer<ObjectData2D> object2D(const std::string& name);
 
         /**
          * @brief Three-dimensional object count
@@ -604,7 +726,7 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * If no scene for given name exists, returns @cpp -1 @ce. Expects that
          * a file is opened.
-         * @see @ref object3DName()
+         * @see @ref object3DName(), @ref object3D(const std::string&)
          */
         Int object3DForName(const std::string& name);
 
@@ -623,33 +745,146 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * Returns given object or @cpp nullptr @ce if importing failed.
          * Expects that a file is opened.
+         * @see @ref object3D(const std::string&)
          */
         Containers::Pointer<ObjectData3D> object3D(UnsignedInt id);
 
         /**
+         * @brief Three-dimensional object for given name
+         * @m_since_latest
+         *
+         * A convenience API combining @ref object3DForName() and
+         * @ref object3D(UnsignedInt). If @ref object3DForName() returns
+         * @cpp -1 @ce, prints an error message and returns
+         * @ref Containers::NullOpt, otherwise propagates the result from
+         * @ref object3D(UnsignedInt). Expects that a file is opened.
+         */
+        Containers::Pointer<ObjectData3D> object3D(const std::string& name);
+
+        /**
+         * @brief Mesh count
+         * @m_since_latest
+         *
+         * Expects that a file is opened.
+         * @see @ref meshLevelCount()
+         */
+        UnsignedInt meshCount() const;
+
+        /**
+         * @brief Mesh level count
+         * @param id        Mesh ID, from range [0, @ref meshCount()).
+         * @m_since_latest
+         *
+         * Always returns at least one level, import failures are deferred to
+         * @ref mesh(). Expects that a file is opened.
+         */
+        UnsignedInt meshLevelCount(UnsignedInt id);
+
+        /**
+         * @brief Mesh ID for given name
+         * @m_since_latest
+         *
+         * If no mesh for given name exists, returns @cpp -1 @ce. Expects that
+         * a file is opened.
+         * @see @ref meshName(), @ref mesh(const std::string&, UnsignedInt)
+         */
+        Int meshForName(const std::string& name);
+
+        /**
+         * @brief Mesh name
+         * @param id        Mesh ID, from range [0, @ref meshCount()).
+         * @m_since_latest
+         *
+         * Expects that a file is opened.
+         * @see @ref meshForName()
+         */
+        std::string meshName(UnsignedInt id);
+
+        /**
+         * @brief Mesh
+         * @param id        Mesh ID, from range [0, @ref meshCount()).
+         * @param level     Mesh level, from range [0, @ref meshLevelCount())
+         * @m_since_latest
+         *
+         * Returns given mesh or @ref Containers::NullOpt if importing failed.
+         * The @p level parameter allows access to additional data and is
+         * largely left as importer-specific --- for example allowing access to
+         * per-instance, per-face or per-edge data. Expects that a file is
+         * opened.
+         * @see @ref mesh(const std::string&, UnsignedInt),
+         *      @ref MeshPrimitive::Instances, @ref MeshPrimitive::Faces,
+         *      @ref MeshPrimitive::Edges
+         */
+        Containers::Optional<MeshData> mesh(UnsignedInt id, UnsignedInt level = 0);
+
+        /**
+         * @brief Mesh for given name
+         * @m_since_latest
+         *
+         * A convenience API combining @ref meshForName() and
+         * @ref mesh(UnsignedInt, UnsignedInt). If @ref meshForName() returns
+         * @cpp -1 @ce, prints an error message and returns
+         * @ref Containers::NullOpt, otherwise propagates the result from
+         * @ref mesh(UnsignedInt, UnsignedInt). Expects that a file is opened.
+         */
+        Containers::Optional<MeshData> mesh(const std::string& name, UnsignedInt level = 0);
+
+        /**
+         * @brief Mesh attribute for given name
+         * @m_since_latest
+         *
+         * If the name is not recognized, returns a zero (invalid)
+         * @ref MeshAttribute, otherwise returns a custom mesh attribute. Note
+         * that the value returned by this function may depend on whether a
+         * file is opened or not and also be different for different files ---
+         * see documentation of a particular importer for more information.
+         * @see @ref isMeshAttributeCustom()
+         */
+        MeshAttribute meshAttributeForName(const std::string& name);
+
+        /**
+         * @brief String name for given custom mesh attribute
+         * @m_since_latest
+         *
+         * Given a custom @p name returned by @ref mesh() in a @ref MeshData,
+         * returns a string identifier. If a string representation is not
+         * available or @p name is not recognized, returns an empty string.
+         * Expects that @p name is custom. Note that the value returned by
+         * this function may depend on whether a file is opened or not and also
+         * be different for different files --- see documentation of a
+         * particular importer for more information.
+         * @see @ref isMeshAttributeCustom()
+         */
+        std::string meshAttributeName(MeshAttribute name);
+
+        #ifdef MAGNUM_BUILD_DEPRECATED
+        /**
          * @brief Two-dimensional mesh count
          *
          * Expects that a file is opened.
+         * @m_deprecated_since_latest Use @ref meshCount() instead.
          */
-        UnsignedInt mesh2DCount() const;
+        CORRADE_DEPRECATED("use meshCount() instead") UnsignedInt mesh2DCount() const;
 
         /**
          * @brief Two-dimensional mesh ID for given name
          *
          * If no mesh for given name exists, returns @cpp -1 @ce. Expects that
          * a file is opened.
+         * @m_deprecated_since_latest Use @ref meshForName() instead.
          * @see @ref mesh2DName()
          */
-        Int mesh2DForName(const std::string& name);
+        CORRADE_DEPRECATED("use meshForName() instead") Int mesh2DForName(const std::string& name);
 
         /**
          * @brief Two-dimensional mesh name
          * @param id        Mesh ID, from range [0, @ref mesh2DCount()).
          *
          * Expects that a file is opened.
+         * @m_deprecated_since_latest Use @ref meshName() instead.
          * @see @ref mesh2DForName()
          */
-        std::string mesh2DName(UnsignedInt id);
+        CORRADE_DEPRECATED("use meshName() instead") std::string mesh2DName(UnsignedInt id);
 
         /**
          * @brief Two-dimensional mesh
@@ -657,29 +892,39 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * Returns given mesh or @ref Containers::NullOpt if importing failed.
          * Expects that a file is opened.
+         * @m_deprecated_since_latest Use @ref mesh() instead.
          */
-        Containers::Optional<MeshData2D> mesh2D(UnsignedInt id);
+        CORRADE_IGNORE_DEPRECATED_PUSH /* Clang doesn't warn, but GCC does */
+        CORRADE_DEPRECATED("use mesh() instead") Containers::Optional<MeshData2D> mesh2D(UnsignedInt id);
+        CORRADE_IGNORE_DEPRECATED_POP
 
-        /** @brief Three-dimensional mesh count */
-        UnsignedInt mesh3DCount() const;
+        /**
+         * @brief Three-dimensional mesh count
+         *
+         * Expects that a file is opened.
+         * @m_deprecated_since_latest Use @ref meshCount() instead.
+         */
+        CORRADE_DEPRECATED("use meshCount() instead") UnsignedInt mesh3DCount() const;
 
         /**
          * @brief Three-dimensional mesh ID for given name
          *
          * If no mesh for given name exists, returns @cpp -1 @ce. Expects that
          * a file is opened.
+         * @m_deprecated_since_latest Use @ref meshForName() instead.
          * @see @ref mesh3DName()
          */
-        Int mesh3DForName(const std::string& name);
+        CORRADE_DEPRECATED("use meshForName() instead") Int mesh3DForName(const std::string& name);
 
         /**
          * @brief Three-dimensional mesh name
          * @param id        Mesh ID, from range [0, @ref mesh3DCount()).
          *
          * Expects that a file is opened.
+         * @m_deprecated_since_latest Use @ref meshName() instead.
          * @see @ref mesh3DForName()
          */
-        std::string mesh3DName(UnsignedInt id);
+        CORRADE_DEPRECATED("use meshName() instead") std::string mesh3DName(UnsignedInt id);
 
         /**
          * @brief Three-dimensional mesh
@@ -687,8 +932,12 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * Returns given mesh or @ref Containers::NullOpt if importing failed.
          * Expects that a file is opened.
+         * @m_deprecated_since_latest Use @ref meshName() instead.
          */
-        Containers::Optional<MeshData3D> mesh3D(UnsignedInt id);
+        CORRADE_IGNORE_DEPRECATED_PUSH /* Clang doesn't warn, but GCC does */
+        CORRADE_DEPRECATED("use mesh() instead") Containers::Optional<MeshData3D> mesh3D(UnsignedInt id);
+        CORRADE_IGNORE_DEPRECATED_POP
+        #endif
 
         /**
          * @brief Material count
@@ -711,7 +960,7 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          * @param id        Material ID, from range [0, @ref materialCount()).
          *
          * Expects that a file is opened.
-         * @see @ref materialForName()
+         * @see @ref materialForName(), @ref material(const std::string&)
          */
         std::string materialName(UnsignedInt id);
 
@@ -721,8 +970,21 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * Returns given material or @cpp nullptr @ce if importing failed.
          * Expects that a file is opened.
+         * @see @ref material(const std::string&)
          */
         Containers::Pointer<AbstractMaterialData> material(UnsignedInt id);
+
+        /**
+         * @brief Material for given name
+         * @m_since_latest
+         *
+         * A convenience API combining @ref materialForName() and
+         * @ref material(UnsignedInt). If @ref materialForName() returns
+         * @cpp -1 @ce, prints an error message and returns
+         * @ref Containers::NullOpt, otherwise propagates the result from
+         * @ref material(UnsignedInt). Expects that a file is opened.
+         */
+        Containers::Pointer<AbstractMaterialData> material(const std::string& name);
 
         /**
          * @brief Texture count
@@ -736,7 +998,7 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * If no texture for given name exists, returns @cpp -1 @ce. Expects
          * that a file is opened.
-         * @see @ref textureName()
+         * @see @ref textureName(), @ref texture(const std::string&)
          */
         Int textureForName(const std::string& name);
 
@@ -755,22 +1017,46 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          *
          * Returns given texture or @ref Containers::NullOpt if importing
          * failed. Expects that a file is opened.
+         * @see @ref texture(const std::string&)
          */
         Containers::Optional<TextureData> texture(UnsignedInt id);
+
+        /**
+         * @brief Texture for given name
+         * @m_since_latest
+         *
+         * A convenience API combining @ref textureForName() and
+         * @ref texture(UnsignedInt). If @ref textureForName() returns
+         * @cpp -1 @ce, prints an error message and returns
+         * @ref Containers::NullOpt, otherwise propagates the result from
+         * @ref texture(UnsignedInt). Expects that a file is opened.
+         */
+        Containers::Optional<TextureData> texture(const std::string& name);
 
         /**
          * @brief One-dimensional image count
          *
          * Expects that a file is opened.
+         * @see @ref image1DLevelCount()
          */
         UnsignedInt image1DCount() const;
+
+        /**
+         * @brief One-dimensional image mip level count
+         * @param id        Image ID, from range [0, @ref image1DCount())
+         * @m_since_latest
+         *
+         * Always returns at least one level, import failures are deferred to
+         * @ref image1D(). Expects that a file is opened.
+         */
+        UnsignedInt image1DLevelCount(UnsignedInt id);
 
         /**
          * @brief One-dimensional image ID for given name
          *
          * If no image for given name exists, returns @cpp -1 @ce. Expects that
          * a file is opened.
-         * @see @ref image1DName()
+         * @see @ref image1DName(), @ref image1D(const std::string&, UnsignedInt)
          */
         Int image1DForName(const std::string& name);
 
@@ -786,25 +1072,51 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
         /**
          * @brief One-dimensional image
          * @param id        Image ID, from range [0, @ref image1DCount()).
+         * @param level     Mip level, from range [0, @ref image1DLevelCount())
          *
          * Returns given image or @ref Containers::NullOpt if importing failed.
          * Expects that a file is opened.
+         * @see @ref image1D(const std::string&, UnsignedInt)
          */
-        Containers::Optional<ImageData1D> image1D(UnsignedInt id);
+        Containers::Optional<ImageData1D> image1D(UnsignedInt id, UnsignedInt level = 0);
+
+        /**
+         * @brief One-dimensional image for given name
+         * @m_since_latest
+         *
+         * A convenience API combining @ref image1DForName() and
+         * @ref image1D(UnsignedInt, UnsignedInt). If @ref image1DForName()
+         * returns @cpp -1 @ce, prints an error message and returns
+         * @ref Containers::NullOpt, otherwise propagates the result from
+         * @ref image1D(UnsignedInt, UnsignedInt). Expects that a file is
+         * opened.
+         */
+        Containers::Optional<ImageData1D> image1D(const std::string& name, UnsignedInt level = 0);
 
         /**
          * @brief Two-dimensional image count
          *
          * Expects that a file is opened.
+         * @see @ref image2DLevelCount()
          */
         UnsignedInt image2DCount() const;
+
+        /**
+         * @brief Two-dimensional image mip level count
+         * @param id        Image ID, from range [0, @ref image2DCount()).
+         * @m_since_latest
+         *
+         * Always returns at least one level, import failures are deferred to
+         * @ref image2D(). Expects that a file is opened.
+         */
+        UnsignedInt image2DLevelCount(UnsignedInt id);
 
         /**
          * @brief Two-dimensional image ID for given name
          *
          * If no image for given name exists, returns @cpp -1 @ce. Expects that
          * a file is opened.
-         * @see @ref image2DName()
+         * @see @ref image2DName(), @ref image2D(const std::string&, UnsignedInt)
          */
         Int image2DForName(const std::string& name);
 
@@ -820,25 +1132,51 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
         /**
          * @brief Two-dimensional image
          * @param id        Image ID, from range [0, @ref image2DCount()).
+         * @param level     Mip level, from range [0, @ref image2DLevelCount())
          *
          * Returns given image or @ref Containers::NullOpt if importing failed.
          * Expects that a file is opened.
+         * @see @ref image2D(const std::string&, UnsignedInt)
          */
-        Containers::Optional<ImageData2D> image2D(UnsignedInt id);
+        Containers::Optional<ImageData2D> image2D(UnsignedInt id, UnsignedInt level = 0);
+
+        /**
+         * @brief Two-dimensional image for given name
+         * @m_since_latest
+         *
+         * A convenience API combining @ref image2DForName() and
+         * @ref image2D(UnsignedInt, UnsignedInt). If @ref image2DForName()
+         * returns @cpp -1 @ce, prints an error message and returns
+         * @ref Containers::NullOpt, otherwise propagates the result from
+         * @ref image2D(UnsignedInt, UnsignedInt). Expects that a file is
+         * opened.
+         */
+        Containers::Optional<ImageData2D> image2D(const std::string& name, UnsignedInt level = 0);
 
         /**
          * @brief Three-dimensional image count
          *
          * Expects that a file is opened.
+         * @see @ref image3DLevelCount()
          */
         UnsignedInt image3DCount() const;
+
+        /**
+         * @brief Three-dimensional image mip level count
+         * @param id        Image ID, from range [0, @ref image3DCount())
+         * @m_since_latest
+         *
+         * Always returns at least one level, import failures are deferred to
+         * @ref image3D(). Expects that a file is opened.
+         */
+        UnsignedInt image3DLevelCount(UnsignedInt id);
 
         /**
          * @brief Three-dimensional image ID for given name
          *
          * If no image for given name exists, returns @cpp -1 @ce. Expects that
          * a file is opened.
-         * @see @ref image3DName()
+         * @see @ref image3DName(), @ref image3D(const std::string&, UnsignedInt)
          */
         Int image3DForName(const std::string& name);
 
@@ -854,13 +1192,32 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
         /**
          * @brief Three-dimensional image
          * @param id        Image ID, from range [0, @ref image3DCount()).
+         * @param level     Mip level, from range [0, @ref image3DLevelCount())
          *
          * Returns given image or @ref Containers::NullOpt if importing failed.
          * Expects that a file is opened.
+         * @see @ref image3D(const std::string&, UnsignedInt)
          */
-        Containers::Optional<ImageData3D> image3D(UnsignedInt id);
+        Containers::Optional<ImageData3D> image3D(UnsignedInt id, UnsignedInt level = 0);
 
-        /*@}*/
+        /**
+         * @brief Three-dimensional image for given name
+         * @m_since_latest
+         *
+         * A convenience API combining @ref image3DForName() and
+         * @ref image3D(UnsignedInt, UnsignedInt). If @ref image3DForName()
+         * returns @cpp -1 @ce, prints an error message and returns
+         * @ref Containers::NullOpt, otherwise propagates the result from
+         * @ref image3D(UnsignedInt, UnsignedInt). Expects that a file is
+         * opened.
+         */
+        Containers::Optional<ImageData3D> image3D(const std::string& name, UnsignedInt level = 0);
+
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /**
          * @brief Plugin-specific access to internal importer state
@@ -872,7 +1229,7 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          * @see @ref AbstractMaterialData::importerState(),
          *      @ref AnimationData::importerState(), @ref CameraData::importerState(),
          *      @ref ImageData::importerState(), @ref LightData::importerState(),
-         *      @ref MeshData2D::importerState(), @ref MeshData3D::importerState(),
+         *      @ref MeshData::importerState(),
          *      @ref ObjectData2D::importerState(), @ref ObjectData3D::importerState(),
          *      @ref SceneData::importerState(), @ref TextureData::importerState()
          */
@@ -882,14 +1239,15 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
         /**
          * @brief Implementation for @ref openFile()
          *
-         * If @ref Feature::OpenData is supported, default implementation opens
-         * the file and calls @ref doOpenData() with its contents. It is
-         * allowed to call this function from your @ref doOpenFile()
-         * implementation --- in particular, this implementation will also
-         * correctly handle callbacks set through @ref setFileCallback().
+         * If @ref ImporterFeature::OpenData is supported, default
+         * implementation opens the file and calls @ref doOpenData() with its
+         * contents. It is allowed to call this function from your
+         * @ref doOpenFile() implementation --- in particular, this
+         * implementation will also correctly handle callbacks set through
+         * @ref setFileCallback().
          *
          * This function is not called when file callbacks are set through
-         * @ref setFileCallback() and @ref Feature::FileCallback is not
+         * @ref setFileCallback() and @ref ImporterFeature::FileCallback is not
          * supported --- instead, file is loaded though the callback and data
          * passed through to @ref doOpenData().
          */
@@ -897,7 +1255,7 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
 
     private:
         /** @brief Implementation for @ref features() */
-        virtual Features doFeatures() const = 0;
+        virtual ImporterFeatures doFeatures() const = 0;
 
         /**
          * @brief Implementation for @ref setFileCallback()
@@ -1074,52 +1432,178 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
         virtual Containers::Pointer<ObjectData3D> doObject3D(UnsignedInt id);
 
         /**
-         * @brief Implementation for @ref mesh2DCount()
+         * @brief Implementation for @ref meshCount()
+         * @m_since_latest
          *
          * Default implementation returns @cpp 0 @ce.
          */
+        virtual UnsignedInt doMeshCount() const;
+
+        /**
+         * @brief Implementation for @ref meshLevelCount()
+         * @m_since_latest
+         *
+         * Default implementation returns @cpp 1 @ce. Similarly to all other
+         * `*Count()` functions, this function isn't expected to fail --- if an
+         * import error occus, this function should return @cpp 1 @ce and the
+         * error state should be returned from @ref mesh() instead.
+         *
+         * Deliberately not @cpp const @ce to allow plugins cache decoded
+         * data.
+         */
+        virtual UnsignedInt doMeshLevelCount(UnsignedInt id);
+
+        /**
+         * @brief Implementation for @ref meshForName()
+         * @m_since_latest
+         *
+         * Default implementation returns @cpp -1 @ce.
+         */
+        virtual Int doMeshForName(const std::string& name);
+
+        /**
+         * @brief Implementation for @ref meshName()
+         * @m_since_latest
+         *
+         * Default implementation returns an empty string.
+         */
+        virtual std::string doMeshName(UnsignedInt id);
+
+        /**
+         * @brief Implementation for @ref mesh()
+         * @m_since_latest
+         */
+        virtual Containers::Optional<MeshData> doMesh(UnsignedInt id, UnsignedInt level);
+
+        /**
+         * @brief Implementation for @ref meshAttributeForName()
+         * @m_since_latest
+         *
+         * Default implementation returns an invalid (zero) value.
+         */
+        virtual MeshAttribute doMeshAttributeForName(const std::string& name);
+
+        /**
+         * @brief Implementation for @ref meshAttributeName()
+         * @m_since_latest
+         *
+         * Receives the custom ID extracted via @ref meshAttributeCustom(MeshAttribute).
+         * Default implementation returns an empty string.
+         */
+        virtual std::string doMeshAttributeName(UnsignedShort name);
+
+        #ifdef MAGNUM_BUILD_DEPRECATED
+        /**
+         * @brief Implementation for @ref mesh2DCount()
+         *
+         * Default implementation returns @cpp 0 @ce. There weren't any
+         * importers in existence known to implement 2D mesh import, so unlike
+         * @ref doMesh3DCount() this function doesn't delegate to
+         * @ref doMeshCount().
+         * @m_deprecated_since_latest Implement @ref doMeshCount() instead.
+         */
+        /* MSVC warns when overriding such methods and there's no way to
+           suppress that warning, making the RT build (which treats deprecation
+           warnings as errors) fail and other builds extremely noisy. So
+           disabling those on MSVC. */
+        #if !(defined(CORRADE_TARGET_MSVC) && !defined(CORRADE_TARGET_CLANG))
+        CORRADE_DEPRECATED("implement doMeshCount() instead")
+        #endif
         virtual UnsignedInt doMesh2DCount() const;
 
         /**
          * @brief Implementation for @ref mesh2DForName()
          *
-         * Default implementation returns @cpp -1 @ce.
+         * Default implementation returns @cpp -1 @ce. There weren't any
+         * importers in existence known to implement 2D mesh import, so unlike
+         * @ref doMesh3DForName() this function doesn't delegate to
+         * @ref doMeshForName().
+         * @m_deprecated_since_latest Implement @ref doMeshForName() instead.
          */
+        #if !(defined(CORRADE_TARGET_MSVC) && !defined(CORRADE_TARGET_CLANG))
+        CORRADE_DEPRECATED("implement doMeshForName() instead")
+        #endif /* See above */
         virtual Int doMesh2DForName(const std::string& name);
 
         /**
          * @brief Implementation for @ref mesh2DName()
          *
-         * Default implementation returns empty string.
+         * Default implementation returns empty string. There weren't any
+         * importers in existence known to implement 2D mesh import, so unlike
+         * @ref doMesh3DName() this function doesn't delegate to
+         * @ref doMeshName().
+         * @m_deprecated_since_latest Implement @ref doMeshName() instead.
          */
+        #if !(defined(CORRADE_TARGET_MSVC) && !defined(CORRADE_TARGET_CLANG))
+        CORRADE_DEPRECATED("implement doMeshName() instead")
+        #endif /* See above */
         virtual std::string doMesh2DName(UnsignedInt id);
 
-        /** @brief Implementation for @ref mesh2D() */
+        /**
+         * @brief Implementation for @ref mesh2D()
+         *
+         * There weren't any importers in existence known to implement 2D mesh
+         * import, so unlike @ref doMesh3D() this function doesn't
+         * delegate to @ref doMesh().
+         * @m_deprecated_since_latest Implement @ref doMesh() instead.
+         */
+        CORRADE_IGNORE_DEPRECATED_PUSH /* Clang doesn't warn, but GCC does */
+        #if !(defined(CORRADE_TARGET_MSVC) && !defined(CORRADE_TARGET_CLANG))
+        CORRADE_DEPRECATED("implement doMesh() instead")
+        #endif /* See above */
         virtual Containers::Optional<MeshData2D> doMesh2D(UnsignedInt id);
+        CORRADE_IGNORE_DEPRECATED_POP
 
         /**
          * @brief Implementation for @ref mesh3DCount()
          *
-         * Default implementation returns @cpp 0 @ce.
+         * Default implementation returns @ref doMeshCount() for backwards
+         * compatibility.
+         * @m_deprecated_since_latest Implement @ref doMeshCount() instead.
          */
+        #if !(defined(CORRADE_TARGET_MSVC) && !defined(CORRADE_TARGET_CLANG))
+        CORRADE_DEPRECATED("implement doMeshCount() instead")
+        #endif /* See above */
         virtual UnsignedInt doMesh3DCount() const;
 
         /**
          * @brief Implementation for @ref mesh3DForName()
          *
-         * Default implementation returns @cpp -1 @ce.
+         * Default implementation returns @ref doMeshForName() for backwards
+         * compatibility.
+         * @m_deprecated_since_latest Implement @ref doMeshForName() instead.
          */
+        #if !(defined(CORRADE_TARGET_MSVC) && !defined(CORRADE_TARGET_CLANG))
+        CORRADE_DEPRECATED("implement doMeshForName() instead")
+        #endif /* See above */
         virtual Int doMesh3DForName(const std::string& name);
 
         /**
          * @brief Implementation for @ref mesh3DName()
          *
-         * Default implementation returns empty string.
+         * Default implementation returns @ref doMeshName() for backwards
+         * compatibility.
+         * @m_deprecated_since_latest Implement @ref doMeshName() instead.
          */
+        #if !(defined(CORRADE_TARGET_MSVC) && !defined(CORRADE_TARGET_CLANG))
+        CORRADE_DEPRECATED("implement doMeshName() instead")
+        #endif /* See above */
         virtual std::string doMesh3DName(UnsignedInt id);
 
-        /** @brief Implementation for @ref mesh3D() */
+        /**
+         * @brief Implementation for @ref mesh3D()
+         *
+         * Default implementation returns @ref doMesh() converted to
+         * @cpp MeshData3D @ce for backwards compatibility.
+         * @m_deprecated_since_latest Implement @ref doMesh() instead.
+         */
+        CORRADE_IGNORE_DEPRECATED_PUSH /* Clang doesn't warn, but GCC does */
+        #if !(defined(CORRADE_TARGET_MSVC) && !defined(CORRADE_TARGET_CLANG))
+        CORRADE_DEPRECATED("implement doMesh() instead")
+        #endif /* See above */
         virtual Containers::Optional<MeshData3D> doMesh3D(UnsignedInt id);
+        CORRADE_IGNORE_DEPRECATED_POP
+        #endif
 
         /**
          * @brief Implementation for @ref materialCount()
@@ -1177,6 +1661,15 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
         virtual UnsignedInt doImage1DCount() const;
 
         /**
+         * @brief Implementation for @ref image1DLevelCount()
+         * @m_since_latest
+         *
+         * Default implementation returns @cpp 1 @ce. See
+         * @ref doImage2DLevelCount() for expected implementation behavior.
+         */
+        virtual UnsignedInt doImage1DLevelCount(UnsignedInt id);
+
+        /**
          * @brief Implementation for @ref image1DForName()
          *
          * Default implementation returns @cpp -1 @ce.
@@ -1191,7 +1684,7 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
         virtual std::string doImage1DName(UnsignedInt id);
 
         /** @brief Implementation for @ref image1D() */
-        virtual Containers::Optional<ImageData1D> doImage1D(UnsignedInt id);
+        virtual Containers::Optional<ImageData1D> doImage1D(UnsignedInt id, UnsignedInt level);
 
         /**
          * @brief Implementation for @ref image2DCount()
@@ -1199,6 +1692,23 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          * Default implementation returns @cpp 0 @ce.
          */
         virtual UnsignedInt doImage2DCount() const;
+
+        /**
+         * @brief Implementation for @ref image2DLevelCount()
+         * @m_since_latest
+         *
+         * Default implementation returns @cpp 1 @ce. Similarly to all other
+         * `*Count()` functions, this function isn't expected to fail --- if an
+         * import error occus, this function should return @cpp 1 @ce and the
+         * error state should be returned from @ref image2D() instead; if a
+         * file really contains a zero-level image, the implementation should
+         * exclude that image from @ref doImage2DCount() instead of returning
+         * @cpp 0 @ce here.
+         *
+         * Deliberately not @cpp const @ce to allow plugins cache decoded
+         * data.
+         */
+        virtual UnsignedInt doImage2DLevelCount(UnsignedInt id);
 
         /**
          * @brief Implementation for @ref image2DForName()
@@ -1215,7 +1725,7 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
         virtual std::string doImage2DName(UnsignedInt id);
 
         /** @brief Implementation for @ref image2D() */
-        virtual Containers::Optional<ImageData2D> doImage2D(UnsignedInt id);
+        virtual Containers::Optional<ImageData2D> doImage2D(UnsignedInt id, UnsignedInt level);
 
         /**
          * @brief Implementation for @ref image3DCount()
@@ -1223,6 +1733,15 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
          * Default implementation returns @cpp 0 @ce.
          */
         virtual UnsignedInt doImage3DCount() const;
+
+        /**
+         * @brief Implementation for @ref image3DLevelCount()
+         * @m_since_latest
+         *
+         * Default implementation returns @cpp 1 @ce. See
+         * @ref doImage2DLevelCount() for expected implementation behavior.
+         */
+        virtual UnsignedInt doImage3DLevelCount(UnsignedInt id);
 
         /**
          * @brief Implementation for @ref image3DForName()
@@ -1239,7 +1758,7 @@ class MAGNUM_TRADE_EXPORT AbstractImporter: public PluginManager::AbstractManagi
         virtual std::string doImage3DName(UnsignedInt id);
 
         /** @brief Implementation for @ref image3D() */
-        virtual Containers::Optional<ImageData3D> doImage3D(UnsignedInt id);
+        virtual Containers::Optional<ImageData3D> doImage3D(UnsignedInt id, UnsignedInt level);
 
         /** @brief Implementation for @ref importerState() */
         virtual const void* doImporterState() const;
@@ -1269,14 +1788,6 @@ template<class Callback, class T> void AbstractImporter::setFileCallback(Callbac
     }, &_fileCallbackTemplate);
 }
 #endif
-
-CORRADE_ENUMSET_OPERATORS(AbstractImporter::Features)
-
-/** @debugoperatorclassenum{AbstractImporter,AbstractImporter::Feature} */
-MAGNUM_TRADE_EXPORT Debug& operator<<(Debug& debug, AbstractImporter::Feature value);
-
-/** @debugoperatorclassenum{AbstractImporter,AbstractImporter::Features} */
-MAGNUM_TRADE_EXPORT Debug& operator<<(Debug& debug, AbstractImporter::Features value);
 
 }}
 

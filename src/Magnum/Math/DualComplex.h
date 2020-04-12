@@ -67,6 +67,10 @@ template<class T> class DualComplex: public Dual<Complex<T>> {
          * @f[
          *      \hat c = (\cos(\theta) + i \sin(\theta)) + \epsilon (0 + i0)
          * @f]
+         *
+         * For creating a dual complex number from a rotation @ref Complex, use
+         * the implicit conversion provided by
+         * @ref DualComplex(const Complex<T>&, const Complex<T>&).
          * @see @ref Complex::rotation(), @ref Matrix3::rotation(),
          *      @ref DualQuaternion::rotation()
          */
@@ -130,6 +134,9 @@ template<class T> class DualComplex: public Dual<Complex<T>> {
          * @f[
          *      \hat c = c_0 + \epsilon c_\epsilon
          * @f]
+         *
+         * This constructor can be also used to implicitly convert a rotation
+         * complex number to a rotation dual complex number.
          */
         constexpr /*implicit*/ DualComplex(const Complex<T>& real, const Complex<T>& dual = Complex<T>(T(0), T(0))) noexcept: Dual<Complex<T>>(real, dual) {}
 
@@ -333,13 +340,24 @@ template<class T> class DualComplex: public Dual<Complex<T>> {
         }
 
         /**
+         * @brief Rotate a vector with a dual complex number
+         * @m_since_latest
+         *
+         * Calls @ref Complex::transformVector() on the @ref real() part,
+         * see its documentation for more information.
+         */
+        Vector2<T> transformVector(const Vector2<T>& vector) const {
+            return Dual<Complex<T>>::real().transformVector(vector);
+        }
+
+        /**
          * @brief Rotate and translate point with dual complex number
          *
          * @f[
          *      v' = \hat c v = \hat c ((0 + i) + \epsilon(v_x + iv_y))
          * @f]
          * @see @ref DualComplex(const Vector2<T>&), @ref dual(),
-         *      @ref Matrix3::transformPoint(), @ref Complex::transformVector(),
+         *      @ref Matrix3::transformPoint(),
          *      @ref DualQuaternion::transformPoint()
          */
         Vector2<T> transformPoint(const Vector2<T>& vector) const {

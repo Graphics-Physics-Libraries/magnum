@@ -86,7 +86,14 @@ functions and properties:
     and similar, possibly with overloads based on desired use cases, e.g.:
 
     @snippet MagnumGL.cpp AbstractShaderProgram-xfb
-</li></ul>
+</li>
+<li>And optionally, **hiding irrelevant draw/dispatch functions** to prevent
+    users from accidentally calling @ref draw() on compute shaders,
+    @ref drawTransformFeedback() on shaders that don't have transform feedback
+    or @ref dispatchCompute() on shaders that aren't compute. For example:
+
+    @snippet MagnumGL.cpp AbstractShaderProgram-hide-irrelevant
+</ul>
 
 @subsection GL-AbstractShaderProgram-attribute-location Binding attribute and fragment data location
 
@@ -345,7 +352,7 @@ class, configure attribute binding in meshes (see @ref GL-Mesh-configuration "Me
 for more information) and map shader outputs to framebuffer attachments if
 needed (see @ref GL-Framebuffer-usage "Framebuffer documentation" for more
 information). In each draw event set all required shader parameters, bind
-specific framebuffer (if needed) and then call @ref Mesh::draw(). Example:
+specific framebuffer (if needed) and then call @ref draw(). Example:
 
 @snippet MagnumGL.cpp AbstractShaderProgram-rendering
 
@@ -419,8 +426,6 @@ comes in handy.
 @todo `GL_NUM_{PROGRAM,SHADER}_BINARY_FORMATS` + `GL_{PROGRAM,SHADER}_BINARY_FORMATS` (vector), (@gl_extension{ARB,ES2_compatibility})
  */
 class MAGNUM_GL_EXPORT AbstractShaderProgram: public AbstractObject {
-    friend Mesh;
-    friend MeshView;
     #ifndef MAGNUM_TARGET_GLES2
     friend TransformFeedback;
     #endif
@@ -457,6 +462,21 @@ class MAGNUM_GL_EXPORT AbstractShaderProgram: public AbstractObject {
         static Int maxVertexAttributes();
 
         #if !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
+        /**
+         * @brief Max supported count of vertices emitted by a geometry shader
+         * @m_since_latest
+         *
+         * The result is cached, repeated queries don't result in repeated
+         * OpenGL calls. If neither @gl_extension{ARB,geometry_shader4} (part of
+         * OpenGL 3.2) nor @gl_extension{ANDROID,extension_pack_es31a} /
+         * @gl_extension{EXT,geometry_shader} (part of OpenGL ES 3.2) is not
+         * available, returns @cpp 0 @ce.
+         * @see @fn_gl{Get} with @def_gl_keyword{MAX_GEOMETRY_OUTPUT_VERTICES}
+         * @requires_gles30 Not defined in OpenGL ES 2.0.
+         * @requires_gles Geometry shaders are not available in WebGL.
+         */
+        static Int maxGeometryOutputVertices();
+
         /**
          * @brief Max supported atomic counter buffer size
          *
@@ -650,6 +670,8 @@ class MAGNUM_GL_EXPORT AbstractShaderProgram: public AbstractObject {
          *
          * This function can be safely used for constructing (and later
          * destructing) objects even without any OpenGL context being active.
+         * However note that this is a low-level and a potentially dangerous
+         * API, see the documentation of @ref NoCreate for alternatives.
          * @see @ref AbstractShaderProgram()
          */
         explicit AbstractShaderProgram(NoCreateT) noexcept;
@@ -727,6 +749,181 @@ class MAGNUM_GL_EXPORT AbstractShaderProgram: public AbstractObject {
          */
         std::pair<bool, std::string> validate();
 
+        /**
+         * @brief Draw a mesh
+         * @param mesh      Mesh to draw
+         * @m_since_latest
+         *
+         * Expects that @p mesh is compatible with this shader and is fully set
+         * up. If its vertex/index count or instance count is @cpp 0 @ce, no
+         * draw commands are issued. See also
+         * @ref GL-AbstractShaderProgram-rendering-workflow "class documentation"
+         * for more information. If @gl_extension{ARB,vertex_array_object} (part
+         * of OpenGL 3.0), OpenGL ES 3.0, WebGL 2.0, @gl_extension{OES,vertex_array_object}
+         * in OpenGL ES 2.0 or @webgl_extension{OES,vertex_array_object} in
+         * WebGL 1.0 is available, the associated vertex array object is bound
+         * instead of setting up the mesh from scratch.
+         * @see @ref Mesh::setCount(), @ref Mesh::setInstanceCount(),
+         *      @ref draw(MeshView&),
+         *      @ref draw(Containers::ArrayView<const Containers::Reference<MeshView>>),
+         *      @ref drawTransformFeedback(),
+         *      @fn_gl_keyword{UseProgram}, @fn_gl_keyword{EnableVertexAttribArray},
+         *      @fn_gl{BindBuffer}, @fn_gl_keyword{VertexAttribPointer},
+         *      @fn_gl_keyword{DisableVertexAttribArray} or @fn_gl_keyword{BindVertexArray},
+         *      @fn_gl_keyword{DrawArrays}/@fn_gl_keyword{DrawArraysInstanced}/
+         *      @fn_gl_keyword{DrawArraysInstancedBaseInstance} or @fn_gl_keyword{DrawElements}/
+         *      @fn_gl_keyword{DrawRangeElements}/@fn_gl_keyword{DrawElementsBaseVertex}/
+         *      @fn_gl_keyword{DrawRangeElementsBaseVertex}/@fn_gl_keyword{DrawElementsInstanced}/
+         *      @fn_gl_keyword{DrawElementsInstancedBaseInstance}/
+         *      @fn_gl_keyword{DrawElementsInstancedBaseVertex}/
+         *      @fn_gl_keyword{DrawElementsInstancedBaseVertexBaseInstance}
+         * @requires_gl32 Extension @gl_extension{ARB,draw_elements_base_vertex}
+         *      if the mesh is indexed and @ref Mesh::baseVertex() is not `0`.
+         * @requires_gl33 Extension @gl_extension{ARB,instanced_arrays} if
+         *      @ref Mesh::instanceCount() is more than `1`.
+         * @requires_gl42 Extension @gl_extension{ARB,base_instance} if
+         *      @ref Mesh::baseInstance() is not `0`.
+         * @requires_gles30 Extension @gl_extension{ANGLE,instanced_arrays},
+         *      @gl_extension{EXT,instanced_arrays},
+         *      @gl_extension{EXT,draw_instanced},
+         *      @gl_extension{NV,instanced_arrays},
+         *      @gl_extension{NV,draw_instanced} in OpenGL ES 2.0 if
+         *      @ref Mesh::instanceCount() is more than `1`.
+         * @requires_webgl20 Extension @webgl_extension{ANGLE,instanced_arrays}
+         *      in WebGL 1.0 if @ref Mesh::instanceCount() is more than `1`.
+         * @requires_gl Specifying base vertex for indexed meshes is not
+         *      available in OpenGL ES or WebGL.
+         */
+        void draw(Mesh& mesh);
+
+        /**
+         * @overload
+         * @m_since_latest
+         */
+        void draw(Mesh&& mesh) { draw(mesh); }
+
+        /**
+         * @brief Draw a mesh view
+         * @m_since_latest
+         *
+         * See @ref draw(Mesh&) for more information.
+         * @see @ref draw(Containers::ArrayView<const Containers::Reference<MeshView>>),
+         *      @ref drawTransformFeedback()
+         * @requires_gl32 Extension @gl_extension{ARB,draw_elements_base_vertex}
+         *      if the mesh is indexed and @ref MeshView::baseVertex() is not
+         *      `0`.
+         * @requires_gl33 Extension @gl_extension{ARB,instanced_arrays} if
+         *      @ref MeshView::instanceCount() is more than `1`.
+         * @requires_gl42 Extension @gl_extension{ARB,base_instance} if
+         *      @ref MeshView::baseInstance() is not `0`.
+         * @requires_gles30 Extension @gl_extension{ANGLE,instanced_arrays},
+         *      @gl_extension{EXT,instanced_arrays},
+         *      @gl_extension{EXT,draw_instanced},
+         *      @gl_extension{NV,instanced_arrays},
+         *      @gl_extension{NV,draw_instanced} in OpenGL ES 2.0 if
+         *      @ref MeshView::instanceCount() is more than `1`.
+         * @requires_webgl20 Extension @webgl_extension{ANGLE,instanced_arrays}
+         *      in WebGL 1.0 if @ref MeshView::instanceCount() is more than
+         *      `1`
+         * @requires_gl Specifying base vertex for indexed meshes is not
+         *      available in OpenGL ES or WebGL.
+         */
+        void draw(MeshView& mesh);
+
+        /**
+         * @overload
+         * @m_since_latest
+         */
+        void draw(MeshView&& mesh) { draw(mesh); }
+
+        /**
+         * @brief Draw multiple meshes at once
+         * @m_since_latest
+         *
+         * In OpenGL ES, if @gl_extension{EXT,multi_draw_arrays} is not
+         * present, the functionality is emulated using a sequence of
+         * @ref draw(MeshView&) calls.
+         *
+         * If @gl_extension{ARB,vertex_array_object} (part of OpenGL 3.0),
+         * OpenGL ES 3.0, WebGL 2.0, @gl_extension{OES,vertex_array_object} in
+         * OpenGL ES 2.0 or @webgl_extension{OES,vertex_array_object} in WebGL
+         * 1.0 is available, the associated vertex array object is bound
+         * instead of setting up the mesh from scratch.
+         * @attention All meshes must be views of the same original mesh and
+         *      must not be instanced.
+         * @see @ref draw(MeshView&), @fn_gl{UseProgram},
+         *      @fn_gl_keyword{EnableVertexAttribArray}, @fn_gl{BindBuffer},
+         *      @fn_gl_keyword{VertexAttribPointer}, @fn_gl_keyword{DisableVertexAttribArray}
+         *      or @fn_gl{BindVertexArray}, @fn_gl_keyword{MultiDrawArrays} or
+         *      @fn_gl_keyword{MultiDrawElements}/@fn_gl_keyword{MultiDrawElementsBaseVertex}
+         * @requires_gl32 Extension @gl_extension{ARB,draw_elements_base_vertex}
+         *      if the mesh is indexed and @ref MeshView::baseVertex() is not
+         *      `0`
+         * @requires_gl Specifying base vertex for indexed meshes is not
+         *      available in OpenGL ES or WebGL.
+         */
+        void draw(Containers::ArrayView<const Containers::Reference<MeshView>> meshes);
+
+        /**
+         * @overload
+         * @m_since_latest
+         */
+        void draw(std::initializer_list<Containers::Reference<MeshView>> meshes);
+
+        #ifndef MAGNUM_TARGET_GLES
+        /**
+         * @brief Draw a mesh with vertices coming out of transform feedback
+         * @param mesh      Mesh to draw
+         * @param xfb       Transform feedback to use for vertex count
+         * @param stream    Transform feedback stream ID
+         * @m_since_latest
+         *
+         * Expects that @p mesh is compatible with this shader, is fully set up
+         * and that the output buffer(s) from @p xfb are used as vertex buffers
+         * in the mesh. Everything set by @ref Mesh::setCount(),
+         * @ref Mesh::setBaseInstance(), @ref Mesh::setBaseVertex() and
+         * @ref Mesh::setIndexBuffer() is ignored, the mesh is drawn as
+         * non-indexed and the vertex count is taken from the @p xfb object. If
+         * @p stream is @cpp 0 @ce, non-stream draw command is used. If
+         * @gl_extension{ARB,vertex_array_object} (part of OpenGL 3.0) is
+         * available, the associated vertex array object is bound instead of
+         * setting up the mesh from scratch.
+         * @see @ref Mesh::setInstanceCount(), @ref draw(Mesh&),
+         *      @ref drawTransformFeedback(MeshView&, TransformFeedback&, UnsignedInt),
+         *      @fn_gl_keyword{UseProgram}, @fn_gl_keyword{EnableVertexAttribArray},
+         *      @fn_gl{BindBuffer}, @fn_gl_keyword{VertexAttribPointer},
+         *      @fn_gl_keyword{DisableVertexAttribArray} or @fn_gl_keyword{BindVertexArray},
+         *      @fn_gl_keyword{DrawTransformFeedback}/@fn_gl_keyword{DrawTransformFeedbackInstanced} or
+         *      @fn_gl_keyword{DrawTransformFeedbackStream}/@fn_gl_keyword{DrawTransformFeedbackStreamInstanced}
+         * @requires_gl40 Extension @gl_extension{ARB,transform_feedback2}
+         * @requires_gl40 Extension @gl_extension{ARB,transform_feedback3} if
+         *      @p stream is not `0`
+         * @requires_gl42 Extension @gl_extension{ARB,transform_feedback_instanced}
+         *      if @ref Mesh::instanceCount() is more than `1`
+         */
+        void drawTransformFeedback(Mesh& mesh, TransformFeedback& xfb, UnsignedInt stream = 0);
+
+        /**
+         * @brief Draw a mesh view with vertices coming out of transform feedback
+         * @m_since_latest
+         *
+         * Everything set by @ref MeshView::setCount(),
+         * @ref MeshView::setBaseInstance(), @ref MeshView::setBaseVertex(),
+         * @ref MeshView::setIndexRange() and @ref Mesh::setIndexBuffer() is
+         * ignored, the mesh is drawn as non-indexed and the vertex count is
+         * taken from the @p xfb object. See
+         * @ref drawTransformFeedback(Mesh&, TransformFeedback&, UnsignedInt)
+         * for more information.
+         * @see @ref draw(Mesh&)
+         * @requires_gl40 Extension @gl_extension{ARB,transform_feedback2}
+         * @requires_gl40 Extension @gl_extension{ARB,transform_feedback3} if
+         *      @p stream is not `0`
+         * @requires_gl42 Extension @gl_extension{ARB,transform_feedback_instanced}
+         *      if @ref MeshView::instanceCount() is more than `1`
+         */
+        void drawTransformFeedback(MeshView& mesh, TransformFeedback& xfb, UnsignedInt stream = 0);
+        #endif
+
         #if !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
         /**
          * @brief Dispatch compute
@@ -796,7 +993,7 @@ class MAGNUM_GL_EXPORT AbstractShaderProgram: public AbstractObject {
         #endif
 
         /**
-         * @brief Attach shader
+         * @brief Attach a shader
          *
          * @see @fn_gl_keyword{AttachShader}
          */
@@ -812,7 +1009,7 @@ class MAGNUM_GL_EXPORT AbstractShaderProgram: public AbstractObject {
         void attachShaders(std::initializer_list<Containers::Reference<Shader>> shaders);
 
         /**
-         * @brief Bind attribute to given location
+         * @brief Bind an attribute to given location
          * @param location      Location
          * @param name          Attribute name
          *

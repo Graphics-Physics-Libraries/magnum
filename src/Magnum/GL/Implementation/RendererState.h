@@ -33,13 +33,29 @@
 
 namespace Magnum { namespace GL { namespace Implementation {
 
+struct ContextState;
+
 struct RendererState {
-    explicit RendererState(Context& context, std::vector<std::string>& extensions);
+    explicit RendererState(Context& context, ContextState& contextState, std::vector<std::string>& extensions);
 
     Range1D(*lineWidthRangeImplementation)();
     void(*clearDepthfImplementation)(GLfloat);
     #if !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
     void(*minSampleShadingImplementation)(GLfloat);
+    #endif
+    /* These are direct pointers to the GL functions, so need a __stdcall on
+       Windows to compile properly on 32 bits */
+    #if !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
+    void(APIENTRY *patchParameteriImplementation)(GLenum, GLint);
+    #endif
+    #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
+    void(APIENTRY *enableiImplementation)(GLenum, GLuint);
+    void(APIENTRY *disableiImplementation)(GLenum, GLuint);
+    void(APIENTRY *blendEquationiImplementation)(GLuint, GLenum);
+    void(APIENTRY *blendEquationSeparateiImplementation)(GLuint, GLenum, GLenum);
+    void(APIENTRY *blendFunciImplementation)(GLuint, GLenum, GLenum);
+    void(APIENTRY *blendFuncSeparateiImplementation)(GLuint, GLenum, GLenum, GLenum, GLenum);
+    void(APIENTRY *colorMaskiImplementation)(GLuint, GLboolean, GLboolean, GLboolean, GLboolean);
     #endif
     #ifndef MAGNUM_TARGET_WEBGL
     Renderer::GraphicsResetStatus(*graphicsResetStatusImplementation)();
@@ -74,6 +90,9 @@ struct RendererState {
 
     PixelStorage packPixelStorage, unpackPixelStorage;
     Range1D lineWidthRange;
+    #if !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
+    GLint maxPatchVertexCount{};
+    #endif
 
     /* Bool parameter is ugly, but this is implementation detail of internal
        API so who cares */

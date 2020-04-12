@@ -87,7 +87,7 @@ template<class T> class BasicRigidMatrixTransformation3D: public AbstractBasicTr
         }
 
         /**
-         * @brief Transform object
+         * @brief Transform the object
          * @return Reference to self (for method chaining)
          *
          * Expects that the matrix represents rigid transformation.
@@ -101,7 +101,7 @@ template<class T> class BasicRigidMatrixTransformation3D: public AbstractBasicTr
         }
 
         /**
-         * @brief Transform object as a local transformation
+         * @brief Transform the object as a local transformation
          *
          * Similar to the above, except that the transformation is applied
          * before all others.
@@ -114,7 +114,7 @@ template<class T> class BasicRigidMatrixTransformation3D: public AbstractBasicTr
         }
 
         /**
-         * @brief Translate object
+         * @brief Translate the object
          * @return Reference to self (for method chaining)
          *
          * Same as calling @ref transform() with @ref Math::Matrix4::translation().
@@ -126,7 +126,7 @@ template<class T> class BasicRigidMatrixTransformation3D: public AbstractBasicTr
         }
 
         /**
-         * @brief Translate object as a local transformation
+         * @brief Translate the object as a local transformation
          *
          * Similar to the above, except that the transformation is applied
          * before all others. Same as calling @ref transformLocal() with
@@ -137,23 +137,45 @@ template<class T> class BasicRigidMatrixTransformation3D: public AbstractBasicTr
         }
 
         /**
-         * @brief Rotate object
+         * @brief Rotate the object using a quaternion
+         * @param quaternion    Normalized quaternion
+         * @return Reference to self (for method chaining)
+         * @m_since_latest
+         *
+         * Expects that the quaternion is normalized.
+         * @see @ref rotate(Math::Rad<T>, const Math::Vector3<T>&),
+         *      @ref rotateLocal(const Math::Quaternion<T>&), @ref rotateX(),
+         *      @ref rotateY(), @ref rotateZ()
+         */
+        Object<BasicRigidMatrixTransformation3D<T>>& rotate(const Math::Quaternion<T>& quaternion);
+
+        /**
+         * @brief Rotate the object using a quaternion as a local transformation
+         * @m_since_latest
+         *
+         * Similar to the above, except that the transformation is applied
+         * before all others.
+         */
+        Object<BasicRigidMatrixTransformation3D<T>>& rotateLocal(const Math::Quaternion<T>& quaternion);
+
+        /**
+         * @brief Rotate the object
          * @param angle             Angle (counterclockwise)
          * @param normalizedAxis    Normalized rotation axis
          * @return Reference to self (for method chaining)
          *
          * Same as calling @ref transform() with @ref Math::Matrix4::rotation().
-         * @see @ref rotateLocal(), @ref rotateX(), @ref rotateY(),
-         *      @ref rotateZ(), @ref normalizeRotation(),
-         *      @ref Math::Vector3::xAxis(), @ref Math::Vector3::yAxis(),
-         *      @ref Math::Vector3::zAxis()
+         * @see @ref rotate(const Math::Quaternion<T>&), @ref rotateLocal(),
+         *      @ref rotateX(), @ref rotateY(), @ref rotateZ(),
+         *      @ref normalizeRotation(), @ref Math::Vector3::xAxis(),
+         *      @ref Math::Vector3::yAxis(), @ref Math::Vector3::zAxis()
          */
         Object<BasicRigidMatrixTransformation3D<T>>& rotate(Math::Rad<T> angle, const Math::Vector3<T>& normalizedAxis) {
             return transformInternal(Math::Matrix4<T>::rotation(angle, normalizedAxis));
         }
 
         /**
-         * @brief Rotate object as a local transformation
+         * @brief Rotate the object as a local transformation
          *
          * Similar to the above, except that the transformation is applied
          * before all others. Same as calling @ref transformLocal() with
@@ -164,7 +186,7 @@ template<class T> class BasicRigidMatrixTransformation3D: public AbstractBasicTr
         }
 
         /**
-         * @brief Rotate object around X axis
+         * @brief Rotate the object around X axis
          * @param angle             Angle (counterclockwise)
          * @return Reference to self (for method chaining)
          *
@@ -176,7 +198,7 @@ template<class T> class BasicRigidMatrixTransformation3D: public AbstractBasicTr
         }
 
         /**
-         * @brief Rotate object around X axis as a local transformation
+         * @brief Rotate the object around X axis as a local transformation
          *
          * Similar to the above, except that the transformation is applied
          * before all others. Same as calling @ref transformLocal() with
@@ -187,7 +209,7 @@ template<class T> class BasicRigidMatrixTransformation3D: public AbstractBasicTr
         }
 
         /**
-         * @brief Rotate object around Y axis
+         * @brief Rotate the object around Y axis
          * @param angle             Angle (counterclockwise)
          * @return Reference to self (for method chaining)
          *
@@ -199,7 +221,7 @@ template<class T> class BasicRigidMatrixTransformation3D: public AbstractBasicTr
         }
 
         /**
-         * @brief Rotate object around Y axis as a local transformation
+         * @brief Rotate the object around Y axis as a local transformation
          *
          * Similar to the above, except that the transformation is applied
          * before all others. Same as calling @ref transformLocal() with
@@ -210,7 +232,7 @@ template<class T> class BasicRigidMatrixTransformation3D: public AbstractBasicTr
         }
 
         /**
-         * @brief Rotate object around Z axis
+         * @brief Rotate the object around Z axis
          * @param angle             Angle (counterclockwise)
          * @return Reference to self (for method chaining)
          *
@@ -222,7 +244,7 @@ template<class T> class BasicRigidMatrixTransformation3D: public AbstractBasicTr
         }
 
         /**
-         * @brief Rotate object around Z axis as a local transformation
+         * @brief Rotate the object around Z axis as a local transformation
          *
          * Similar to the above, except that the transformation is applied
          * before all others. Same as calling @ref transformLocal() with
@@ -233,7 +255,7 @@ template<class T> class BasicRigidMatrixTransformation3D: public AbstractBasicTr
         }
 
         /**
-         * @brief Reflect object
+         * @brief Reflect the object
          * @param normal    Normal of the plane through which to reflect
          *      (normalized)
          * @return Reference to self (for method chaining)
@@ -246,7 +268,7 @@ template<class T> class BasicRigidMatrixTransformation3D: public AbstractBasicTr
         }
 
         /**
-         * @brief Reflect object as a local transformation
+         * @brief Reflect the object as a local transformation
          *
          * Similar to the above, except that the transformation is applied
          * before all others. Same as calling @ref transformLocal() with
@@ -265,6 +287,13 @@ template<class T> class BasicRigidMatrixTransformation3D: public AbstractBasicTr
 
         void doTranslate(const Math::Vector3<T>& vector) override final { translate(vector); }
         void doTranslateLocal(const Math::Vector3<T>& vector) override final { translateLocal(vector); }
+
+        void doRotate(const Math::Quaternion<T>& quaternion) override final {
+            rotate(quaternion);
+        }
+        void doRotateLocal(const Math::Quaternion<T>& quaternion) override final {
+            rotateLocal(quaternion);
+        }
 
         void doRotate(Math::Rad<T> angle, const Math::Vector3<T>& normalizedAxis) override final {
             rotate(angle, normalizedAxis);
@@ -338,6 +367,7 @@ template<class T> struct Transformation<BasicRigidMatrixTransformation3D<T>> {
 }
 
 #if defined(CORRADE_TARGET_WINDOWS) && !defined(__MINGW32__)
+extern template class MAGNUM_SCENEGRAPH_EXPORT BasicRigidMatrixTransformation3D<Float>;
 extern template class MAGNUM_SCENEGRAPH_EXPORT Object<BasicRigidMatrixTransformation3D<Float>>;
 #endif
 

@@ -38,8 +38,9 @@ namespace Magnum { namespace Math {
 @tparam T   Data type
 
 See @ref matrix-vector for brief introduction.
-@see @ref Magnum::Vector4, @ref Magnum::Vector4i, @ref Magnum::Vector4ui,
-    @ref Magnum::Vector4d
+@see @ref Magnum::Vector4, @ref Magnum::Vector4h, @ref Magnum::Vector4d,
+    @ref Magnum::Vector4ub, @ref Magnum::Vector4b, @ref Magnum::Vector4us,
+    @ref Magnum::Vector4s, @ref Magnum::Vector4ui, @ref Magnum::Vector4i
 @configurationvalueref{Magnum::Math::Vector4}
 */
 template<class T> class Vector4: public Vector<4, T> {
@@ -66,13 +67,22 @@ template<class T> class Vector4: public Vector<4, T> {
          */
         constexpr /*implicit*/ Vector4() noexcept: Vector<4, T>{ZeroInit} {}
 
-        /** @copydoc Vector::Vector(ZeroInitT) */
+        /** @copydoc Magnum::Math::Vector::Vector(ZeroInitT) */
+        /* For some freaking reason doxygen 1.8.17 needs a fully qualified name
+           here but GUESS WHAT! Not in the other Vector2/3 classes! Dumpster
+           fire! FFS. */
         constexpr explicit Vector4(ZeroInitT) noexcept: Vector<4, T>{ZeroInit} {}
 
-        /** @copydoc Vector::Vector(NoInitT) */
+        /** @copydoc Magnum::Math::Vector::Vector(NoInitT) */
+        /* For some freaking reason doxygen 1.8.17 needs a fully qualified name
+           here but GUESS WHAT! Not in the other Vector2/3 classes! Dumpster
+           fire! FFS. */
         explicit Vector4(NoInitT) noexcept: Vector<4, T>{NoInit} {}
 
-        /** @copydoc Vector::Vector(T) */
+        /** @copydoc Magnum::Math::Vector::Vector(T) */
+        /* For some freaking reason doxygen 1.8.17 needs a fully qualified name
+           here but GUESS WHAT! Not in the other Vector2/3 classes! Dumpster
+           fire! FFS. */
         constexpr explicit Vector4(T value) noexcept: Vector<4, T>(value) {}
 
         /**
@@ -93,7 +103,10 @@ template<class T> class Vector4: public Vector<4, T> {
          */
         constexpr /*implicit*/ Vector4(const Vector3<T>& xyz, T w) noexcept: Vector<4, T>(xyz[0], xyz[1], xyz[2], w) {}
 
-        /** @copydoc Vector::Vector(const Vector<size, U>&) */
+        /** @copydoc Magnum::Math::Vector::Vector(const Vector<size, U>&) */
+        /* For some freaking reason doxygen 1.8.17 needs a fully qualified name
+           here but GUESS WHAT! Not in the other Vector2/3 classes! Dumpster
+           fire! FFS. */
         template<class U> constexpr explicit Vector4(const Vector<4, U>& other) noexcept: Vector<4, T>(other) {}
 
         /** @brief Construct vector from external representation */
@@ -170,7 +183,7 @@ template<class T> class Vector4: public Vector<4, T> {
          * @brief XYZ part of the vector
          * @return First three components of the vector
          *
-         * @see @ref swizzle(), @ref rgb()
+         * @see @ref rgb(), @ref gather(), @ref scatter()
          */
         Vector3<T>& xyz() { return Vector3<T>::from(Vector<4, T>::data()); }
         constexpr const Vector3<T> xyz() const {
@@ -182,7 +195,7 @@ template<class T> class Vector4: public Vector<4, T> {
          * @return First three components of the vector
          *
          * Equivalent to @ref xyz().
-         * @see @ref swizzle()
+         * @see @ref gather(), @ref scatter()
          */
         Vector3<T>& rgb() { return Vector3<T>::from(Vector<4, T>::data()); }
         constexpr const Vector3<T> rgb() const {
@@ -193,7 +206,7 @@ template<class T> class Vector4: public Vector<4, T> {
          * @brief XY part of the vector
          * @return First two components of the vector
          *
-         * @see @ref swizzle()
+         * @see @ref gather(), @ref scatter()
          */
         Vector2<T>& xy() { return Vector2<T>::from(Vector<4, T>::data()); }
         constexpr const Vector2<T> xy() const {

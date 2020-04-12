@@ -25,14 +25,24 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+#ifdef MAGNUM_BUILD_DEPRECATED
 /** @file
  * @brief Class @ref Magnum::Trade::MeshData2D
+ * @m_deprecated_since_latest Use @ref Magnum/Trade/MeshData.h and the
+ *      @ref Magnum::Trade::MeshData "MeshData" class instead.
  */
+#endif
 
+#include "Magnum/configure.h"
+
+#ifdef MAGNUM_BUILD_DEPRECATED
 #include <vector>
 
-#include "Magnum/Magnum.h"
-#include "Magnum/Trade/visibility.h"
+#include "Magnum/Trade/MeshData.h"
+
+#ifndef _MAGNUM_NO_DEPRECATED_MESHDATA
+CORRADE_DEPRECATED_FILE("use Magnum/Trade/MeshData.h and the MeshData class instead")
+#endif
 
 namespace Magnum { namespace Trade {
 
@@ -49,9 +59,11 @@ directly to vertex positions:
 
 @snippet MagnumTrade.cpp MeshData2D-transform
 
+@m_deprecated_since_latest Use @ref MeshData instead.
+
 @see @ref AbstractImporter::mesh2D(), @ref MeshData3D
 */
-class MAGNUM_TRADE_EXPORT MeshData2D {
+class CORRADE_DEPRECATED("use MeshData instead") MAGNUM_TRADE_EXPORT MeshData2D {
     public:
         /**
          * @brief Constructor
@@ -66,6 +78,16 @@ class MAGNUM_TRADE_EXPORT MeshData2D {
          * @param importerState     Importer-specific state
          */
         explicit MeshData2D(MeshPrimitive primitive, std::vector<UnsignedInt> indices, std::vector<std::vector<Vector2>> positions, std::vector<std::vector<Vector2>> textureCoords2D, std::vector<std::vector<Color4>> colors, const void* importerState = nullptr);
+
+        #ifdef MAGNUM_BUILD_DEPRECATED
+        /**
+         * @brief Construct from @ref MeshData
+         * @m_deprecated_since_latest Use @ref MeshData directly instead.
+         */
+        /* No data moving can take place because std::vector is damn shitty
+           regarding memory ownership transfer, so it can well be a copy. */
+        CORRADE_DEPRECATED("use MeshData directly instead") /*implicit*/ MeshData2D(const MeshData& other);
+        #endif
 
         /** @brief Copying is not allowed */
         MeshData2D(const MeshData2D&) = delete;
@@ -172,5 +194,8 @@ class MAGNUM_TRADE_EXPORT MeshData2D {
 };
 
 }}
+#else
+#error use Magnum/Trade/MeshData.h and the MeshData class instead
+#endif
 
 #endif

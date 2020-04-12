@@ -29,6 +29,7 @@
 #if defined(CORRADE_TARGET_EMSCRIPTEN) || defined(DOXYGEN_GENERATING_OUTPUT)
 /** @file
  * @brief Class @ref Magnum::Platform::EmscriptenApplication, macro @ref MAGNUM_EMSCRIPTENAPPLICATION_MAIN()
+ * @m_since{2019,10}
  */
 #endif
 
@@ -56,16 +57,14 @@ namespace Magnum { namespace Platform {
 
 /** @nosubgrouping
 @brief Emscripten application
+@m_since{2019,10}
 
 @m_keywords{Application}
 
-Application running on Emscripten.
-
-This application library is available only on
+Application running on Emscripten. Available only on
 @ref CORRADE_TARGET_EMSCRIPTEN "Emscripten", see respective sections
 in the @ref building-corrade-cross-emscripten "Corrade" and
-@ref building-cross-emscripten "Magnum" building documentation. It is built if
-`WITH_EMSCRIPTENAPPLICATION` is enabled when building Magnum.
+@ref building-cross-emscripten "Magnum" building documentation.
 
 @section Platform-EmscriptenApplication-bootstrap Bootstrap application
 
@@ -109,8 +108,12 @@ together with a troubleshooting guide is available in @ref platforms-html5.
 
 @section Platform-EmscriptenApplication-usage General usage
 
-Request the `EmscriptenApplication` component of the `Magnum` package and link
-to the `Magnum::EmscriptenApplication` target:
+This application library is built if `WITH_EMSCRIPTENAPPLICATION` is enabled
+when building Magnum. To use this library with CMake, put
+[FindOpenGLES2.cmake](https://github.com/mosra/magnum/blob/master/modules/FindOpenGLES2.cmake) (or
+[FindOpenGLES3.cmake](https://github.com/mosra/magnum/blob/master/modules/FindOpenGLES3.cmake))
+into your `modules/` directory, request the `EmscriptenApplication` component
+of the `Magnum` package and link to the `Magnum::EmscriptenApplication` target:
 
 @code{.cmake}
 find_package(Magnum REQUIRED)
@@ -120,8 +123,17 @@ endif()
 
 # ...
 if(CORRADE_TARGET_EMSCRIPTEN)
-    target_link_libraries(your-app Magnum::EmscriptenApplication)
+    target_link_libraries(your-app PRIVATE Magnum::EmscriptenApplication)
 endif()
+@endcode
+
+Additionally, if you're using Magnum as a CMake subproject, do the following
+* *before* calling @cmake find_package() @ce to ensure it's enabled, as the
+library is not built by default:
+
+@code{.cmake}
+set(WITH_EMSCRIPTENAPPLICATION ON CACHE BOOL "" FORCE)
+add_subdirectory(magnum EXCLUDE_FROM_ALL)
 @endcode
 
 If no other application is requested, you can also use the generic
@@ -335,10 +347,21 @@ class EmscriptenApplication {
 
         /**
          * @brief Exit application main loop
+         * @param exitCode  Ignored, present only for API compatibility with
+         *      other app implementations.
          *
-         * Stops execution started by @ref exec(). The @p exitCode is ignored
-         * and present only for API compatibility with other app
-         * implementations.
+         * When called from application constructor, it will cause the
+         * application to exit immediately after constructor ends, without any
+         * events being processed. Calling this function is recommended over
+         * @ref std::exit() or @ref Corrade::Utility::Fatal "Fatal", which exit
+         * immediately and without calling destructors on local scope. Note
+         * that, however, you need to explicitly @cpp return @ce after calling
+         * it, as it can't exit the constructor on its own:
+         *
+         * @snippet MagnumPlatform.cpp exit-from-constructor
+         *
+         * When called from the main loop, the application exits cleanly
+         * before next main loop iteration is executed.
          */
         void exit(int exitCode = 0);
 
@@ -520,7 +543,11 @@ class EmscriptenApplication {
         /** @copydoc Sdl2Application::drawEvent() */
         virtual void drawEvent() = 0;
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Keyboard handling */
 
@@ -530,9 +557,217 @@ class EmscriptenApplication {
         /** @copydoc Sdl2Application::keyReleaseEvent() */
         virtual void keyReleaseEvent(KeyEvent& event);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Mouse handling */
+
+    public:
+        /**
+         * @brief Cursor type
+         * @m_since_latest
+         *
+         * Value names in this enum don't necessarily match the CSS names in
+         * order to be compatible with @ref Sdl2Application and
+         * @ref GlfwApplication.
+         * @see @ref setCursor()
+         */
+        enum class Cursor: UnsignedInt {
+            /* Keeping the same order as at
+               https://developer.mozilla.org/en-US/docs/Web/CSS/cursor, which
+               is different than in Sdl2Application / GlfwApplication */
+
+            /**
+             * The browser determines the cursor depending on the context.
+             * Since this affects the cursor when hovering the
+             * @cb{.html} <canvas> @ce element, this is usually equivalent to
+             * @ref Cursor::Arrow. Matches @cb{.css} cursor: auto @ce in CSS.
+             */
+            Auto,
+
+            /** Arrow. Matches @cb{.css} cursor: default @ce in CSS. */
+            Arrow,
+
+            /** Hidden. Matches @cb{.css} cursor: none @ce in CSS. */
+            Hidden,
+
+            /**
+             * Context menu. Matches @cb{.css} cursor: context-menu @ce in CSS.
+             */
+            ContextMenu,
+
+            /** Help. Matches @cb{.css} cursor: help @ce in CSS. */
+            Help,
+
+            /** Hand. Matches @cb{.css} cursor: pointer @ce in CSS. */
+            Hand,
+
+            /**
+             * Small wait cursor. Matches @cb{.css} cursor: progress @ce in
+             * CSS.
+             */
+            WaitArrow,
+
+            /** Wait. Matches @cb{.css} cursor: wait @ce in CSS. */
+            Wait,
+
+            /** Cell. Matches @cb{.css} cursor: cell @ce in CSS. */
+            Cell,
+
+            /** Crosshair. Matches @cb{.css} cursor: crosshair @ce in CSS. */
+            Crosshair,
+
+            /** Text input. Matches @cb{.css} cursor: text @ce in CSS. */
+            TextInput,
+
+            /**
+             * Vertical text input. Matches @cb{.css} cursor: vertical-text @ce
+             * in CSS.
+             */
+            VerticalTextInput,
+
+            /** Alias. Matches @cb{.css} cursor: alias @ce in CSS. */
+            Alias,
+
+            /** Copy. Matches @cb{.css} cursor: copy @ce in CSS. */
+            Copy,
+
+            /**
+             * Four pointed arrow pointing north, south, east, and west.
+             * Matches @cb{.css} cursor: move @ce in CSS.
+             */
+            ResizeAll,
+
+            /**
+             * Drop not allowed. Matches @cb{.css} cursor: no-drop @ce in CSS.
+             */
+            NoDrop,
+
+            /**
+             * Slashed circle or crossbones. Matches
+             * @cb{.css} cursor: not-allowed @ce in CSS.
+             */
+            No,
+
+            /** Grab. Matches @cb{.css} cursor: grab @ce in CSS. */
+            Grab,
+
+            /** Grabbing. Matches @cb{.css} cursor: grabbing @ce in CSS. */
+            Grabbing,
+
+            /**
+             * Scroll in any direction. Matches
+             * @cb{.css} cursor: all-scroll @ce in CSS.
+             */
+            AllScroll,
+
+            /**
+             * Column resize. Matches @cb{.css} cursor: col-resize @ce in CSS.
+             */
+            ColResize,
+
+            /**
+             * Row resize. Matches @cb{.css} cursor: row-resize @ce in CSS.
+             */
+            RowResize,
+
+            /**
+             * Resize arrow pointing north. Matches
+             * @cb{.css} cursor: n-resize @ce in CSS.
+             */
+            ResizeN,
+
+            /**
+             * Resize arrow pointing east. Matches
+             * @cb{.css} cursor: e-resize @ce in CSS.
+             */
+            ResizeE,
+
+            /**
+             * Resize arrow pointing south. Matches
+             * @cb{.css} cursor: s-resize @ce in CSS.
+             */
+            ResizeS,
+
+            /**
+             * Resize arrow pointing west. Matches
+             * @cb{.css} cursor: w-resize @ce in CSS.
+             */
+            ResizeW,
+
+            /**
+             * Resize arrow pointing northeast. Matches
+             * @cb{.css} cursor: ne-resize @ce in CSS.
+             */
+            ResizeNE,
+
+            /**
+             * Resize arrow pointing northwest. Matches
+             * @cb{.css} cursor: nw-resize @ce in CSS.
+             */
+            ResizeNW,
+
+            /**
+             * Resize arrow pointing southeast. Matches
+             * @cb{.css} cursor: se-resize @ce in CSS.
+             */
+            ResizeSE,
+
+            /**
+             * Resize arrow pointing southwest. Matches
+             * @cb{.css} cursor: se-resize @ce in CSS.
+             */
+            ResizeSW,
+
+            /**
+             * Double resize arrow pointing west and east. Matches
+             * @cb{.css} cursor: ew-resize @ce in CSS.
+             */
+            /* Kept like this for compatibility with Sdl2 and GlfwApp (winapi
+               has it like this, too) */
+            ResizeWE,
+
+            /**
+             * Double resize arrow pointing north and south. Matches
+             * @cb{.css} cursor: ns-resize @ce in CSS.
+             */
+            ResizeNS,
+
+            /**
+             * Double resize arrow pointing northeast and southwest. Matches
+             * @cb{.css} cursor: nesw-resize @ce in CSS.
+             */
+            ResizeNESW,
+
+            /**
+             * Double resize arrow pointing northwest and southeast. Matches
+             * @cb{.css} cursor: nwse-resize @ce in CSS.
+             */
+            ResizeNWSE,
+
+            /** Zoom in. Matches @cb{.css} cursor: zoom-in @ce in CSS. */
+            ZoomIn,
+
+            /** Zoom out. Matches @cb{.css} cursor: zoom-out @ce in CSS. */
+            ZoomOut
+        };
+
+        /**
+         * @brief Set cursor type
+         * @m_since_latest
+         *
+         * Default is @ref Cursor::Arrow.
+         */
+        void setCursor(Cursor cursor);
+
+        /**
+         * @brief Get current cursor type
+         * @m_since_latest
+         */
+        Cursor cursor();
 
     private:
         /**
@@ -566,7 +801,11 @@ class EmscriptenApplication {
          */
         virtual void mouseScrollEvent(MouseScrollEvent& event);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Text input handling */
     public:
@@ -620,7 +859,11 @@ class EmscriptenApplication {
          */
         virtual void textInputEvent(TextInputEvent& event);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
     private:
         enum class Flag: UnsignedByte {
@@ -642,6 +885,7 @@ class EmscriptenApplication {
         Vector2i _lastKnownCanvasSize, _previousMouseMovePosition{-1};
 
         Flags _flags;
+        Cursor _cursor;
 
         #ifdef MAGNUM_TARGET_GL
         EMSCRIPTEN_WEBGL_CONTEXT_HANDLE _glContext{};
@@ -799,7 +1043,7 @@ class EmscriptenApplication::GLConfiguration {
         /**
          * @brief Set color buffer size
          *
-         * Default is @cpp {8, 8, 8, 0} @ce (8-bit-per-channel RGB, no alpha).
+         * Default is @cpp {8, 8, 8, 8} @ce (8-bit-per-channel RGBA).
          * @see @ref setDepthBufferSize(), @ref setStencilBufferSize()
          */
         GLConfiguration& setColorBufferSize(const Vector4i& size) {
@@ -1379,6 +1623,8 @@ class EmscriptenApplication::KeyEvent: public EmscriptenApplication::InputEvent 
              */
             RightSuper,
 
+            /* no equivalent for Sdl2Application's AltGr */
+
             Enter,              /**< Enter */
             Esc,                /**< Escape */
 
@@ -1447,6 +1693,7 @@ class EmscriptenApplication::KeyEvent: public EmscriptenApplication::InputEvent 
 
             Space,              /**< Space */
             Tab,                /**< Tab */
+            Quote,              /**< Quote (<tt>'</tt>) */
             Comma,              /**< Comma */
             Period,             /**< Period */
             Minus,              /**< Minus */
@@ -1455,13 +1702,20 @@ class EmscriptenApplication::KeyEvent: public EmscriptenApplication::InputEvent 
             Slash,              /**< Slash */
             /* Note: This may only be represented as SHIFT + 5 */
             Percent,            /**< Percent */
-            Equal,              /**< Equal */
 
-            Backquote,          /**< Backquote */
-            Backslash,          /**< Backslash */
-            Quote,              /**< Quote */
-            BracketRight,       /**< BracketRight */
-            BracketLeft,        /**< BracketLeft */
+            /**
+             * Semicolon (`;`)
+             * @m_since_latest
+             */
+            Semicolon,
+
+            Equal,              /**< Equal */
+            LeftBracket,        /**< Left bracket (`[`) */
+            RightBracket,       /**< Right bracket (`]`) */
+            Backslash,          /**< Backslash (`\`) */
+            Backquote,          /**< Backquote (<tt>`</tt>) */
+
+            /* no equivalent for GlfwApplication's World1 / World2 */
 
             CapsLock,           /**< Caps lock */
             ScrollLock,         /**< Scroll lock */
@@ -1561,6 +1815,8 @@ class EmscriptenApplication::TextInputEvent {
 /** @hideinitializer
 @brief Entry point for Emscripten applications
 @param className Class name
+
+@m_keywords{MAGNUM_APPLICATION_MAIN()}
 
 See @ref Magnum::Platform::EmscriptenApplication "Platform::EmscriptenApplication"
 for usage information. This macro abstracts out platform-specific entry point

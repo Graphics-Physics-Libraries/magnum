@@ -41,7 +41,7 @@
 #include "Magnum/SceneGraph/Scene.h"
 #include "Magnum/Shaders/Flat.h"
 #include "Magnum/Shaders/Phong.h"
-#include "Magnum/Trade/MeshData3D.h"
+#include "Magnum/Trade/MeshData.h"
 
 using namespace Magnum;
 using namespace Magnum::Math::Literals;
@@ -106,9 +106,9 @@ class RedCubeDrawable: public SceneGraph::Drawable3D {
                 .setLightPosition(camera.cameraMatrix().transformPoint(
                     {5.0f, 5.0f, 7.0f}))
                 .setTransformationMatrix(transformationMatrix)
-                .setNormalMatrix(transformationMatrix.rotationScaling())
-                .setProjectionMatrix(camera.projectionMatrix());
-            _mesh.draw(_shader);
+                .setNormalMatrix(transformationMatrix.normalMatrix())
+                .setProjectionMatrix(camera.projectionMatrix())
+                .draw(_mesh);
         }
 
         GL::Mesh _mesh;

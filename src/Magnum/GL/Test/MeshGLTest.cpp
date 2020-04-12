@@ -97,7 +97,7 @@ struct MeshGLTest: OpenGLTester {
     #endif
     #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
     /* Other Float types omitted (covered by addVertexBufferNormalized()) */
-    void addVertexBufferFloatWithHalfFloat();
+    void addVertexBufferFloatWithHalf();
     #endif
     #ifndef MAGNUM_TARGET_GLES
     void addVertexBufferFloatWithDouble();
@@ -214,7 +214,7 @@ MeshGLTest::MeshGLTest() {
         &MeshGLTest::addVertexBufferIntWithShort,
         #endif
         #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
-        &MeshGLTest::addVertexBufferFloatWithHalfFloat,
+        &MeshGLTest::addVertexBufferFloatWithHalf,
         #endif
         #ifndef MAGNUM_TARGET_GLES
         &MeshGLTest::addVertexBufferFloatWithDouble,
@@ -395,10 +395,10 @@ void MeshGLTest::constructMove() {
         framebuffer.attachRenderbuffer(Framebuffer::ColorAttachment(0), renderbuffer)
                    .bind();
 
-        FloatShader shader{"float", "vec4(valueInterpolated, 0.0, 0.0, 0.0)"};
         d.setPrimitive(MeshPrimitive::Points)
-         .setCount(1)
-         .draw(shader);
+         .setCount(1);
+        FloatShader shader{"float", "vec4(valueInterpolated, 0.0, 0.0, 0.0)"};
+        shader.draw(d);
 
         MAGNUM_VERIFY_NO_GL_ERROR();
 
@@ -663,7 +663,7 @@ Checker::Checker(AbstractShaderProgram&& shader, RenderbufferFormat format, Mesh
 
     if(view.mesh().isIndexed()) view.setIndexRange(1);
 
-    view.draw(shader);
+    shader.draw(view);
 }
 
 template<class T> T Checker::get(PixelFormat format, PixelType type) {
@@ -995,17 +995,9 @@ void MeshGLTest::addVertexBufferMatrixNxN() {
     } else if(testCaseInstanceId() == 1) {
         setTestCaseDescription("DynamicAttribute");
         mesh.addVertexBuffer(buffer, 3*3*4, 3*3*4, DynamicAttribute{
-                DynamicAttribute::Kind::Generic, 0,
-                DynamicAttribute::Components::Three,
-                DynamicAttribute::DataType::Float})
-            .addVertexBuffer(buffer, 3*3*4 + 3*4, 3*3*4, DynamicAttribute{
-                DynamicAttribute::Kind::Generic, 1,
-                DynamicAttribute::Components::Three,
-                DynamicAttribute::DataType::Float})
-            .addVertexBuffer(buffer, 3*3*4 + 6*4, 3*3*4, DynamicAttribute{
-                DynamicAttribute::Kind::Generic, 2,
-                DynamicAttribute::Components::Three,
-                DynamicAttribute::DataType::Float});
+            DynamicAttribute::Kind::Generic, 0,
+            DynamicAttribute::Components::Three, 3,
+            DynamicAttribute::DataType::Float});
     } else CORRADE_ASSERT_UNREACHABLE();
 
     MAGNUM_VERIFY_NO_GL_ERROR();
@@ -1049,17 +1041,9 @@ void MeshGLTest::addVertexBufferMatrixNxNd() {
     } else if(testCaseInstanceId() == 1) {
         setTestCaseDescription("DynamicAttribute");
         mesh.addVertexBuffer(buffer, 3*3*8, 3*3*8, DynamicAttribute{
-                DynamicAttribute::Kind::Long, 0,
-                DynamicAttribute::Components::Three,
-                DynamicAttribute::DataType::Double})
-            .addVertexBuffer(buffer, 3*3*8 + 3*8, 3*3*8, DynamicAttribute{
-                DynamicAttribute::Kind::Long, 1,
-                DynamicAttribute::Components::Three,
-                DynamicAttribute::DataType::Double})
-            .addVertexBuffer(buffer, 3*3*8 + 6*8, 3*3*8, DynamicAttribute{
-                DynamicAttribute::Kind::Long, 2,
-                DynamicAttribute::Components::Three,
-                DynamicAttribute::DataType::Double});
+            DynamicAttribute::Kind::Long, 0,
+            DynamicAttribute::Components::Three, 3,
+            DynamicAttribute::DataType::Double});
     } else CORRADE_ASSERT_UNREACHABLE();
 
     MAGNUM_VERIFY_NO_GL_ERROR();
@@ -1071,11 +1055,9 @@ void MeshGLTest::addVertexBufferMatrixNxNd() {
     MAGNUM_VERIFY_NO_GL_ERROR();
 
     {
-        auto drivers = Context::DetectedDriver::Amd|Context::DetectedDriver::NVidia;
-        #ifdef CORRADE_TARGET_WINDOWS
-        drivers |= Context::DetectedDriver::IntelWindows;
-        #endif
-        CORRADE_EXPECT_FAIL_IF(Context::current().detectedDriver() & drivers, "Somehow only first two values are extracted on AMD, NVidia and Intel Windows drivers.");
+        /* Used to be a problem on Intel Windows drivers 23, not a problem on
+           26 anymore */
+        CORRADE_EXPECT_FAIL_IF(Context::current().detectedDriver() & (Context::DetectedDriver::Amd|Context::DetectedDriver::NVidia), "Somehow only first two values are extracted on AMD and NVidia drivers.");
         CORRADE_COMPARE(value.xyz(), Math::Vector3<UnsignedShort>(315, 65201, 2576));
     }
 
@@ -1105,17 +1087,9 @@ void MeshGLTest::addVertexBufferMatrixMxN() {
     } else if(testCaseInstanceId() == 1) {
         setTestCaseDescription("DynamicAttribute");
         mesh.addVertexBuffer(buffer, 3*4*4, 3*4*4, DynamicAttribute{
-                DynamicAttribute::Kind::Generic, 0,
-                DynamicAttribute::Components::Four,
-                DynamicAttribute::DataType::Float})
-            .addVertexBuffer(buffer, 3*4*4 + 4*4, 3*4*4, DynamicAttribute{
-                DynamicAttribute::Kind::Generic, 1,
-                DynamicAttribute::Components::Four,
-                DynamicAttribute::DataType::Float})
-            .addVertexBuffer(buffer, 3*4*4 + 8*4, 3*4*4, DynamicAttribute{
-                DynamicAttribute::Kind::Generic, 2,
-                DynamicAttribute::Components::Four,
-                DynamicAttribute::DataType::Float});
+            DynamicAttribute::Kind::Generic, 0,
+            DynamicAttribute::Components::Four, 3,
+            DynamicAttribute::DataType::Float});
     } else CORRADE_ASSERT_UNREACHABLE();
 
     MAGNUM_VERIFY_NO_GL_ERROR();
@@ -1151,17 +1125,9 @@ void MeshGLTest::addVertexBufferMatrixMxNd() {
     } else if(testCaseInstanceId() == 1) {
         setTestCaseDescription("DynamicAttribute");
         mesh.addVertexBuffer(buffer, 3*4*8, 3*4*8, DynamicAttribute{
-                DynamicAttribute::Kind::Long, 0,
-                DynamicAttribute::Components::Four,
-                DynamicAttribute::DataType::Double})
-            .addVertexBuffer(buffer, 3*4*8 + 4*8, 3*4*8, DynamicAttribute{
-                DynamicAttribute::Kind::Long, 1,
-                DynamicAttribute::Components::Four,
-                DynamicAttribute::DataType::Double})
-            .addVertexBuffer(buffer, 3*4*8 + 8*8, 3*4*8, DynamicAttribute{
-                DynamicAttribute::Kind::Long, 2,
-                DynamicAttribute::Components::Four,
-                DynamicAttribute::DataType::Double});
+            DynamicAttribute::Kind::Long, 0,
+            DynamicAttribute::Components::Four, 3,
+            DynamicAttribute::DataType::Double});
     } else CORRADE_ASSERT_UNREACHABLE();
 
     MAGNUM_VERIFY_NO_GL_ERROR();
@@ -1173,11 +1139,9 @@ void MeshGLTest::addVertexBufferMatrixMxNd() {
     MAGNUM_VERIFY_NO_GL_ERROR();
 
     {
-        auto drivers = Context::DetectedDriver::Amd|Context::DetectedDriver::NVidia;
-        #ifdef CORRADE_TARGET_WINDOWS
-        drivers |= Context::DetectedDriver::IntelWindows;
-        #endif
-        CORRADE_EXPECT_FAIL_IF(Context::current().detectedDriver() & drivers, "Somehow only first two values are extracted on AMD, NVidia and Intel Windows drivers.");
+        /* Used to be a problem on Intel Windows drivers 23, not a problem on
+           26 anymore */
+        CORRADE_EXPECT_FAIL_IF(Context::current().detectedDriver() & (Context::DetectedDriver::Amd|Context::DetectedDriver::NVidia), "Somehow only first two values are extracted on AMD and NVidia drivers.");
         CORRADE_COMPARE(value.xyz(), Math::Vector3<UnsignedShort>(315, 65201, 2576));
     }
 
@@ -1343,7 +1307,7 @@ void MeshGLTest::addVertexBufferIntWithShort() {
 #endif
 
 #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
-void MeshGLTest::addVertexBufferFloatWithHalfFloat() {
+void MeshGLTest::addVertexBufferFloatWithHalf() {
     #ifndef MAGNUM_TARGET_GLES
     if(!Context::current().isExtensionSupported<Extensions::ARB::half_float_vertex>())
         CORRADE_SKIP(Extensions::ARB::half_float_vertex::string() + std::string(" is not supported."));
@@ -1361,13 +1325,13 @@ void MeshGLTest::addVertexBufferFloatWithHalfFloat() {
 
     if(testCaseInstanceId() == 0) {
         setTestCaseDescription("Attribute");
-        mesh.addVertexBuffer(buffer, 2, Attribute<0, Float>{Attribute<0, Float>::DataType::HalfFloat});
+        mesh.addVertexBuffer(buffer, 2, Attribute<0, Float>{Attribute<0, Float>::DataType::Half});
     } else if(testCaseInstanceId() == 1) {
         setTestCaseDescription("DynamicAttribute");
         mesh.addVertexBuffer(buffer, 2, 2, DynamicAttribute{
             DynamicAttribute::Kind::Generic, 0,
             DynamicAttribute::Components::One,
-            DynamicAttribute::DataType::HalfFloat});
+            DynamicAttribute::DataType::Half});
     } else CORRADE_ASSERT_UNREACHABLE();
 
     MAGNUM_VERIFY_NO_GL_ERROR();
@@ -2209,7 +2173,7 @@ void MeshGLTest::unbindVAOWhenSettingIndexBufferData() {
     if(!Context::current().isExtensionSupported<Extensions::ARB::vertex_array_object>())
         CORRADE_SKIP(Extensions::ARB::vertex_array_object::string() + std::string(" is not available."));
     if(Context::current().isExtensionSupported<Extensions::ARB::direct_state_access>())
-        CORRADE_SKIP(Extensions::ARB::direct_state_access::string() + std::string(" is active with circumvents the issue tested here."));
+        CORRADE_SKIP(Extensions::ARB::direct_state_access::string() + std::string(" is active which circumvents the issue tested here."));
     #elif defined(MAGNUM_TARGET_GLES2)
     if(!Context::current().isExtensionSupported<Extensions::OES::vertex_array_object>())
         CORRADE_SKIP(Extensions::OES::vertex_array_object::string() + std::string(" is not available."));
@@ -2264,7 +2228,7 @@ void MeshGLTest::unbindIndexBufferWhenBindingVao() {
     if(!Context::current().isExtensionSupported<Extensions::ARB::vertex_array_object>())
         CORRADE_SKIP(Extensions::ARB::vertex_array_object::string() + std::string(" is not available."));
     if(Context::current().isExtensionSupported<Extensions::ARB::direct_state_access>())
-        CORRADE_SKIP(Extensions::ARB::direct_state_access::string() + std::string(" is active with circumvents the issue tested here."));
+        CORRADE_SKIP(Extensions::ARB::direct_state_access::string() + std::string(" is active which circumvents the issue tested here."));
     #elif defined(MAGNUM_TARGET_GLES2)
     if(!Context::current().isExtensionSupported<Extensions::OES::vertex_array_object>())
         CORRADE_SKIP(Extensions::OES::vertex_array_object::string() + std::string(" is not available."));
@@ -2326,7 +2290,7 @@ void MeshGLTest::resetIndexBufferBindingWhenBindingVao() {
     if(!Context::current().isExtensionSupported<Extensions::ARB::vertex_array_object>())
         CORRADE_SKIP(Extensions::ARB::vertex_array_object::string() + std::string(" is not available."));
     if(Context::current().isExtensionSupported<Extensions::ARB::direct_state_access>())
-        CORRADE_SKIP(Extensions::ARB::direct_state_access::string() + std::string(" is active with circumvents the issue tested here."));
+        CORRADE_SKIP(Extensions::ARB::direct_state_access::string() + std::string(" is active which circumvents the issue tested here."));
     #elif defined(MAGNUM_TARGET_GLES2)
     if(!Context::current().isExtensionSupported<Extensions::OES::vertex_array_object>())
         CORRADE_SKIP(Extensions::OES::vertex_array_object::string() + std::string(" is not available."));
@@ -2956,8 +2920,8 @@ void MeshGLTest::resetDivisorAfterInstancedDraw() {
         mesh.setInstanceCount(2)
             .addVertexBufferInstanced(buffer, 1, 0, Attribute{})
             .setPrimitive(MeshPrimitive::Points)
-            .setCount(1)
-            .draw(shader);
+            .setCount(1);
+        shader.draw(mesh);
 
         MAGNUM_VERIFY_NO_GL_ERROR();
 
@@ -2972,8 +2936,8 @@ void MeshGLTest::resetDivisorAfterInstancedDraw() {
         mesh.setInstanceCount(1)
             .addVertexBuffer(buffer, 4, Attribute{})
             .setPrimitive(MeshPrimitive::Points)
-            .setCount(2)
-            .draw(shader);
+            .setCount(2);
+        shader.draw(mesh);
 
         MAGNUM_VERIFY_NO_GL_ERROR();
 
@@ -3021,7 +2985,7 @@ MultiChecker::MultiChecker(AbstractShaderProgram&& shader, Mesh& mesh): framebuf
          .setIndexRange(1);
     } else c.setBaseVertex(1);
 
-    MeshView::draw(shader, {a, b, c});
+    shader.draw({a, b, c});
 }
 
 template<class T> T MultiChecker::get(PixelFormat format, PixelType type) {

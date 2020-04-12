@@ -26,6 +26,7 @@
 #include <Corrade/Containers/StridedArrayView.h>
 #include <Corrade/Containers/ArrayViewStl.h>
 
+#include "Magnum/Math/Vector3.h"
 #include "Magnum/MeshTools/GenerateNormals.h"
 
 using namespace Magnum;
@@ -58,7 +59,7 @@ std::vector<UnsignedInt> indices;
 std::vector<Vector3> positions;
 
 std::vector<Vector3> normals{positions.size()};
-MeshTools::generateSmoothNormalsInto<UnsignedInt>(indices, positions, normals);
+MeshTools::generateSmoothNormalsInto(indices, positions, normals);
 /* [generateSmoothNormalsInto] */
 }
 

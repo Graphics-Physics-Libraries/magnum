@@ -29,34 +29,48 @@
  * @brief Type traits
  */
 
+#include <type_traits>
 #include <Corrade/Utility/StlMath.h>
 
 #include "Magnum/Math/Math.h"
 #include "Magnum/Types.h"
 
+#ifdef MAGNUM_BUILD_DEPRECATED
+#include <Corrade/Utility/Macros.h>
+#endif
+
+#ifdef MAGNUM_BUILD_DEPRECATED
 /**
 @brief Precision when testing floats for equality
+@m_deprecated_since_latest Use @ref Magnum::Math::TypeTraits::epsilon()
+    instead.
 
 They have "at least" 6 significant digits of precision, taking one digit less
 for more headroom.
 */
 #ifndef FLOAT_EQUALITY_PRECISION
-#define FLOAT_EQUALITY_PRECISION 1.0e-5f
+#define FLOAT_EQUALITY_PRECISION \
+    CORRADE_DEPRECATED_MACRO(FLOAT_EQUALITY_PRECISION, "use Math::TypeTraits instead") 1.0e-5f
 #endif
 
 /**
 @brief Precision when testing doubles for equality
+@m_deprecated_since_latest Use @ref Magnum::Math::TypeTraits::epsilon()
+    instead.
 
 They have "at least" 15 significant digits of precision, taking one digit less
 for more headroom.
 */
 #ifndef DOUBLE_EQUALITY_PRECISION
-#define DOUBLE_EQUALITY_PRECISION 1.0e-14
+#define DOUBLE_EQUALITY_PRECISION \
+    CORRADE_DEPRECATED_MACRO(DOUBLE_EQUALITY_PRECISION, "use Math::TypeTraits instead") 1.0e-14
 #endif
 
 #ifndef CORRADE_TARGET_EMSCRIPTEN
 /**
 @brief Precision when testing long doubles for equality
+@m_deprecated_since_latest Use @ref Magnum::Math::TypeTraits::epsilon()
+    instead.
 
 They have "at least" 18 significant digits of precision, taking one digit less
 for more headroom.
@@ -71,9 +85,12 @@ for more headroom.
 */
 #ifndef LONG_DOUBLE_EQUALITY_PRECISION
 #if !defined(_MSC_VER) && (!defined(CORRADE_TARGET_ANDROID) || __LP64__)
-#define LONG_DOUBLE_EQUALITY_PRECISION 1.0e-17l
+#define LONG_DOUBLE_EQUALITY_PRECISION \
+    CORRADE_DEPRECATED_MACRO(LONG_DOUBLE_EQUALITY_PRECISION, "use Math::TypeTraits instead") 1.0e-17l
 #else
-#define LONG_DOUBLE_EQUALITY_PRECISION 1.0e-14
+#define LONG_DOUBLE_EQUALITY_PRECISION \
+    CORRADE_DEPRECATED_MACRO(LONG_DOUBLE_EQUALITY_PRECISION, "use Math::TypeTraits instead") 1.0e-14l
+#endif
 #endif
 #endif
 #endif
@@ -82,11 +99,11 @@ namespace Magnum { namespace Math {
 
 /**
 @brief Whether @p T is an arithmetic scalar type
+@m_since{2019,10}
 
 Equivalent to @ref std::true_type for all builtin scalar integer and
-floating-point types and in addition also @ref Deg and @ref Rad; equivalent to
-@ref std::false_type otherwise. The @ref Half type deliberately doesn't support
-any arithmetic, so it's not treated as a scalar type.
+floating-point types and in addition also @ref Half, @ref Deg and @ref Rad;
+equivalent to @ref std::false_type otherwise.
 
 Note that this is *different* from @ref std::is_scalar, which is @cpp true @ce
 also for enums or pointers --- it's rather closer to @ref std::is_arithmetic,
@@ -116,6 +133,7 @@ template<> struct IsScalar<unsigned long>: std::true_type {};
 template<> struct IsScalar<long long>: std::true_type {};
 template<> struct IsScalar<unsigned long long>: std::true_type {};
 template<> struct IsScalar<float>: std::true_type {};
+template<> struct IsScalar<Half>: std::true_type {};
 template<> struct IsScalar<double>: std::true_type {};
 #ifndef CORRADE_TARGET_EMSCRIPTEN
 template<> struct IsScalar<long double>: std::true_type {};
@@ -127,6 +145,7 @@ template<class T> struct IsScalar<Rad<T>>: std::true_type {};
 
 /**
 @brief Whether @p T is an arithmetic vector type
+@m_since{2019,10}
 
 Equivalent to @ref std::true_type for all @ref Vector types and their
 subclasses; equivalent to @ref std::false_type otherwise. In particular, gives
@@ -151,6 +170,7 @@ template<class T> struct IsVector<Color4<T>>: std::true_type {};
 
 /**
 @brief Whether @p T is integral
+@m_since{2019,10}
 
 Equivalent to @ref std::true_type for all integral scalar and vector types
 supported by Magnum math; equivalent to @ref std::false_type otherwise.
@@ -190,11 +210,11 @@ template<class T> struct IsIntegral<Color4<T>>: IsIntegral<T> {};
 
 /**
 @brief Whether @p T is floating-point
+@m_since{2019,10}
 
 Equivalent to @ref std::true_type for all floating-point scalar and vector
-types supported by Magnum math including @ref Deg and @ref Rad; equivalent to
-@ref std::false_type otherwise. The @ref Half type deliberately doesn't support
-any arithmetic, so it's not treated as a floating-point type.
+types supported by Magnum math including @ref Half, @ref Deg and @ref Rad;
+equivalent to @ref std::false_type otherwise.
 @see @ref IsIntegral, @ref IsScalar, @ref IsVector, @ref std::is_floating_point
 */
 template<class T> struct IsFloatingPoint
@@ -205,6 +225,7 @@ template<class T> struct IsFloatingPoint
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
 template<> struct IsFloatingPoint<Float>: std::true_type {};
+template<> struct IsFloatingPoint<Half>: std::true_type {};
 template<> struct IsFloatingPoint<Double>: std::true_type {};
 #ifndef CORRADE_TARGET_EMSCRIPTEN
 template<> struct IsFloatingPoint<long double>: std::true_type {};
@@ -223,7 +244,8 @@ template<class T> struct IsFloatingPoint<Rad<T>>: IsFloatingPoint<T> {};
 #endif
 
 /**
-@brief Whether @p T is a unitless tpye
+@brief Whether @p T is a unitless type
+@m_since{2019,10}
 
 Equivalent to @ref std::true_type for scalar or vector types that have an
 unitless underlying type (i.e., not @ref Deg or @ref Rad); @ref std::false_type
@@ -270,6 +292,7 @@ namespace Implementation {
 
 /**
 @brief Underlying type of a math type
+@m_since{2019,10}
 
 For builtin scalar types returns the type itself, for wrapped types like
 @ref Deg or @ref Rad returns the underlying builtin type, for vector and matrix
@@ -332,16 +355,28 @@ template<class T> struct TypeTraits: Implementation::TypeTraitsDefault<T> {
      * @brief Epsilon value for fuzzy compare
      *
      * Returns minimal difference between numbers to be considered
-     * inequal. Returns 1 for integer types and reasonably small value for
-     * floating-point types. Not implemented for arbitrary types.
+     * inequal. Not implemented for arbitrary types. Returns @cpp 1 @ce for
+     * integer types and
+     *
+     * -    @cpp 1.0e-5f @ce for @cpp float @ce,
+     * -    @cpp 1.0e-15 @ce for @cpp double @ce,
+     * -    @cpp 1.0e-17l @ce for @cpp long double @ce on platforms where it is
+     *      80-bit, and @cpp 1.0e-14l @ce on platforms
+     *      @ref CORRADE_LONG_DOUBLE_SAME_AS_DOUBLE "where it is 64-bit".
+     *
+     * This matches fuzzy comparison precision in @ref Corrade::TestSuite and
+     * is always one digit less than how @ref Corrade::Utility::Debug or
+     * @ref Corrade::Utility::format() prints given type.
      */
     constexpr static T epsilon();
 
     /**
      * @brief Fuzzy compare
      *
-     * Uses fuzzy compare for floating-point types (using @ref epsilon()
-     * value), pure equality comparison everywhere else. Algorithm adapted from
+     * Uses fuzzy compare for all floating-point types except @ref Half (using
+     * the @ref epsilon() value), pure equality comparison everywhere else.
+     * The @ref Half type has representable values sparse enough that no fuzzy
+     * comparison needs to be done. Algorithm adapted from
      * http://floating-point-gui.de/errors/comparison/.
      * @see @ref Math::equal(T, T), @ref Math::notEqual(T, T)
      */
@@ -364,6 +399,7 @@ template<class T> struct TypeTraits: Implementation::TypeTraitsDefault<T> {
 
 /**
 @brief Equality comparison of scalar types
+@m_since{2019,10}
 
 Calls @ref TypeTraits<T>::equals() --- using fuzzy compare for floating-point
 types and doing equality comparison on integral types. Scalar complement to
@@ -375,6 +411,7 @@ template<class T> inline typename std::enable_if<IsScalar<T>::value, bool>::type
 
 /**
 @brief Non-equality comparison of scalar types
+@m_since{2019,10}
 
 Calls @ref TypeTraits<T>::equals() --- using fuzzy compare for floating-point
 types and doing equality comparison on integral types. Scalar complement to
@@ -402,10 +439,9 @@ namespace Implementation {
     _c(Long)
     #endif
     _c(Float)
+    _c(Half)
     _c(Double)
-    #ifndef CORRADE_TARGET_EMSCRIPTEN
     _c(long double)
-    #endif
     #undef _c
     #endif
 
@@ -488,20 +524,27 @@ template<class T> bool TypeTraitsFloatingPoint<T>::equalsZero(const T a, const T
 template<> struct TypeTraits<Float>: Implementation::TypeTraitsFloatingPoint<Float> {
     typedef Float FloatingPointType;
 
-    constexpr static Float epsilon() { return FLOAT_EQUALITY_PRECISION; }
+    constexpr static Float epsilon() { return 1.0e-5f; }
+};
+/* A bit special -- using integer comparison for equality but presenting itself
+   as a floating-point type so Color's fullChannel() works correctly */
+template<> struct TypeTraits<Half>: Implementation::TypeTraitsName<Half>, Implementation::TypeTraitsDefault<Half> {
+    typedef Half FloatingPointType;
 };
 template<> struct TypeTraits<Double>: Implementation::TypeTraitsFloatingPoint<Double> {
     typedef Double FloatingPointType;
 
-    constexpr static Double epsilon() { return DOUBLE_EQUALITY_PRECISION; }
+    constexpr static Double epsilon() { return 1.0e-14; }
 };
-#ifndef CORRADE_TARGET_EMSCRIPTEN
 template<> struct TypeTraits<long double>: Implementation::TypeTraitsFloatingPoint<long double> {
     typedef long double FloatingPointType;
 
-    constexpr static long double epsilon() { return LONG_DOUBLE_EQUALITY_PRECISION; }
+    #ifndef CORRADE_LONG_DOUBLE_SAME_AS_DOUBLE
+    constexpr static long double epsilon() { return 1.0e-17l; }
+    #else
+    constexpr static long double epsilon() { return 1.0e-14l; }
+    #endif
 };
-#endif
 
 namespace Implementation {
 

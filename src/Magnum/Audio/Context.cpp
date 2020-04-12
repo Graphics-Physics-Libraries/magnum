@@ -41,6 +41,10 @@
 
 #include "Magnum/Audio/Extensions.h"
 
+#if defined(CORRADE_TARGET_WINDOWS) && defined(MAGNUM_BUILD_STATIC) && !defined(CORRADE_TARGET_WINDOWS_RT)
+#include "Magnum/Implementation/WindowsWeakSymbol.h"
+#endif
+
 namespace Magnum { namespace Audio {
 
 namespace {
@@ -67,9 +71,11 @@ Containers::ArrayView<const Extension> Extension::extensions() {
 }
 
 Debug& operator<<(Debug& debug, const Context::HrtfStatus value) {
+    debug << "Audio::Context::HrtfStatus" << Debug::nospace;
+
     switch(value) {
         /* LCOV_EXCL_START */
-        #define _c(value) case Context::HrtfStatus::value: return debug << "Audio::Context::HrtfStatus::" #value;
+        #define _c(value) case Context::HrtfStatus::value: return debug << "::" #value;
         _c(Disabled)
         _c(Enabled)
         _c(Denied)
@@ -80,7 +86,7 @@ Debug& operator<<(Debug& debug, const Context::HrtfStatus value) {
         /* LCOV_EXCL_STOP */
     }
 
-    return debug << "Audio::Context::HrtfStatus(" << Debug::nospace << reinterpret_cast<void*>(ALenum(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(ALenum(value)) << Debug::nospace << ")";
 }
 
 namespace {
@@ -104,8 +110,6 @@ const char* alcErrorString(const ALenum error) {
 
 }
 
-Context* Context::_current = nullptr;
-
 std::vector<std::string> Context::deviceSpecifierStrings() {
     std::vector<std::string> list;
     const char* const devices = alcGetString(nullptr, ALC_DEVICE_SPECIFIER);
@@ -115,11 +119,68 @@ std::vector<std::string> Context::deviceSpecifierStrings() {
     return list;
 }
 
-bool Context::hasCurrent() { return _current; }
+#if !defined(MAGNUM_BUILD_STATIC) || defined(CORRADE_TARGET_WINDOWS)
+/* (Of course) can't be in an unnamed namespace in order to export it below
+   (except for Windows, where we do extern "C" so this doesn't matter) */
+namespace {
+#endif
+
+/* Unlike GL, this isn't thread-local. Would need to implement
+   ALC_EXT_thread_local_context first */
+#if !defined(MAGNUM_BUILD_STATIC) || (defined(MAGNUM_BUILD_STATIC) && !defined(CORRADE_TARGET_WINDOWS))
+#ifdef MAGNUM_BUILD_STATIC
+/* On static builds that get linked to multiple shared libraries and then used
+   in a single app we want to ensure there's just one global symbol. On Linux
+   it's apparently enough to just export, macOS needs the weak attribute.
+   Windows not handled yet, as it needs a workaround using DllMain() and
+   GetProcAddress(). */
+CORRADE_VISIBILITY_EXPORT
+    #ifdef __GNUC__
+    __attribute__((weak))
+    #else
+    /* uh oh? the test will fail, probably */
+    #endif
+#endif
+Context* currentContext = nullptr;
+#else
+/* On Windows the symbol is exported unmangled and then fetched via
+   GetProcAddress() to emulate weak linking. Using an extern "C" block instead
+   of just a function annotation because otherwise MinGW prints a warning:
+   '...' initialized and declared 'extern' (uh?) */
+extern "C" {
+    CORRADE_VISIBILITY_EXPORT Context* magnumAudioUniqueCurrentContext = nullptr;
+}
+#endif
+
+#if !defined(MAGNUM_BUILD_STATIC) || defined(CORRADE_TARGET_WINDOWS)
+}
+#endif
+
+/* Windows don't have any concept of weak symbols, instead GetProcAddress() on
+   GetModuleHandle(nullptr) "emulates" the weak linking as it's guaranteed to
+   pick up the same symbol of the final exe independently of the DLL it was
+   called from. To avoid #ifdef hell in code below, the currentContext is
+   redefined to return a value from this uniqueness-ensuring function. */
+#if defined(CORRADE_TARGET_WINDOWS) && defined(MAGNUM_BUILD_STATIC) && !defined(CORRADE_TARGET_WINDOWS_RT)
+namespace {
+
+Context*& windowsCurrentContext() {
+    /* A function-local static to ensure it's only initialized once without any
+       race conditions among threads */
+    static Context** const uniqueGlobals = reinterpret_cast<Context**>(Magnum::Implementation::windowsWeakSymbol("magnumAudioUniqueCurrentContext", &magnumAudioUniqueCurrentContext));
+    return *uniqueGlobals;
+}
+
+}
+
+#define currentContext windowsCurrentContext()
+#endif
+
+bool Context::hasCurrent() { return currentContext; }
 
 Context& Context::current() {
-    CORRADE_ASSERT(_current, "Audio::Context::current(): no current context", *_current);
-    return *_current;
+    CORRADE_ASSERT(currentContext, "Audio::Context::current(): no current context", *currentContext);
+    return *currentContext;
 }
 
 Context::Context(Int argc, const char** argv): Context(Configuration{}, argc, argv) {}
@@ -145,7 +206,7 @@ void Context::create(const Configuration& configuration) {
 }
 
 bool Context::tryCreate(const Configuration& configuration) {
-    CORRADE_ASSERT(!_current, "Audio::Context: context already created", false);
+    CORRADE_ASSERT(!currentContext, "Audio::Context: context already created", false);
 
     /* Open the device */
     const ALCchar* const deviceSpecifier = configuration.deviceSpecifier().empty() ? alcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER) : configuration.deviceSpecifier().data();
@@ -204,7 +265,7 @@ bool Context::tryCreate(const Configuration& configuration) {
     }
 
     alcMakeContextCurrent(_context);
-    _current = this;
+    currentContext = this;
 
     /* Add all extensions to a map for faster lookup */
     std::unordered_map<std::string, Extension> extensionMap;
@@ -262,13 +323,13 @@ bool Context::tryCreate(const Configuration& configuration) {
 Context::Context(Context&& other) noexcept: _device{other._device}, _context{other._context}, _extensionStatus{std::move(other._extensionStatus)}, _supportedExtensions{std::move(other._supportedExtensions)} {
     other._device = nullptr;
     other._context = nullptr;
-    if(_current == &other) _current = this;
+    if(currentContext == &other) currentContext = this;
 }
 
 Context::~Context() {
     if(_context) alcDestroyContext(_context);
     if(_device) alcCloseDevice(_device);
-    if(_current == this) _current = nullptr;
+    if(currentContext == this) currentContext = nullptr;
 }
 
 std::vector<std::string> Context::extensionStrings() const {

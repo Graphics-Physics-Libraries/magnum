@@ -29,45 +29,103 @@
  * @brief Function @ref Magnum::Primitives::planeSolid(), @ref Magnum::Primitives::planeWireframe()
  */
 
+#include <Corrade/Containers/EnumSet.h>
+#include <Corrade/Utility/Macros.h>
+
 #include "Magnum/Trade/Trade.h"
 #include "Magnum/Primitives/visibility.h"
 
 namespace Magnum { namespace Primitives {
 
 /**
-@brief Whether to generate plane texture coordinates
+@brief Plane flag
+@m_since_latest
+
+@see @ref PlaneFlags, @ref planeSolid()
+*/
+enum class PlaneFlag: UnsignedByte {
+    /** Generate texture coordinates with origin in bottom left corner */
+    TextureCoordinates = 1 << 0,
+
+    /**
+     * Generate four-component tangents. The last component can be used to
+     * reconstruct a bitangent as described in the documentation of
+     * @ref Trade::MeshAttribute::Tangent.
+     * @m_since_latest
+     */
+    Tangents = 1 << 1
+};
+
+/**
+@brief Plane flags
+@m_since_latest
 
 @see @ref planeSolid()
 */
-enum class PlaneTextureCoords: UnsignedByte {
+typedef Containers::EnumSet<PlaneFlag> PlaneFlags;
+
+CORRADE_ENUMSET_OPERATORS(PlaneFlags)
+
+#ifdef MAGNUM_BUILD_DEPRECATED
+/**
+@brief Whether to generate plane texture coordinates
+@m_deprecated_since_latest Use @ref PlaneFlags instead.
+*/
+enum class CORRADE_DEPRECATED_ENUM("use PlaneFlags instead") PlaneTextureCoords: UnsignedByte {
     DontGenerate,       /**< Don't generate texture coordinates */
 
     /** Generate texture coordinates with origin in bottom left corner. */
     Generate
 };
+#endif
 
 /**
 @brief Solid 3D plane
+@param flags        Flags
+@m_since_latest
 
-2x2 plane. Non-indexed @ref MeshPrimitive::TriangleStrip on the XY plane with
-normals in positive Z direction.
+2x2 square on the XY plane, centered at origin. Non-indexed
+@ref MeshPrimitive::TriangleStrip with @ref VertexFormat::Vector3 positions,
+@ref VertexFormat::Vector3 normals in positive Z direction, optional
+@ref VertexFormat::Vector4 tangents and optional @ref VertexFormat::Vector2
+texture coordinates. The returned instance may reference data stored in
+constant memory.
 
 @image html primitives-planesolid.png width=256px
 
-@see @ref planeWireframe(), @ref squareSolid(), @ref gradient3D()
+@see @ref planeWireframe(), @ref squareSolid(), @ref gradient3D(),
+    @ref MeshTools::generateTriangleStripIndices()
 */
-MAGNUM_PRIMITIVES_EXPORT Trade::MeshData3D planeSolid(PlaneTextureCoords textureCoords = PlaneTextureCoords::DontGenerate);
+MAGNUM_PRIMITIVES_EXPORT Trade::MeshData planeSolid(PlaneFlags flags);
+
+/** @overload */
+/* Separate API so apps that don't need texture coordinate / tangents don't
+   need to drag in the extra code needed to allocate & calculate them */
+MAGNUM_PRIMITIVES_EXPORT Trade::MeshData planeSolid();
+
+#ifdef MAGNUM_BUILD_DEPRECATED
+/**
+@brief @copybrief planeSolid(PlaneFlags)
+@m_deprecated_since_latest Use @ref planeSolid(PlaneFlags) instead.
+*/
+CORRADE_IGNORE_DEPRECATED_PUSH
+MAGNUM_PRIMITIVES_EXPORT CORRADE_DEPRECATED("use planeSolid(PlaneFlags) instead") Trade::MeshData planeSolid(PlaneTextureCoords textureCoords);
+CORRADE_IGNORE_DEPRECATED_POP
+#endif
 
 /**
 @brief Wireframe 3D plane
 
-2x2 plane. Non-indexed @ref MeshPrimitive::LineLoop on the XY plane.
+2x2 square on the XY plane, centered at origin. Non-indexed
+@ref MeshPrimitive::LineLoop on the XY plane with @ref VertexFormat::Vector3
+positions. The returned instance references data stored in constant memory.
 
 @image html primitives-planewireframe.png width=256px
 
-@see @ref planeSolid(), @ref squareWireframe()
+@see @ref planeSolid(), @ref squareWireframe(),
+    @ref MeshTools::generateLineLoopIndices()
 */
-MAGNUM_PRIMITIVES_EXPORT Trade::MeshData3D planeWireframe();
+MAGNUM_PRIMITIVES_EXPORT Trade::MeshData planeWireframe();
 
 }}
 

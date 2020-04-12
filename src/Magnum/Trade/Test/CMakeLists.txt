@@ -44,11 +44,11 @@ target_include_directories(TradeAbstractImporterTest PRIVATE ${CMAKE_CURRENT_BIN
 
 corrade_add_test(TradeAnimationDataTest AnimationDataTest.cpp LIBRARIES MagnumTradeTestLib)
 corrade_add_test(TradeCameraDataTest CameraDataTest.cpp LIBRARIES MagnumTradeTestLib)
+corrade_add_test(TradeDataTest DataTest.cpp LIBRARIES MagnumTrade)
 corrade_add_test(TradeImageDataTest ImageDataTest.cpp LIBRARIES MagnumTradeTestLib)
 corrade_add_test(TradeLightDataTest LightDataTest.cpp LIBRARIES MagnumTrade)
 corrade_add_test(TradeMaterialDataTest MaterialDataTest.cpp LIBRARIES MagnumTradeTestLib)
-corrade_add_test(TradeMeshData2DTest MeshData2DTest.cpp LIBRARIES MagnumTrade)
-corrade_add_test(TradeMeshData3DTest MeshData3DTest.cpp LIBRARIES MagnumTrade)
+corrade_add_test(TradeMeshDataTest MeshDataTest.cpp LIBRARIES MagnumTradeTestLib)
 corrade_add_test(TradeObjectData2DTest ObjectData2DTest.cpp LIBRARIES MagnumTradeTestLib)
 corrade_add_test(TradeObjectData3DTest ObjectData3DTest.cpp LIBRARIES MagnumTradeTestLib)
 corrade_add_test(TradeSceneDataTest SceneDataTest.cpp LIBRARIES MagnumTrade)
@@ -56,6 +56,7 @@ corrade_add_test(TradeTextureDataTest TextureDataTest.cpp LIBRARIES MagnumTrade)
 
 set_property(TARGET
     TradeAnimationDataTest
+    TradeMeshDataTest
     APPEND PROPERTY COMPILE_DEFINITIONS "CORRADE_GRACEFUL_ASSERT")
 
 set_target_properties(
@@ -66,10 +67,18 @@ set_target_properties(
     TradeImageDataTest
     TradeLightDataTest
     TradeMaterialDataTest
-    TradeMeshData2DTest
-    TradeMeshData3DTest
     TradeObjectData2DTest
     TradeObjectData3DTest
     TradeSceneDataTest
     TradeTextureDataTest
     PROPERTIES FOLDER "Magnum/Trade/Test")
+
+if(MAGNUM_BUILD_DEPRECATED)
+    corrade_add_test(TradeMeshData2DTest MeshData2DTest.cpp LIBRARIES MagnumTrade)
+    corrade_add_test(TradeMeshData3DTest MeshData3DTest.cpp LIBRARIES MagnumTrade)
+
+    set_target_properties(
+        TradeMeshData2DTest
+        TradeMeshData3DTest
+        PROPERTIES FOLDER "Magnum/Trade/Test")
+endif()

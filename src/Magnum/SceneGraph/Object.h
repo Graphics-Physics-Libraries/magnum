@@ -76,20 +76,24 @@ and @ref previousSibling().
 
 @section SceneGraph-Object-explicit-specializations Explicit template specializations
 
-The following specializations are explicitly compiled into @ref SceneGraph
+The following specializations are explicitly compiled into the @ref SceneGraph
 library. For other specializations (e.g. using @ref Magnum::Double "Double"
-type or special transformation class) you have to use @ref Object.hpp
-implementation file to avoid linker errors. See also relevant sections in
-@ref SceneGraph-AbstractObject-explicit-specializations "AbstractObject" and
+type or special transformation class) you have to use the @ref Object.hpp
+implementation file (and possibly others) to avoid linker errors. See also
+relevant sections in the @ref SceneGraph-AbstractObject-explicit-specializations "AbstractObject" and
 @ref SceneGraph-AbstractTransformation-explicit-specializations "AbstractTransformation"
 class documentation or @ref compilation-speedup-hpp for more information.
 
 -   @ref DualComplexTransformation "Object<DualComplexTransformation>"
 -   @ref DualQuaternionTransformation "Object<DualQuaternionTransformation>"
--   @ref MatrixTransformation2D "Object<MatrixTransformation2D>"
--   @ref MatrixTransformation3D "Object<MatrixTransformation3D>"
+-   @ref MatrixTransformation2D "Object<MatrixTransformation2D>" (custom
+    specializations need also @ref MatrixTransformation2D.hpp)
+-   @ref MatrixTransformation3D "Object<MatrixTransformation3D>" (custom
+    specializations need also @ref MatrixTransformation3D.hpp)
 -   @ref RigidMatrixTransformation2D "Object<RigidMatrixTransformation2D>"
+    (custom specializations need also @ref RigidMatrixTransformation2D.hpp)
 -   @ref RigidMatrixTransformation3D "Object<RigidMatrixTransformation3D>"
+    (custom specializations need also @ref RigidMatrixTransformation3D.hpp)
 -   @ref TranslationTransformation2D "Object<TranslationTransformation2D>"
 -   @ref TranslationTransformation3D "Object<TranslationTransformation3D>"
 
@@ -215,7 +219,11 @@ template<class Transformation> class Object: public AbstractObject<Transformatio
          */
         Object<Transformation>& setParentKeepTransformation(Object<Transformation>* parent);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Object transformation */
 
@@ -248,22 +256,26 @@ template<class Transformation> class Object: public AbstractObject<Transformatio
         /**
          * @brief Transformation matrices of given set of objects relative to this object
          *
-         * All transformations are premultiplied with @p initialTransformationMatrix,
-         * if specified.
+         * All transformations are post-multiplied with
+         * @p finalTransformationMatrix, if specified (it gets applied on the
+         * left-most side, suitable for example for an inverse camera
+         * transformation or a projection matrix).
          * @see @ref transformations()
          */
-        std::vector<MatrixType> transformationMatrices(const std::vector<std::reference_wrapper<Object<Transformation>>>& objects, const MatrixType& initialTransformationMatrix = MatrixType()) const;
+        std::vector<MatrixType> transformationMatrices(const std::vector<std::reference_wrapper<Object<Transformation>>>& objects, const MatrixType& finalTransformationMatrix = MatrixType()) const;
 
         /**
          * @brief Transformations of given group of objects relative to this object
          *
-         * All transformations can be premultiplied with @p initialTransformation,
-         * if specified.
+         * All transformations are post-multiplied with
+         * @p finalTransformation, if specified (it gets applied on the
+         * left-most side, suitable for example for an inverse camera
+         * transformation).
          * @see @ref transformationMatrices()
          */
         /* `objects` passed by copy intentionally (to allow move from
            transformationMatrices() and avoid copy in the function itself) */
-        std::vector<typename Transformation::DataType> transformations(std::vector<std::reference_wrapper<Object<Transformation>>> objects, const typename Transformation::DataType& initialTransformation =
+        std::vector<typename Transformation::DataType> transformations(std::vector<std::reference_wrapper<Object<Transformation>>> objects, const typename Transformation::DataType& finalTransformation =
             #ifndef CORRADE_MSVC2015_COMPATIBILITY /* I hate this inconsistency */
             typename Transformation::DataType()
             #else
@@ -271,7 +283,11 @@ template<class Transformation> class Object: public AbstractObject<Transformatio
             #endif
             ) const;
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /**
          * @{ @name Transformation caching
@@ -311,7 +327,11 @@ template<class Transformation> class Object: public AbstractObject<Transformatio
         /* note: doc verbatim copied from AbstractObject::setClean() */
         void setClean();
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
     #ifndef DOXYGEN_GENERATING_OUTPUT
     public:
@@ -346,9 +366,9 @@ template<class Transformation> class Object: public AbstractObject<Transformatio
             return absoluteTransformationMatrix();
         }
 
-        std::vector<MatrixType> doTransformationMatrices(const std::vector<std::reference_wrapper<AbstractObject<Transformation::Dimensions, typename Transformation::Type>>>& objects, const MatrixType& initialTransformationMatrix) const override final;
+        std::vector<MatrixType> doTransformationMatrices(const std::vector<std::reference_wrapper<AbstractObject<Transformation::Dimensions, typename Transformation::Type>>>& objects, const MatrixType& finalTransformationMatrix) const override final;
 
-        typename Transformation::DataType MAGNUM_SCENEGRAPH_LOCAL computeJointTransformation(const std::vector<std::reference_wrapper<Object<Transformation>>>& jointObjects, std::vector<typename Transformation::DataType>& jointTransformations, const std::size_t joint, const typename Transformation::DataType& initialTransformation) const;
+        typename Transformation::DataType MAGNUM_SCENEGRAPH_LOCAL computeJointTransformation(const std::vector<std::reference_wrapper<Object<Transformation>>>& jointObjects, std::vector<typename Transformation::DataType>& jointTransformations, const std::size_t joint, const typename Transformation::DataType& finalTransformation) const;
 
         bool MAGNUM_SCENEGRAPH_LOCAL doIsDirty() const override final { return isDirty(); }
         void MAGNUM_SCENEGRAPH_LOCAL doSetDirty() override final { setDirty(); }

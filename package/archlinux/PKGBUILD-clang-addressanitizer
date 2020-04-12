@@ -52,6 +52,7 @@ build() {
         -DWITH_DISTANCEFIELDCONVERTER=ON \
         -DWITH_FONTCONVERTER=ON \
         -DWITH_IMAGECONVERTER=ON \
+        -DWITH_SCENECONVERTER=ON \
         -DWITH_GL_INFO=ON \
         -DWITH_AL_INFO=ON \
         -DBUILD_TESTS=ON \
@@ -61,10 +62,12 @@ build() {
 
 check() {
     cd "$_rootdir/build-clang-addressanitizer"
-    CORRADE_TEST_COLOR=ON ctest --output-on-failure -j5
+    ASAN_OPTIONS="color=always" LSAN_OPTIONS="color=always" CORRADE_TEST_COLOR=ON ctest --output-on-failure -j5
 }
 
 package() {
     cd "$_rootdir/build-clang-addressanitizer"
     DESTDIR="$pkgdir/" ninja install
 }
+
+# kate: hl bash

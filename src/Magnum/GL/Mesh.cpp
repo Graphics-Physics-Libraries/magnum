@@ -29,7 +29,6 @@
 #include <Corrade/Utility/Debug.h>
 
 #include "Magnum/Mesh.h"
-#include "Magnum/GL/AbstractShaderProgram.h"
 #include "Magnum/GL/Buffer.h"
 #include "Magnum/GL/Context.h"
 #include "Magnum/GL/Extensions.h"
@@ -43,6 +42,10 @@
 #include "Magnum/GL/Implementation/MeshState.h"
 #include "Magnum/GL/Implementation/State.h"
 
+#ifdef MAGNUM_BUILD_DEPRECATED
+#include "Magnum/GL/AbstractShaderProgram.h"
+#endif
+
 namespace Magnum { namespace GL {
 
 namespace {
@@ -54,7 +57,10 @@ constexpr MeshPrimitive PrimitiveMapping[]{
     MeshPrimitive::LineStrip,
     MeshPrimitive::Triangles,
     MeshPrimitive::TriangleStrip,
-    MeshPrimitive::TriangleFan
+    MeshPrimitive::TriangleFan,
+    MeshPrimitive(~UnsignedInt{}), /* Instances */
+    MeshPrimitive(~UnsignedInt{}), /* Faces */
+    MeshPrimitive(~UnsignedInt{})  /* Edges */
 };
 
 constexpr MeshIndexType IndexTypeMapping[]{
@@ -65,23 +71,40 @@ constexpr MeshIndexType IndexTypeMapping[]{
 
 }
 
+bool hasMeshPrimitive(const Magnum::MeshPrimitive primitive) {
+    if(isMeshPrimitiveImplementationSpecific(primitive))
+        return true;
+
+    CORRADE_ASSERT(UnsignedInt(primitive) - 1 < Containers::arraySize(PrimitiveMapping),
+        "GL::hasPrimitive(): invalid primitive" << primitive, {});
+    return UnsignedInt(PrimitiveMapping[UnsignedInt(primitive) - 1]) != ~UnsignedInt{};
+}
+
 MeshPrimitive meshPrimitive(const Magnum::MeshPrimitive primitive) {
-    CORRADE_ASSERT(UnsignedInt(primitive) < Containers::arraySize(PrimitiveMapping),
+    if(isMeshPrimitiveImplementationSpecific(primitive))
+        return meshPrimitiveUnwrap<GL::MeshPrimitive>(primitive);
+
+    CORRADE_ASSERT(UnsignedInt(primitive) - 1 < Containers::arraySize(PrimitiveMapping),
         "GL::meshPrimitive(): invalid primitive" << primitive, {});
-    return PrimitiveMapping[UnsignedInt(primitive)];
+    const MeshPrimitive out = PrimitiveMapping[UnsignedInt(primitive) - 1];
+    CORRADE_ASSERT(out != MeshPrimitive(~UnsignedInt{}),
+        "GL::meshPrimitive(): unsupported primitive" << primitive, {});
+    return out;
 }
 
 MeshIndexType meshIndexType(const Magnum::MeshIndexType type) {
-    CORRADE_ASSERT(UnsignedInt(type) < Containers::arraySize(IndexTypeMapping),
+    CORRADE_ASSERT(UnsignedInt(type) - 1 < Containers::arraySize(IndexTypeMapping),
         "GL::meshIndexType(): invalid type" << type, {});
-    return IndexTypeMapping[UnsignedInt(type)];
+    return IndexTypeMapping[UnsignedInt(type) - 1];
 }
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
-Debug& operator<<(Debug& debug, MeshPrimitive value) {
+Debug& operator<<(Debug& debug, const MeshPrimitive value) {
+    debug << "GL::MeshPrimitive" << Debug::nospace;
+
     switch(value) {
         /* LCOV_EXCL_START */
-        #define _c(value) case MeshPrimitive::value: return debug << "GL::MeshPrimitive::" #value;
+        #define _c(value) case MeshPrimitive::value: return debug << "::" #value;
         _c(Points)
         _c(Lines)
         _c(LineLoop)
@@ -102,13 +125,15 @@ Debug& operator<<(Debug& debug, MeshPrimitive value) {
         /* LCOV_EXCL_STOP */
     }
 
-    return debug << "GL::MeshPrimitive(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
 }
 
-Debug& operator<<(Debug& debug, MeshIndexType value) {
+Debug& operator<<(Debug& debug, const MeshIndexType value) {
+    debug << "GL::MeshIndexType" << Debug::nospace;
+
     switch(value) {
         /* LCOV_EXCL_START */
-        #define _c(value) case MeshIndexType::value: return debug << "GL::MeshIndexType::" #value;
+        #define _c(value) case MeshIndexType::value: return debug << "::" #value;
         _c(UnsignedByte)
         _c(UnsignedShort)
         _c(UnsignedInt)
@@ -116,7 +141,7 @@ Debug& operator<<(Debug& debug, MeshIndexType value) {
         /* LCOV_EXCL_STOP */
     }
 
-    return debug << "GL::MeshIndexType(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
+    return debug << "(" << Debug::nospace << reinterpret_cast<void*>(GLenum(value)) << Debug::nospace << ")";
 }
 #endif
 
@@ -137,6 +162,35 @@ struct Mesh::AttributeLayout {
     GLsizei stride;
     GLuint divisor;
 };
+
+UnsignedInt Mesh::maxVertexAttributeStride() {
+    #ifdef MAGNUM_TARGET_WEBGL
+    /* Defined for WebGL 1 and for the new vertexAttribIPointer in WebGL 2 too:
+        https://www.khronos.org/registry/webgl/specs/latest/1.0/index.html#5.14.10
+        https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.8
+    */
+    return 255;
+    #else
+    #ifndef MAGNUM_TARGET_GLES
+    if(!Context::current().isVersionSupported(Version::GL440))
+    #elif !defined(MAGNUM_TARGET_GLES2)
+    if(!Context::current().isVersionSupported(Version::GLES310))
+    #endif
+    {
+        return 0xffffffffu;
+    }
+
+    #ifndef MAGNUM_TARGET_GLES2
+    GLint& value = Context::current().state().mesh->maxVertexAttributeStride;
+
+    /* Get the value, if not already cached */
+    if(value == 0)
+        glGetIntegerv(GL_MAX_VERTEX_ATTRIB_STRIDE, &value);
+
+    return value;
+    #endif
+    #endif
+}
 
 #ifndef MAGNUM_TARGET_GLES2
 #ifndef MAGNUM_TARGET_WEBGL
@@ -304,14 +358,15 @@ UnsignedInt Mesh::indexTypeSize() const {
 }
 
 Mesh& Mesh::addVertexBufferInstanced(Buffer& buffer, const UnsignedInt divisor, const GLintptr offset, const GLsizei stride, const DynamicAttribute& attribute) {
-    attributePointerInternal(AttributeLayout{buffer,
-        attribute.location(),
-        GLint(attribute.components()),
-        GLenum(attribute.dataType()),
-        attribute.kind(),
-        offset,
-        stride,
-        divisor});
+    for(UnsignedInt i = 0; i != attribute.vectors(); ++i)
+        attributePointerInternal(AttributeLayout{buffer,
+            attribute.location() + i,
+            GLint(attribute.components()),
+            GLenum(attribute.dataType()),
+            attribute.kind(),
+            GLintptr(offset + i*attribute.vectorStride()),
+            stride,
+            divisor});
     return *this;
 }
 
@@ -343,25 +398,6 @@ Mesh& Mesh::setIndexBuffer(Buffer&& buffer, GLintptr offset, MeshIndexType type,
 
 Mesh& Mesh::setIndexBuffer(Buffer& buffer, const GLintptr offset, const MeshIndexType type, const UnsignedInt start, const UnsignedInt end) {
     setIndexBuffer(Buffer::wrap(buffer.id(), buffer.targetHint()), offset, type, start, end);
-    return *this;
-}
-
-Mesh& Mesh::draw(AbstractShaderProgram& shader) {
-    CORRADE_ASSERT(_countSet, "GL::Mesh::draw(): setCount() was never called, probably a mistake?", *this);
-
-    /* Nothing to draw, exit without touching any state */
-    if(!_count || !_instanceCount) return *this;
-
-    shader.use();
-
-    #ifndef MAGNUM_TARGET_GLES
-    drawInternal(_count, _baseVertex, _instanceCount, _baseInstance, _indexOffset, _indexStart, _indexEnd);
-    #elif !defined(MAGNUM_TARGET_GLES2)
-    drawInternal(_count, _baseVertex, _instanceCount, _indexOffset, _indexStart, _indexEnd);
-    #else
-    drawInternal(_count, _baseVertex, _instanceCount, _indexOffset);
-    #endif
-
     return *this;
 }
 
@@ -503,15 +539,30 @@ void Mesh::drawInternal(TransformFeedback& xfb, const UnsignedInt stream, const 
 
     (this->*state.unbindImplementation)();
 }
+#endif
 
-Mesh& Mesh::draw(AbstractShaderProgram& shader, TransformFeedback& xfb, UnsignedInt stream) {
-    /* Nothing to draw, exit without touching any state */
-    if(!_instanceCount) return *this;
-
-    shader.use();
-    drawInternal(xfb, stream, _instanceCount);
+#ifdef MAGNUM_BUILD_DEPRECATED
+Mesh& Mesh::draw(AbstractShaderProgram& shader) {
+    shader.draw(*this);
     return *this;
 }
+
+Mesh& Mesh::draw(AbstractShaderProgram&& shader) {
+    shader.draw(*this);
+    return *this;
+}
+
+#ifndef MAGNUM_TARGET_GLES
+Mesh& Mesh::draw(AbstractShaderProgram& shader, TransformFeedback& xfb, UnsignedInt stream) {
+    shader.drawTransformFeedback(*this, xfb, stream);
+    return *this;
+}
+
+Mesh& Mesh::draw(AbstractShaderProgram&& shader, TransformFeedback& xfb, UnsignedInt stream) {
+    shader.drawTransformFeedback(*this, xfb, stream);
+    return *this;
+}
+#endif
 #endif
 
 void Mesh::bindVAOImplementationDefault(GLuint) {}

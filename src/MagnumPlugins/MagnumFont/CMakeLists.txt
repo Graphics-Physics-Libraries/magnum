@@ -48,9 +48,16 @@ add_plugin(MagnumFont
 if(BUILD_PLUGINS_STATIC AND BUILD_STATIC_PIC)
     set_target_properties(MagnumFont PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
-target_link_libraries(MagnumFont PUBLIC Magnum MagnumText)
+target_link_libraries(MagnumFont PUBLIC Magnum MagnumText MagnumTrade)
 if(CORRADE_TARGET_WINDOWS)
     target_link_libraries(MagnumFont PUBLIC TgaImporter)
+endif()
+# Modify output location only if all are set, otherwise it makes no sense
+if(CMAKE_RUNTIME_OUTPUT_DIRECTORY AND CMAKE_LIBRARY_OUTPUT_DIRECTORY AND CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
+    set_target_properties(MagnumFont PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/magnum$<$<CONFIG:Debug>:-d>/fonts
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/magnum$<$<CONFIG:Debug>:-d>/fonts
+        ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/magnum$<$<CONFIG:Debug>:-d>/fonts)
 endif()
 
 install(FILES MagnumFont.h ${CMAKE_CURRENT_BINARY_DIR}/configure.h

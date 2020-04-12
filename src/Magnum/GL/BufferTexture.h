@@ -81,8 +81,6 @@ and respective function documentation for more information.
 @requires_gles Texture buffers are not available in WebGL.
 */
 class MAGNUM_GL_EXPORT BufferTexture: public AbstractTexture {
-    friend Implementation::TextureState;
-
     public:
         /**
          * @brief Max supported buffer texture size
@@ -140,6 +138,8 @@ class MAGNUM_GL_EXPORT BufferTexture: public AbstractTexture {
          *
          * This function can be safely used for constructing (and later
          * destructing) objects even without any OpenGL context being active.
+         * However note that this is a low-level and a potentially dangerous
+         * API, see the documentation of @ref NoCreate for alternatives.
          * @see @ref BufferTexture(), @ref wrap()
          */
         explicit BufferTexture(NoCreateT) noexcept: AbstractTexture{NoCreate, GL_TEXTURE_BUFFER} {}
@@ -158,6 +158,7 @@ class MAGNUM_GL_EXPORT BufferTexture: public AbstractTexture {
 
         /**
          * @brief Texture size
+         * @m_since{2019,10}
          *
          * Equivalent to size of the buffer attached to @ref setBuffer()
          * divided by size of a particular @ref BufferTextureFormat. The result
@@ -206,8 +207,9 @@ class MAGNUM_GL_EXPORT BufferTexture: public AbstractTexture {
          * own data setting functions. If @gl_extension{ARB,direct_state_access}
          * (part of OpenGL 4.5) is not available, the texture is bound before
          * the operation (if not already).
-         * @see @ref maxSize(), @fn_gl2_keyword{TextureBuffer,TexBuffer},
-         *      eventually @fn_gl{ActiveTexture}, @fn_gl{BindTexture} and
+         * @see @ref maxSize(), @ref resetBuffer(),
+         *      @fn_gl2_keyword{TextureBuffer,TexBuffer}, eventually
+         *      @fn_gl{ActiveTexture}, @fn_gl{BindTexture} and
          *      @fn_gl_keyword{TexBuffer}
          */
         BufferTexture& setBuffer(BufferTextureFormat internalFormat, Buffer& buffer);
@@ -225,12 +227,22 @@ class MAGNUM_GL_EXPORT BufferTexture: public AbstractTexture {
          * own data setting functions. If @gl_extension{ARB,direct_state_access}
          * (part of OpenGL 4.5) is not available, the texture is bound before
          * the operation (if not already).
-         * @see @ref maxSize(), @fn_gl2_keyword{TextureBufferRange,TexBufferRange},
-         *      eventually @fn_gl{ActiveTexture}, @fn_gl{BindTexture} and
+         * @see @ref maxSize(), @ref resetBuffer(),
+         *      @fn_gl2_keyword{TextureBufferRange,TexBufferRange}, eventually
+         *      @fn_gl{ActiveTexture}, @fn_gl{BindTexture} and
          *      @fn_gl_keyword{TexBufferRange}
          * @requires_gl43 Extension @gl_extension{ARB,texture_buffer_range}
          */
         BufferTexture& setBuffer(BufferTextureFormat internalFormat, Buffer& buffer, GLintptr offset, GLsizeiptr size);
+
+        /**
+         * @brief Remove existing buffer from the texture
+         * @return Reference to self (for method chaining)
+         * @m_since_latest
+         *
+         * @see @ref setBuffer()
+         */
+        BufferTexture& resetBuffer();
 
         /* Overloads to remove WTF-factor from method chaining order */
         #ifndef DOXYGEN_GENERATING_OUTPUT
@@ -245,14 +257,16 @@ class MAGNUM_GL_EXPORT BufferTexture: public AbstractTexture {
         #endif
 
     private:
+        friend Implementation::TextureState;
+
         explicit BufferTexture(GLuint id, ObjectFlags flags): AbstractTexture{id, GL_TEXTURE_BUFFER, flags} {}
 
-        void MAGNUM_GL_LOCAL setBufferImplementationDefault(BufferTextureFormat internalFormat, Buffer& buffer);
+        void MAGNUM_GL_LOCAL setBufferImplementationDefault(BufferTextureFormat internalFormat, Buffer* buffer);
         #ifdef MAGNUM_TARGET_GLES
-        void MAGNUM_GL_LOCAL setBufferImplementationEXT(BufferTextureFormat internalFormat, Buffer& buffer);
+        void MAGNUM_GL_LOCAL setBufferImplementationEXT(BufferTextureFormat internalFormat, Buffer* buffer);
         #endif
         #ifndef MAGNUM_TARGET_GLES
-        void MAGNUM_GL_LOCAL setBufferImplementationDSA(BufferTextureFormat internalFormat, Buffer& buffer);
+        void MAGNUM_GL_LOCAL setBufferImplementationDSA(BufferTextureFormat internalFormat, Buffer* buffer);
         #endif
 
         void MAGNUM_GL_LOCAL setBufferRangeImplementationDefault(BufferTextureFormat internalFormat, Buffer& buffer, GLintptr offset, GLsizeiptr size);

@@ -29,9 +29,20 @@
  * @brief Class @ref Magnum::Math::Half, literal @link Magnum::Math::Literals::operator""_h() @endlink
  */
 
-#include "Magnum/Math/Packing.h"
+#include <utility>
+#include <Corrade/Utility/Utility.h>
+
+#include "Magnum/visibility.h"
+#include "Magnum/Math/Math.h"
+#include "Magnum/Math/Tags.h"
 
 namespace Magnum { namespace Math {
+
+#ifndef DOXYGEN_GENERATING_OUTPUT
+/* So we don't need to drag in the whole Packing.h */
+MAGNUM_EXPORT UnsignedShort packHalf(Float value);
+MAGNUM_EXPORT Float unpackHalf(UnsignedShort value);
+#endif
 
 /**
 @brief Half-precision float literal
@@ -75,11 +86,20 @@ class Half {
         constexpr explicit Half(UnsignedShort data) noexcept: _data{data} {}
 
         /**
-         * @brief Construct a half value from 32-bit float representation
+         * @brief Construct a half value from a 32-bit float representation
          *
          * @see @ref packHalf()
          */
         explicit Half(Float value) noexcept: _data{packHalf(value)} {}
+
+        /**
+         * @brief Construct a half value from a 64-bit float representation
+         *
+         * Present only to aid generic code so e.g. @cpp T(1.0) @ce works
+         * without being ambigous.
+         * @see @ref packHalf()
+         */
+        explicit Half(Double value) noexcept: _data{packHalf(Float(value))} {}
 
         /** @brief Construct without initializing the contents */
         explicit Half(NoInitT) noexcept {}

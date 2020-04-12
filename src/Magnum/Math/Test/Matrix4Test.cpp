@@ -105,8 +105,10 @@ struct Matrix4Test: Corrade::TestSuite::Tester {
     void rotationNormalizedPart();
     void rotationNormalizedPartNotOrthogonal();
     void scalingPart();
+    void rotationScalingPartNegative();
     void uniformScalingPart();
     void uniformScalingPartNotUniform();
+    void normalMatrixPart();
     void vectorParts();
     void invertedRigid();
     void invertedRigidNotRigid();
@@ -172,8 +174,10 @@ Matrix4Test::Matrix4Test() {
               &Matrix4Test::rotationNormalizedPart,
               &Matrix4Test::rotationNormalizedPartNotOrthogonal,
               &Matrix4Test::scalingPart,
+              &Matrix4Test::rotationScalingPartNegative,
               &Matrix4Test::uniformScalingPart,
               &Matrix4Test::uniformScalingPartNotUniform,
+              &Matrix4Test::normalMatrixPart,
               &Matrix4Test::vectorParts,
               &Matrix4Test::invertedRigid,
               &Matrix4Test::invertedRigidNotRigid,
@@ -764,6 +768,35 @@ void Matrix4Test::scalingPart() {
     CORRADE_COMPARE(translationRotationScaling.scalingSquared(), (Vector3{0.25f, 12.25f, 1.44f}));
 }
 
+void Matrix4Test::rotationScalingPartNegative() {
+    /* Large angle */
+    Matrix4 largeAngle =
+        Matrix4::rotationY(215.0_degf)*
+        Matrix4::scaling({0.5f, 3.5f, 1.2f});
+    CORRADE_COMPARE(Matrix4::from(largeAngle.rotation(), {}),
+        Matrix4::rotationY(215.0_degf));
+    CORRADE_COMPARE(largeAngle.scaling(), (Vector3{0.5f, 3.5f, 1.2f}));
+    /* The parts should combine back to the same matrix */
+    CORRADE_COMPARE(
+        Matrix4::from(largeAngle.rotation(), {})*
+        Matrix4::scaling(largeAngle.scaling()),
+        largeAngle);
+
+    /* The sign gets contained in the rotation */
+    Matrix4 negativeScaling =
+        Matrix4::rotationY(15.0_degf)*
+        Matrix4::scaling({0.5f, -3.5f, 1.2f});
+    CORRADE_COMPARE(Matrix4::from(negativeScaling.rotation(), {}),
+        Matrix4::rotationY(15.0_degf)*
+        Matrix4::scaling(Vector3::yScale(-1)));
+    CORRADE_COMPARE(negativeScaling.scaling(), (Vector3{0.5f, 3.5f, 1.2f}));
+    /* The parts should combine back to the same matrix */
+    CORRADE_COMPARE(
+        Matrix4::from(negativeScaling.rotation(), {})*
+        Matrix4::scaling(negativeScaling.scaling()),
+        negativeScaling);
+}
+
 void Matrix4Test::uniformScalingPart() {
     const Matrix4 rotation = Matrix4::rotation(-74.0_degf, Vector3(-1.0f, 2.0f, 2.0f).normalized());
 
@@ -777,6 +810,38 @@ void Matrix4Test::uniformScalingPartNotUniform() {
         "Matrix(1, 0, 0,\n"
         "       0, 3, 0,\n"
         "       0, 0, 1)\n");
+}
+
+void Matrix4Test::normalMatrixPart() {
+    /* Comparing normalized matrices -- we care only about orientation, not
+       scaling as that's renormalized in the shader anyway */
+    auto unit = [](const Matrix3x3& a) {
+        return Matrix3x3{a[0].normalized(),
+                         a[1].normalized(),
+                         a[2].normalized()};
+    };
+
+    /* For just a rotation, normalMatrix is the same as the upper-left part
+       (and the same as the "classic" calculation) */
+    auto a = Matrix4::rotationY(35.0_degf);
+    CORRADE_COMPARE(a.normalMatrix(), a.rotationScaling());
+    CORRADE_COMPARE(a.normalMatrix(), a.rotationScaling().inverted().transposed());
+
+    /* For rotation + uniform scaling, normalMatrix is the same as the
+       normalized upper-left part (and the same as the "classic" calculation) */
+    auto b = Matrix4::rotationZ(35.0_degf)*Matrix4::scaling(Vector3{3.5f});
+    CORRADE_COMPARE(unit(b.normalMatrix()), unit(b.rotation()));
+    CORRADE_COMPARE(unit(b.normalMatrix()), unit(b.rotationScaling().inverted().transposed()));
+
+    /* Rotation and non-uniform scaling (= shear) is the same as the
+       "classic" calculation */
+    auto c = Matrix4::rotationX(35.0_degf)*Matrix4::scaling({0.3f, 1.1f, 3.5f});
+    CORRADE_COMPARE(unit(c.normalMatrix()), unit(c.rotationScaling().inverted().transposed()));
+
+    /* Reflection (or scaling by -1) is not -- the "classic" way has the sign
+       flipped */
+    auto d = Matrix4::rotationZ(35.0_degf)*Matrix4::reflection(Vector3{1.0f/Constants::sqrt3()});
+    CORRADE_COMPARE(-unit(d.normalMatrix()), unit(d.rotationScaling().inverted().transposed()));
 }
 
 void Matrix4Test::vectorParts() {

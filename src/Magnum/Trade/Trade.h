@@ -29,12 +29,12 @@
  * @brief Forward declarations for the @ref Magnum::Trade namespace
  */
 
-#include "Magnum/Types.h"
+#include <Corrade/Containers/Containers.h>
+
+#include "Magnum/Magnum.h"
 
 #ifdef MAGNUM_BUILD_DEPRECATED
 #include <Corrade/Utility/Macros.h>
-
-#include "Magnum/Magnum.h"
 #endif
 
 namespace Magnum { namespace Trade {
@@ -59,14 +59,25 @@ class AnimationData;
 enum class CameraType: UnsignedByte;
 class CameraData;
 
+enum class DataFlag: UnsignedByte;
+typedef Containers::EnumSet<DataFlag> DataFlags;
+
 template<UnsignedInt> class ImageData;
 typedef ImageData<1> ImageData1D;
 typedef ImageData<2> ImageData2D;
 typedef ImageData<3> ImageData3D;
 
 class LightData;
-class MeshData2D;
-class MeshData3D;
+
+enum class MeshAttribute: UnsignedShort;
+class MeshIndexData;
+class MeshAttributeData;
+class MeshData;
+
+#ifdef MAGNUM_BUILD_DEPRECATED
+class CORRADE_DEPRECATED("use MeshData instead") MeshData2D;
+class CORRADE_DEPRECATED("use MeshData instead") MeshData3D;
+#endif
 class MeshObjectData2D;
 class MeshObjectData3D;
 class ObjectData2D;

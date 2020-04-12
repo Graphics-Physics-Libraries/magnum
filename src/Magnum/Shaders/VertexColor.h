@@ -31,9 +31,6 @@
 
 #include "Magnum/DimensionTraits.h"
 #include "Magnum/GL/AbstractShaderProgram.h"
-#include "Magnum/Math/Color.h"
-#include "Magnum/Math/Matrix3.h"
-#include "Magnum/Math/Matrix4.h"
 #include "Magnum/Shaders/Generic.h"
 #include "Magnum/Shaders/visibility.h"
 
@@ -42,10 +39,10 @@ namespace Magnum { namespace Shaders {
 /**
 @brief Vertex color shader
 
-Draws vertex-colored mesh. You need to provide @ref Position and @ref Color
-attributes in your triangle mesh. By default, the shader renders the mesh in
-an identity transformation. Use @ref setTransformationProjectionMatrix() to
-configure the shader.
+Draws a vertex-colored mesh. You need to provide @ref Position and @ref Color3
+/ @ref Color4 attributes in your triangle mesh. By default, the shader renders
+the mesh in an identity transformation. Use
+@ref setTransformationProjectionMatrix() to configure the shader.
 
 @image html shaders-vertexcolor.png width=256px
 
@@ -106,7 +103,7 @@ template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT VertexColor: public
         #ifdef MAGNUM_BUILD_DEPRECATED
         /**
          * @brief Vertex color
-         * @deprecated Use @ref Color3 or @ref Color4 instead.
+         * @m_deprecated_since{2018,10} Use @ref Color3 or @ref Color4 instead.
          */
         typedef CORRADE_DEPRECATED("use Color3 or Color4 instead") typename Generic<dimensions>::Color Color;
         #endif
@@ -122,6 +119,8 @@ template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT VertexColor: public
          *
          * This function can be safely used for constructing (and later
          * destructing) objects even without any OpenGL context being active.
+         * However note that this is a low-level and a potentially dangerous
+         * API, see the documentation of @ref NoCreate for alternatives.
          */
         explicit VertexColor(NoCreateT) noexcept: AbstractShaderProgram{NoCreate} {}
 
@@ -143,12 +142,17 @@ template<UnsignedInt dimensions> class MAGNUM_SHADERS_EXPORT VertexColor: public
          *
          * Default is an identity matrix.
          */
-        VertexColor<dimensions>& setTransformationProjectionMatrix(const MatrixTypeFor<dimensions, Float>& matrix) {
-            setUniform(_transformationProjectionMatrixUniform, matrix);
-            return *this;
-        }
+        VertexColor<dimensions>& setTransformationProjectionMatrix(const MatrixTypeFor<dimensions, Float>& matrix);
 
     private:
+        /* Prevent accidentally calling irrelevant functions */
+        #ifndef MAGNUM_TARGET_GLES
+        using GL::AbstractShaderProgram::drawTransformFeedback;
+        #endif
+        #if !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
+        using GL::AbstractShaderProgram::dispatchCompute;
+        #endif
+
         Int _transformationProjectionMatrixUniform{0};
 };
 

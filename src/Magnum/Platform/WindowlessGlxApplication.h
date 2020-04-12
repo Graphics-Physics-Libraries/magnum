@@ -47,20 +47,25 @@
 /* undef Xlib nonsense to avoid conflicts */
 #undef Always
 #undef Complex
+#undef Convex
 #undef None
 #undef Status
-
+#undef Success
+#undef Button1
+#undef Button2
+#undef Button3
+#undef Button4
+#undef Button5
 
 namespace Magnum { namespace Platform {
 
 /**
 @brief Windowless GLX context
 
-@m_keywords{WindowlessGLContext}
+@m_keywords{WindowlessGLContext GLX}
 
 GL context using pure X11 and GLX, used in @ref WindowlessGlxApplication. Does
-not have any default framebuffer. It is built if `WITH_WINDOWLESSGLXAPPLICATION`
-is enabled in CMake.
+not have any default framebuffer.
 
 Meant to be used when there is a need to manage (multiple) GL contexts
 manually. See @ref platform-windowless-contexts for more information. If no
@@ -134,6 +139,17 @@ class WindowlessGlxContext {
          * otherwise returns @cpp true @ce.
          */
         bool makeCurrent();
+
+        /**
+         * @brief Underlying OpenGL context
+         * @m_since_latest
+         *
+         * Use in case you need to call GLX functionality directly or in order
+         * to create a shared context. Returns @cpp nullptr @ce in case the
+         * context was not created yet.
+         * @see @ref Configuration::setSharedContext()
+         */
+        GLXContext glContext() { return _context; }
 
     private:
         Display* _display{};
@@ -234,8 +250,33 @@ class WindowlessGlxContext::Configuration {
             return *this;
         }
 
+        /**
+         * @brief Create a shared context
+         * @return Reference to self (for method chaining)
+         * @m_since_latest
+         *
+         * When set, the created context will share a subset of OpenGL objects
+         * with @p context, instead of being independent. Many caveats and
+         * limitations apply to shared OpenGL contexts, please consult the
+         * OpenGL specification for details. Default is @cpp nullptr @ce, i.e.
+         * no sharing.
+         * @see @ref WindowlessGlxContext::glContext(),
+         *      @ref WindowlessGlxApplication::glContext()
+         */
+        Configuration& setSharedContext(GLXContext ctx) {
+            _sharedContext = ctx;
+            return *this;
+        }
+
+        /**
+         * @brief Shared context
+         * @m_since_latest
+         */
+        GLXContext sharedContext() const { return _sharedContext; }
+
     private:
         Flags _flags;
+        GLXContext _sharedContext = nullptr;
 };
 
 CORRADE_ENUMSET_OPERATORS(WindowlessGlxContext::Configuration::Flags)
@@ -243,13 +284,11 @@ CORRADE_ENUMSET_OPERATORS(WindowlessGlxContext::Configuration::Flags)
 /**
 @brief Windowless GLX application
 
-@m_keywords{WindowlessApplication}
+@m_keywords{WindowlessApplication GLX}
 
 Application for offscreen rendering using @ref WindowlessGlxContext. This
 application library is available on desktop OpenGL and
-@ref MAGNUM_TARGET_DESKTOP_GLES "OpenGL ES emulation on desktop" on Linux. It
-depends on **X11** library and is built if `WITH_WINDOWLESSGLXAPPLICATION` is
-enabled in CMake.
+@ref MAGNUM_TARGET_DESKTOP_GLES "OpenGL ES emulation on desktop" on Linux.
 
 @section Platform-WindowlessGlxApplication-bootstrap Bootstrap application
 
@@ -272,8 +311,11 @@ See @ref cmake for more information.
 
 @section Platform-WindowlessGlxApplication-usage General usage
 
-In order to use this library from CMake, you need to request the
-`WindowlessGlxApplication` component of the `Magnum` package and link to the `Magnum::WindowlessGlxApplication` target:
+This application library depends on the **X11** library and is built if
+`WITH_WINDOWLESSGLXAPPLICATION` is enabled when building Magnum. To use this
+library with CMake, you need to request the `WindowlessGlxApplication`
+component of the `Magnum` package and link to the
+`Magnum::WindowlessGlxApplication` target:
 
 @code{.cmake}
 find_package(Magnum REQUIRED)
@@ -283,8 +325,17 @@ endif()
 
 # ...
 if(CORRADE_TARGET_UNIX)
-    target_link_libraries(your-app Magnum::WindowlessGlxApplication)
+    target_link_libraries(your-app PRIVATE Magnum::WindowlessGlxApplication)
 endif()
+@endcode
+
+Additionally, if you're using Magnum as a CMake subproject, do the following
+* *before* calling @cmake find_package() @ce to ensure it's enabled, as the
+library is not built by default:
+
+@code{.cmake}
+set(WITH_WINDOWLESSGLXAPPLICATION ON CACHE BOOL "" FORCE)
+add_subdirectory(magnum EXCLUDE_FROM_ALL)
 @endcode
 
 If no other application is requested, you can also use the generic
@@ -378,6 +429,17 @@ class WindowlessGlxApplication {
          */
         virtual int exec() = 0;
 
+        /**
+         * @brief Underlying OpenGL context
+         * @m_since_latest
+         *
+         * Use in case you need to call GLX functionality directly or in order
+         * to create a shared context. Returns @cpp nullptr @ce in case the
+         * context was not created yet.
+         * @see @ref Configuration::setSharedContext()
+         */
+        GLXContext glContext() { return _glContext.glContext(); }
+
     protected:
         /* Nobody will need to have (and delete) WindowlessGlxApplication*,
            thus this is faster than public pure virtual destructor */
@@ -416,6 +478,8 @@ class WindowlessGlxApplication {
 /** @hideinitializer
 @brief Entry point for windowless GLX application
 @param className Class name
+
+@m_keywords{MAGNUM_WINDOWLESSAPPLICATION_MAIN()}
 
 See @ref Magnum::Platform::WindowlessGlxApplication "Platform::WindowlessGlxApplication"
 for usage information. This macro abstracts out platform-specific entry point

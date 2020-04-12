@@ -23,7 +23,9 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+#include <sstream>
 #include <Corrade/TestSuite/Tester.h>
+#include <Corrade/Utility/DebugStl.h>
 
 #include "Magnum/Shaders/DistanceFieldVector.h"
 
@@ -32,47 +34,57 @@ namespace Magnum { namespace Shaders { namespace Test { namespace {
 struct DistanceFieldVectorTest: TestSuite::Tester {
     explicit DistanceFieldVectorTest();
 
-    void constructNoCreate2D();
-    void constructNoCreate3D();
+    template<UnsignedInt dimensions> void constructNoCreate();
+    template<UnsignedInt dimensions> void constructCopy();
 
-    void constructCopy2D();
-    void constructCopy3D();
+    void debugFlag();
+    void debugFlags();
 };
 
 DistanceFieldVectorTest::DistanceFieldVectorTest() {
-    addTests({&DistanceFieldVectorTest::constructNoCreate2D,
-              &DistanceFieldVectorTest::constructNoCreate3D,
+    addTests({&DistanceFieldVectorTest::constructNoCreate<2>,
+              &DistanceFieldVectorTest::constructNoCreate<3>,
 
-              &DistanceFieldVectorTest::constructCopy2D,
-              &DistanceFieldVectorTest::constructCopy3D});
+              &DistanceFieldVectorTest::constructCopy<2>,
+              &DistanceFieldVectorTest::constructCopy<3>,
+
+              &DistanceFieldVectorTest::debugFlag,
+              &DistanceFieldVectorTest::debugFlags});
 }
 
-void DistanceFieldVectorTest::constructNoCreate2D() {
+template<UnsignedInt dimensions> void DistanceFieldVectorTest::constructNoCreate() {
+    setTestCaseTemplateName(std::to_string(dimensions));
+
     {
-        DistanceFieldVector2D shader{NoCreate};
+        DistanceFieldVector<dimensions> shader{NoCreate};
         CORRADE_COMPARE(shader.id(), 0);
     }
 
     CORRADE_VERIFY(true);
 }
 
-void DistanceFieldVectorTest::constructNoCreate3D() {
-    {
-        DistanceFieldVector3D shader{NoCreate};
-        CORRADE_COMPARE(shader.id(), 0);
-    }
+template<UnsignedInt dimensions> void DistanceFieldVectorTest::constructCopy() {
+    setTestCaseTemplateName(std::to_string(dimensions));
 
-    CORRADE_VERIFY(true);
+    CORRADE_VERIFY((std::is_constructible<DistanceFieldVector<dimensions>, DistanceFieldVector<dimensions>&&>{}));
+    CORRADE_VERIFY(!(std::is_constructible<DistanceFieldVector<dimensions>, const DistanceFieldVector<dimensions>&>{}));
+
+    CORRADE_VERIFY((std::is_assignable<DistanceFieldVector<dimensions>, DistanceFieldVector<dimensions>&&>{}));
+    CORRADE_VERIFY(!(std::is_assignable<DistanceFieldVector<dimensions>, const DistanceFieldVector<dimensions>&>{}));
 }
 
-void DistanceFieldVectorTest::constructCopy2D() {
-    CORRADE_VERIFY(!(std::is_constructible<DistanceFieldVector2D, const DistanceFieldVector2D&>{}));
-    CORRADE_VERIFY(!(std::is_assignable<DistanceFieldVector2D, const DistanceFieldVector2D&>{}));
+void DistanceFieldVectorTest::debugFlag() {
+    std::ostringstream out;
+
+    Debug{&out} << DistanceFieldVector2D::Flag::TextureTransformation << DistanceFieldVector2D::Flag(0xf0);
+    CORRADE_COMPARE(out.str(), "Shaders::DistanceFieldVector::Flag::TextureTransformation Shaders::DistanceFieldVector::Flag(0xf0)\n");
 }
 
-void DistanceFieldVectorTest::constructCopy3D() {
-    CORRADE_VERIFY(!(std::is_constructible<DistanceFieldVector3D, const DistanceFieldVector3D&>{}));
-    CORRADE_VERIFY(!(std::is_assignable<DistanceFieldVector3D, const DistanceFieldVector3D&>{}));
+void DistanceFieldVectorTest::debugFlags() {
+    std::ostringstream out;
+
+    Debug{&out} << DistanceFieldVector3D::Flags{DistanceFieldVector3D::Flag::TextureTransformation|DistanceFieldVector3D::Flag(0xf0)} << DistanceFieldVector3D::Flags{};
+    CORRADE_COMPARE(out.str(), "Shaders::DistanceFieldVector::Flag::TextureTransformation|Shaders::DistanceFieldVector::Flag(0xf0) Shaders::DistanceFieldVector::Flags{}\n");
 }
 
 }}}}

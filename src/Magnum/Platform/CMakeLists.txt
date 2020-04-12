@@ -36,8 +36,8 @@ set(MagnumPlatform_HEADERS
 
 set(MagnumPlatform_PRIVATE_HEADERS )
 
-# DPI scaling queries only for EmscriptenApplication, Sdl2Application and
-# GlfwApplication at the moment, build the files only then
+# DPI scaling queries and related stuff for EmscriptenApplication,
+# Sdl2Application and GlfwApplication
 if(WITH_EMSCRIPTENAPPLICATION OR WITH_GLFWAPPLICATION OR WITH_SDL2APPLICATION)
     # List of libraries to link when using the MagnumPlatformObjects target
     # TODO: use target_link_libraries() when we are on a CMake version that
@@ -92,17 +92,27 @@ set(MagnumPlatform_FILES )
 
 install(FILES ${MagnumPlatform_HEADERS} DESTINATION ${MAGNUM_INCLUDE_INSTALL_DIR}/Platform)
 
-# Decide about platform-specific context for cross-platform toolkits
-if((WITH_GLFWAPPLICATION OR WITH_SDL2APPLICATION) AND TARGET_GL)
-    if(CORRADE_TARGET_APPLE AND NOT MAGNUM_TARGET_GLES)
-        set(NEED_CGLCONTEXT 1)
-        set(MagnumSomeContext_OBJECTS $<TARGET_OBJECTS:MagnumCglContextObjects>)
-    elseif(CORRADE_TARGET_WINDOWS AND (NOT MAGNUM_TARGET_GLES OR MAGNUM_TARGET_DESKTOP_GLES))
-        set(NEED_WGLCONTEXT 1)
-        set(MagnumSomeContext_OBJECTS $<TARGET_OBJECTS:MagnumWglContextObjects>)
-    elseif(CORRADE_TARGET_UNIX AND (NOT MAGNUM_TARGET_GLES OR MAGNUM_TARGET_DESKTOP_GLES))
-        set(NEED_GLXCONTEXT 1)
-        set(MagnumSomeContext_OBJECTS $<TARGET_OBJECTS:MagnumGlxContextObjects>)
+if(TARGET_GL)
+    # Decide about platform-specific context for cross-platform toolkits
+    if(WITH_GLFWAPPLICATION OR WITH_SDL2APPLICATION)
+        if(CORRADE_TARGET_APPLE AND NOT MAGNUM_TARGET_GLES)
+            set(NEED_CGLCONTEXT 1)
+            set(MagnumSomeContext_OBJECTS $<TARGET_OBJECTS:MagnumCglContextObjects>)
+        elseif(CORRADE_TARGET_WINDOWS AND (NOT MAGNUM_TARGET_GLES OR MAGNUM_TARGET_DESKTOP_GLES))
+            set(NEED_WGLCONTEXT 1)
+            set(MagnumSomeContext_OBJECTS $<TARGET_OBJECTS:MagnumWglContextObjects>)
+        elseif(CORRADE_TARGET_UNIX AND (NOT MAGNUM_TARGET_GLES OR MAGNUM_TARGET_DESKTOP_GLES))
+            set(NEED_GLXCONTEXT 1)
+            set(MagnumSomeContext_OBJECTS $<TARGET_OBJECTS:MagnumGlxContextObjects>)
+        elseif(MAGNUM_TARGET_GLES AND NOT CORRADE_TARGET_EMSCRIPTEN)
+            set(NEED_EGLCONTEXT 1)
+            set(MagnumSomeContext_OBJECTS $<TARGET_OBJECTS:MagnumEglContextObjects>)
+            # We're linking to EGL explicitly, no need to bother with GLVND there
+        endif()
+    endif()
+
+    # This is needed also by [Windowless]GlxApplication
+    if((WITH_GLXAPPLICATION OR WITH_WINDOWLESSGLXAPPLICATION OR WITH_GLFWAPPLICATION OR WITH_SDL2APPLICATION) AND CORRADE_TARGET_UNIX AND (NOT MAGNUM_TARGET_GLES OR MAGNUM_TARGET_DESKTOP_GLES))
         # If the GLVND library (CMake 3.11+) was found and linked to, we need
         # to link to GLX explicitly. Otherwise (and also on all systems except
         # Linux) the transitive dependency to classic GL lib from MagnumGL is
@@ -113,10 +123,6 @@ if((WITH_GLFWAPPLICATION OR WITH_SDL2APPLICATION) AND TARGET_GL)
         if(OPENGL_opengl_LIBRARY AND OpenGL_GL_PREFERENCE STREQUAL GLVND)
             set(MagnumSomeContext_LIBRARY OpenGL::GLX)
         endif()
-    elseif(MAGNUM_TARGET_GLES AND NOT CORRADE_TARGET_EMSCRIPTEN)
-        set(NEED_EGLCONTEXT 1)
-        set(MagnumSomeContext_OBJECTS $<TARGET_OBJECTS:MagnumEglContextObjects>)
-        # We're linking to EGL explicitly, no need to bother with GLVND there
     endif()
 endif()
 
@@ -138,6 +144,7 @@ if(WITH_ANDROIDAPPLICATION)
     set(MagnumAndroidApplication_PRIVATE_HEADERS
         Implementation/Egl.h)
 
+    enable_language(C)
     add_library(MagnumAndroidApplicationGlue OBJECT
         "${CMAKE_ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c")
     set_target_properties(MagnumAndroidApplicationGlue PROPERTIES
@@ -261,6 +268,21 @@ if(WITH_GLFWAPPLICATION)
         LIBRARY DESTINATION ${MAGNUM_LIBRARY_INSTALL_DIR}
         ARCHIVE DESTINATION ${MAGNUM_LIBRARY_INSTALL_DIR})
 
+    # Copy the GLFW DLL next to the place where all executables are stored to
+    # help people running the apps
+    if(CMAKE_RUNTIME_OUTPUT_DIRECTORY AND CORRADE_TARGET_WINDOWS AND (GLFW_DLL_DEBUG OR GLFW_DLL_RELEASE))
+        if(GLFW_DLL_DEBUG AND GLFW_DLL_RELEASE)
+            add_custom_command(TARGET MagnumGlfwApplication POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different $<$<CONFIG:Debug>:${GLFW_DLL_DEBUG}>$<$<NOT:$<CONFIG:Debug>>:${GLFW_DLL_RELEASE}> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+        elseif(GLFW_DLL_DEBUG)
+            add_custom_command(TARGET MagnumGlfwApplication POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${GLFW_DLL_DEBUG} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+        else()
+            add_custom_command(TARGET MagnumGlfwApplication POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${GLFW_DLL_RELEASE} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+        endif()
+    endif()
+
     # Magnum GlfwApplication target alias for superprojects
     add_library(Magnum::GlfwApplication ALIAS MagnumGlfwApplication)
 endif()
@@ -315,6 +337,21 @@ if(WITH_SDL2APPLICATION)
         RUNTIME DESTINATION ${MAGNUM_BINARY_INSTALL_DIR}
         LIBRARY DESTINATION ${MAGNUM_LIBRARY_INSTALL_DIR}
         ARCHIVE DESTINATION ${MAGNUM_LIBRARY_INSTALL_DIR})
+
+    # Copy the SDL2 DLL next to the place where all executables are stored to
+    # help people running the apps
+    if(CMAKE_RUNTIME_OUTPUT_DIRECTORY AND CORRADE_TARGET_WINDOWS AND (SDL2_DLL_DEBUG OR SDL2_DLL_RELEASE))
+        if(SDL2_DLL_DEBUG AND SDL2_DLL_RELEASE)
+            add_custom_command(TARGET MagnumSdl2Application POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different $<$<CONFIG:Debug>:${SDL2_DLL_DEBUG}>$<$<NOT:$<CONFIG:Debug>>,${SDL2_DLL_RELEASE}> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+        elseif(SDL2_DLL_DEBUG)
+            add_custom_command(TARGET MagnumSdl2Application POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SDL2_DLL_DEBUG} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+        else()
+            add_custom_command(TARGET MagnumSdl2Application POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SDL2_DLL_RELEASE} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+        endif()
+    endif()
 
     # Magnum Sdl2Application target alias for superprojects
     add_library(Magnum::Sdl2Application ALIAS MagnumSdl2Application)
@@ -949,6 +986,14 @@ if(WITH_GL_INFO)
             MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/MacOSXBundleInfo.plist.in
             XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "YES")
     elseif(CORRADE_TARGET_EMSCRIPTEN)
+        add_custom_command(TARGET magnum-gl-info POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_CURRENT_SOURCE_DIR}/WebApplication.css
+                ${CMAKE_CURRENT_SOURCE_DIR}/WindowlessEmscriptenApplication.js
+                $<TARGET_FILE_DIR:magnum-gl-info>
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_CURRENT_SOURCE_DIR}/gl-info.html
+                $<TARGET_FILE_DIR:magnum-gl-info>/magnum-gl-info.html)
         install(FILES gl-info.html DESTINATION ${MAGNUM_DEPLOY_PREFIX}/magnum-gl-info RENAME index.html)
         install(TARGETS magnum-gl-info DESTINATION ${MAGNUM_DEPLOY_PREFIX}/magnum-gl-info)
         install(FILES
@@ -956,8 +1001,8 @@ if(WITH_GL_INFO)
             WindowlessEmscriptenApplication.js
             DESTINATION ${MAGNUM_DEPLOY_PREFIX}/magnum-gl-info)
         install(FILES
-            ${CMAKE_CURRENT_BINARY_DIR}/magnum-gl-info.js.mem
-            ${CMAKE_CURRENT_BINARY_DIR}/magnum-gl-info.wasm
+            $<TARGET_FILE_DIR:magnum-gl-info>/magnum-gl-info.js.mem
+            $<TARGET_FILE_DIR:magnum-gl-info>/magnum-gl-info.wasm
             DESTINATION ${MAGNUM_DEPLOY_PREFIX}/magnum-gl-info OPTIONAL)
     endif()
 

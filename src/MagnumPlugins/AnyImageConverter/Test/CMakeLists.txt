@@ -32,32 +32,40 @@ endif()
 # CMake before 3.8 has broken $<TARGET_FILE*> expressions for iOS (see
 # https://gitlab.kitware.com/cmake/cmake/merge_requests/404) and since Corrade
 # doesn't support dynamic plugins on iOS, this sorta works around that. Should
-# be revisited when updating Travis to newer Xcode (current has CMake 3.6).
+# be revisited when updating Travis to newer Xcode (xcode7.3 has CMake 3.6).
 if(NOT BUILD_PLUGINS_STATIC)
     set(ANYIMAGECONVERTER_PLUGIN_FILENAME $<TARGET_FILE:AnyImageConverter>)
     if(WITH_TGAIMAGECONVERTER)
         set(TGAIMAGECONVERTER_PLUGIN_FILENAME $<TARGET_FILE:TgaImageConverter>)
     endif()
-
-    # First replace ${} variables, then $<> generator expressions
-    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/configure.h.cmake
-                   ${CMAKE_CURRENT_BINARY_DIR}/configure.h.in)
-    file(GENERATE OUTPUT $<TARGET_FILE_DIR:AnyImageConverterTest>/configure.h
-        INPUT ${CMAKE_CURRENT_BINARY_DIR}/configure.h.in)
-else()
-    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/configure.h.cmake
-                   ${CMAKE_CURRENT_BINARY_DIR}/configure.h)
 endif()
+
+# First replace ${} variables, then $<> generator expressions
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/configure.h.cmake
+               ${CMAKE_CURRENT_BINARY_DIR}/configure.h.in)
+file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/configure.h
+    INPUT ${CMAKE_CURRENT_BINARY_DIR}/configure.h.in)
 
 corrade_add_test(AnyImageConverterTest AnyImageConverterTest.cpp
     LIBRARIES MagnumTrade)
-if(NOT BUILD_PLUGINS_STATIC)
-    target_include_directories(AnyImageConverterTest PRIVATE $<TARGET_FILE_DIR:AnyImageConverterTest>)
-else()
-    target_include_directories(AnyImageConverterTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(AnyImageConverterTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>)
+if(BUILD_PLUGINS_STATIC)
     target_link_libraries(AnyImageConverterTest PRIVATE AnyImageConverter)
     if(WITH_TGAIMAGECONVERTER)
         target_link_libraries(AnyImageConverterTest PRIVATE TgaImageConverter)
     endif()
+else()
+    # So the plugins get properly built when building the test
+    add_dependencies(AnyImageConverterTest AnyImageConverter)
+    if(WITH_TGAIMAGECONVERTER)
+        add_dependencies(AnyImageConverterTest TgaImageConverter)
+    endif()
 endif()
 set_target_properties(AnyImageConverterTest PROPERTIES FOLDER "MagnumPlugins/AnyImageConverter/Test")
+if(CORRADE_BUILD_STATIC AND NOT BUILD_PLUGINS_STATIC)
+    # CMake < 3.4 does this implicitly, but 3.4+ not anymore (see CMP0065).
+    # That's generally okay, *except if* the build is static, the executable
+    # uses a plugin manager and needs to share globals with the plugins (such
+    # as output redirection and so on).
+    set_target_properties(AnyImageConverterTest PROPERTIES ENABLE_EXPORTS ON)
+endif()

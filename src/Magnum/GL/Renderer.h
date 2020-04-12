@@ -183,7 +183,8 @@ class MAGNUM_GL_EXPORT Renderer {
             #ifdef MAGNUM_BUILD_DEPRECATED
             /**
              * Perform sRGB conversion of values written to sRGB framebuffers.
-             * @deprecated Use @ref Feature::FramebufferSrgb instead.
+             * @m_deprecated_since{2018,10} Use @ref Feature::FramebufferSrgb
+             *      instead.
              */
             FramebufferSRGB CORRADE_DEPRECATED_ENUM("use GL::Renderer::Feature::FramebufferSrgb instead") = FramebufferSrgb,
             #endif
@@ -323,12 +324,50 @@ class MAGNUM_GL_EXPORT Renderer {
          */
         static void enable(Feature feature);
 
+        #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
+        /**
+         * @brief Enable a feature for given draw buffer
+         * @param feature       Feature to enable
+         * @param drawBuffer    Draw buffer index
+         * @m_since_latest
+         *
+         * @see @ref disable(Feature, UnsignedInt),
+         *      @ref setFeature(Feature, UnsignedInt, bool),
+         *      @ref GL-Framebuffer-usage-multiple-outputs,
+         *      @fn_gl2_keyword{Enablei,Enable}
+         * @requires_gl30 Extension @gl_extension{EXT,draw_buffers2}
+         * @requires_gles32 Extension @gl_extension{EXT,draw_buffers_indexed}
+         * @requires_webgl_extension WebGL 2.0 and extension
+         *      @webgl_extension{EXT,draw_buffers_indexed}
+         */
+        static void enable(Feature feature, UnsignedInt drawBuffer);
+        #endif
+
         /**
          * @brief Disable a feature
          *
          * @see @ref enable(), @ref setFeature(), @fn_gl_keyword{Disable}
          */
         static void disable(Feature feature);
+
+        #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
+        /**
+         * @brief Disable a feature for given draw buffer
+         * @param feature       Feature to disable
+         * @param drawBuffer    Draw buffer index
+         * @m_since_latest
+         *
+         * @see @ref enable(Feature, UnsignedInt),
+         *      @ref setFeature(Feature, UnsignedInt, bool),
+         *      @ref GL-Framebuffer-usage-multiple-outputs
+         *      @fn_gl2_keyword{Disablei,Disable}
+         * @requires_gl30 Extension @gl_extension{EXT,draw_buffers2}
+         * @requires_gles32 Extension @gl_extension{EXT,draw_buffers_indexed}
+         * @requires_webgl_extension WebGL 2.0 and extension
+         *      @webgl_extension{EXT,draw_buffers_indexed}
+         */
+        static void disable(Feature feature, UnsignedInt drawBuffer);
+        #endif
 
         /**
          * @brief Enable or disable a feature
@@ -341,6 +380,24 @@ class MAGNUM_GL_EXPORT Renderer {
          * unnecessary branching.
          */
         static void setFeature(Feature feature, bool enabled);
+
+        #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
+        /**
+         * @brief Enable or disable a feature for given draw buffer
+         * @param feature       Feature to toggle
+         * @param drawBuffer    Draw buffer index
+         * @param enabled       Enable or disable
+         *
+         * @see @ref enable(Feature, UnsignedInt),
+         *      @ref disable(Feature, UnsignedInt),
+         *      @ref GL-Framebuffer-usage-multiple-outputs
+         * @requires_gl30 Extension @gl_extension{EXT,draw_buffers2}
+         * @requires_gles32 Extension @gl_extension{EXT,draw_buffers_indexed}
+         * @requires_webgl_extension WebGL 2.0 and extension
+         *      @webgl_extension{EXT,draw_buffers_indexed}
+         */
+        static void setFeature(Feature feature, UnsignedInt drawBuffer, bool enabled);
+        #endif
 
         /**
          * @brief Hint
@@ -393,7 +450,11 @@ class MAGNUM_GL_EXPORT Renderer {
          */
         static void setHint(Hint target, HintMode mode);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Clearing values */
 
@@ -458,9 +519,13 @@ class MAGNUM_GL_EXPORT Renderer {
          */
         static void setClearStencil(Int stencil);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
-        /** @name Polygon drawing settings */
+        /** @{ @name Polygon drawing settings */
 
         /**
          * @brief Front facing polygon winding
@@ -628,7 +693,74 @@ class MAGNUM_GL_EXPORT Renderer {
         static void setMinSampleShading(Float value);
         #endif
 
-        /*@}*/
+        #if !defined(MAGNUM_TARGET_GLES2) && !defined(MAGNUM_TARGET_WEBGL)
+        /**
+         * @brief Max supported component patch vertex count
+         * @m_since_latest
+         *
+         * The result is cached, repeated queries don't result in repeated
+         * OpenGL calls. If neither @gl_extension{ARB,tessellation_shader} (part
+         * of OpenGL 4.0) nor @gl_extension{ANDROID,extension_pack_es31a} /
+         * @gl_extension{EXT,tessellation_shader} ES extension is available,
+         * returns @cpp 0 @ce.
+         * @see @fn_gl{Get} with @def_gl_keyword{MAX_PATCH_VERTICES}
+         * @requires_gles30 Not defined in OpenGL ES 2.0.
+         * @requires_gles Tessellation shaders are not available in WebGL.
+         */
+        static UnsignedInt maxPatchVertexCount();
+
+        /**
+         * @brief Set tessellation patch vertex count
+         * @m_since_latest
+         *
+         * Specifies number of vertices that will be used to make up a single
+         * tessellation patch primitive.
+         * @see @ref maxPatchVertexCount(),
+         *      @fn_gl_keyword{PatchParameter} with @def_gl{PATCH_VERTICES}
+         * @requires_gl40 Extension @gl_extension{ARB,tessellation_shader}
+         * @requires_gles30 Not defined in OpenGL ES 2.0.
+         * @requires_gles32 Extension @gl_extension{ANDROID,extension_pack_es31a} /
+         *      @gl_extension{EXT,tessellation_shader}
+         * @requires_gles Tessellation shaders are not available in WebGL.
+         */
+        static void setPatchVertexCount(UnsignedInt count);
+        #endif
+
+        #ifndef MAGNUM_TARGET_GLES
+        /**
+         * @brief Set default patch inner tessellation level
+         * @m_since_latest
+         *
+         * When no tessellation control shader is present, specifies the
+         * default inner tessellation levels to be used.
+         * @see @fn_gl_keyword{PatchParameter} with
+         *      @def_gl{PATCH_DEFAULT_INNER_LEVEL}
+         * @requires_gl40 Extension @gl_extension{ARB,tessellation_shader}
+         * @requires_gl A tessellation control shader has to be always present
+         *      in OpenGL ES.
+         */
+        static void setPatchDefaultInnerLevel(const Vector2& levels);
+
+        /**
+         * @brief Set default patch outer tessellation level
+         * @m_since_latest
+         *
+         * When no tessellation control shader is present, specifies the
+         * default outer tessellation levels to be used.
+         * @see @fn_gl_keyword{PatchParameter} with
+         *      @def_gl{PATCH_DEFAULT_OUTER_LEVEL}
+         * @requires_gl40 Extension @gl_extension{ARB,tessellation_shader}
+         * @requires_gl A tessellation control shader has to be always present
+         *      in OpenGL ES.
+         */
+        static void setPatchDefaultOuterLevel(const Vector4& levels);
+        #endif
+
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Scissor operations */
 
@@ -640,7 +772,11 @@ class MAGNUM_GL_EXPORT Renderer {
          */
         static void setScissor(const Range2Di& rectangle);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Stencil operations */
 
@@ -758,7 +894,11 @@ class MAGNUM_GL_EXPORT Renderer {
          */
         static void setStencilOperation(StencilOperation stencilFail, StencilOperation depthFail, StencilOperation depthPass);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Depth testing */
 
@@ -777,20 +917,47 @@ class MAGNUM_GL_EXPORT Renderer {
          */
         static void setDepthFunction(DepthFunction function);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Masking writes */
 
         /**
          * @brief Mask color writes
+         * @param allowRed      Allow red channel to be written
+         * @param allowGreen    Allow green channel to be written
+         * @param allowBlue     Allow blue channel to be written
+         * @param allowAlpha    Allow alpha channel to be written
          *
          * Set to @cpp false @ce to disallow writing to given color channel.
          * Initial values are all @cpp true @ce.
          * @see @ref setDepthMask(), @ref setStencilMask(),
          *      @fn_gl_keyword{ColorMask}
-         * @todo Masking only given draw buffer
          */
         static void setColorMask(GLboolean allowRed, GLboolean allowGreen, GLboolean allowBlue, GLboolean allowAlpha);
+
+        #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
+        /**
+         * @brief Mask color writes for given draw buffer
+         * @param drawBuffer    Draw buffer index
+         * @param allowRed      Allow red channel to be written
+         * @param allowGreen    Allow green channel to be written
+         * @param allowBlue     Allow blue channel to be written
+         * @param allowAlpha    Allow alpha channel to be written
+         * @m_since_latest
+         *
+         * @see @ref GL-Framebuffer-usage-multiple-outputs,
+         *      @fn_gl2_keyword{ColorMaski,ColorMask}
+         * @requires_gl30 Extension @gl_extension{EXT,draw_buffers2}
+         * @requires_gles32 Extension @gl_extension{EXT,draw_buffers_indexed}
+         * @requires_webgl_extension WebGL 2.0 and extension
+         *      @webgl_extension{EXT,draw_buffers_indexed}
+         */
+        static void setColorMask(UnsignedInt drawBuffer, GLboolean allowRed, GLboolean allowGreen, GLboolean allowBlue, GLboolean allowAlpha);
+        #endif
 
         /**
          * @brief Mask depth writes
@@ -824,7 +991,11 @@ class MAGNUM_GL_EXPORT Renderer {
          */
         static void setStencilMask(UnsignedInt allowBits);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /**
          * @{ @name Blending
@@ -1199,6 +1370,7 @@ class MAGNUM_GL_EXPORT Renderer {
 
         /**
          * @brief Set blend equation
+         * @param equation  Blend equation
          *
          * How to combine source color (pixel value) with destination color
          * (framebuffer). Initial value is @ref BlendEquation::Add.
@@ -1208,14 +1380,51 @@ class MAGNUM_GL_EXPORT Renderer {
          */
         static void setBlendEquation(BlendEquation equation);
 
+        #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
+        /**
+         * @brief Set blend equation for given draw buffer
+         * @param drawBuffer    Draw buffer index
+         * @param equation      Blend equation
+         * @m_since_latest
+         *
+         * @see @ref GL-Framebuffer-usage-multiple-outputs,
+         *      @fn_gl2_keyword{BlendEquationi,BlendEquation}
+         * @requires_gl40 Extension @gl_extension{ARB,draw_buffers_blend}
+         * @requires_gles32 Extension @gl_extension{EXT,draw_buffers_indexed}
+         * @requires_webgl_extension WebGL 2.0 and extension
+         *      @webgl_extension{EXT,draw_buffers_indexed}
+         */
+        static void setBlendEquation(UnsignedInt drawBuffer, BlendEquation equation);
+        #endif
+
         /**
          * @brief Set blend equation separately for RGB and alpha components
+         * @param rgb           Blend equation for RGB components
+         * @param alpha         Blend equation for the alpha component
          *
          * See @ref setBlendEquation(BlendEquation) for more information.
          * @see @ref Feature::Blending, @ref setBlendFunction(),
          *      @ref setBlendColor(), @fn_gl_keyword{BlendEquationSeparate}
          */
         static void setBlendEquation(BlendEquation rgb, BlendEquation alpha);
+
+        #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
+        /**
+         * @brief Set blend equation for given draw buffer
+         * @param drawBuffer    Draw buffer index
+         * @param rgb           Blend equation for RGB components
+         * @param alpha         Blend equation for the alpha component
+         * @m_since_latest
+         *
+         * @see @ref GL-Framebuffer-usage-multiple-outputs,
+         *      @fn_gl2_keyword{BlendEquationSeparatei,BlendEquationSeparate}
+         * @requires_gl40 Extension @gl_extension{ARB,draw_buffers_blend}
+         * @requires_gles32 Extension @gl_extension{EXT,draw_buffers_indexed}
+         * @requires_webgl_extension WebGL 2.0 and extension
+         *      @webgl_extension{EXT,draw_buffers_indexed}
+         */
+        static void setBlendEquation(UnsignedInt drawBuffer, BlendEquation rgb, BlendEquation alpha);
+        #endif
 
         /**
          * @brief Set blend function
@@ -1232,6 +1441,28 @@ class MAGNUM_GL_EXPORT Renderer {
          */
         static void setBlendFunction(BlendFunction source, BlendFunction destination);
 
+        #if !(defined(MAGNUM_TARGET_WEBGL) && defined(MAGNUM_TARGET_GLES2))
+        /**
+         * @brief Set blend function for given draw buffer
+         * @param drawBuffer    Draw buffer index
+         * @param source        How the source blending factor is computed
+         *      from pixel value
+         * @param destination   How the destination blending factor is
+         *      computed from framebuffer
+         * @m_since_latest
+         *
+         * See @ref setBlendFunction(BlendFunction, BlendFunction) for more
+         * information.
+         * @see @ref GL-Framebuffer-usage-multiple-outputs,
+         *      @fn_gl2_keyword{BlendFunci,BlendFunc}
+         * @requires_gl40 Extension @gl_extension{ARB,draw_buffers_blend}
+         * @requires_gles32 Extension @gl_extension{EXT,draw_buffers_indexed}
+         * @requires_webgl_extension WebGL 2.0 and extension
+         *      @webgl_extension{EXT,draw_buffers_indexed}
+         */
+        static void setBlendFunction(UnsignedInt drawBuffer, BlendFunction source, BlendFunction destination);
+        #endif
+
         /**
          * @brief Set blend function separately for RGB and alpha components
          *
@@ -1241,6 +1472,30 @@ class MAGNUM_GL_EXPORT Renderer {
          *      @ref setBlendColor(), @fn_gl_keyword{BlendFuncSeparate}
          */
         static void setBlendFunction(BlendFunction sourceRgb, BlendFunction destinationRgb, BlendFunction sourceAlpha, BlendFunction destinationAlpha);
+
+        /**
+         * @brief Set blend function separately for RGB and alpha components for given draw buffer
+         * @param drawBuffer        Draw buffer index
+         * @param sourceRgb         How the source blending factor is computed
+         *      from pixel value for RGB components
+         * @param sourceAlpha       How the source blending factor is computed
+         *      from pixel value for the alpha component
+         * @param destinationRgb    How the destination blending factor is
+         *      computed from framebuffer for RGB components
+         * @param destinationAlpha  How the destination blending factor is
+         *      computed from framebuffer for the alpha component
+         * @m_since_latest
+         *
+         * See @ref setBlendFunction(BlendFunction, BlendFunction) for more
+         * information.
+         * @see @ref GL-Framebuffer-usage-multiple-outputs,
+         *      @fn_gl2_keyword{BlendFuncSeparatei,BlendFuncSeparate}
+         * @requires_gl40 Extension @gl_extension{ARB,draw_buffers_blend}
+         * @requires_gles32 Extension @gl_extension{EXT,draw_buffers_indexed}
+         * @requires_webgl_extension WebGL 2.0 and extension
+         *      @webgl_extension{EXT,draw_buffers_indexed}
+         */
+        static void setBlendFunction(UnsignedInt drawBuffer, BlendFunction sourceRgb, BlendFunction destinationRgb, BlendFunction sourceAlpha, BlendFunction destinationAlpha);
 
         /**
          * @brief Set blend color
@@ -1274,7 +1529,11 @@ class MAGNUM_GL_EXPORT Renderer {
         static void blendBarrier() { glBlendBarrierKHR(); }
         #endif
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         #ifndef MAGNUM_TARGET_GLES
         /** @{ @name Logical operation */
@@ -1315,7 +1574,11 @@ class MAGNUM_GL_EXPORT Renderer {
          */
         static void setLogicOperation(LogicOperation operation);
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
         #endif
 
         /** @{ @name Renderer synchronization */
@@ -1465,7 +1728,11 @@ class MAGNUM_GL_EXPORT Renderer {
         }
         #endif
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
         /** @{ @name Renderer management */
 
@@ -1667,7 +1934,11 @@ class MAGNUM_GL_EXPORT Renderer {
         static GraphicsResetStatus graphicsResetStatus();
         #endif
 
-        /*@}*/
+        /* Since 1.8.17, the original short-hand group closing doesn't work
+           anymore. FFS. */
+        /**
+         * @}
+         */
 
     private:
         static void MAGNUM_GL_LOCAL initializeContextBasedFunctionality();

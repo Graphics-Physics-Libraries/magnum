@@ -32,16 +32,16 @@ set_target_properties(MagnumShaders_RCS-dependencies PROPERTIES FOLDER "Magnum/S
 
 set(MagnumShaders_SRCS
     AbstractVector.cpp
-    DistanceFieldVector.cpp
-    MeshVisualizer.cpp
-    Vector.cpp
     VertexColor.cpp
 
     ${MagnumShaders_RCS})
 
 set(MagnumShaders_GracefulAssert_SRCS
+    DistanceFieldVector.cpp
     Flat.cpp
-    Phong.cpp)
+    MeshVisualizer.cpp
+    Phong.cpp
+    Vector.cpp)
 
 set(MagnumShaders_HEADERS
     DistanceFieldVector.h
@@ -63,6 +63,13 @@ set(MagnumShaders_PRIVATE_HEADERS Implementation/CreateCompatibilityShader.h)
 add_library(MagnumShadersObjects OBJECT
     ${MagnumShaders_SRCS}
     ${MagnumShaders_HEADERS})
+if(BUILD_STATIC)
+    # On the static build we're importing the resources manually, so no need to
+    # have the implicit initializers as well.
+    set_property(SOURCE ${MagnumShaders_RCS} APPEND PROPERTY COMPILE_DEFINITIONS
+        "CORRADE_AUTOMATIC_INITIALIZER=CORRADE_NOOP"
+        "CORRADE_AUTOMATIC_FINALIZER=CORRADE_NOOP")
+endif()
 target_include_directories(MagnumShadersObjects PUBLIC
     $<TARGET_PROPERTY:Magnum,INTERFACE_INCLUDE_DIRECTORIES>
     $<TARGET_PROPERTY:MagnumGL,INTERFACE_INCLUDE_DIRECTORIES>)
@@ -112,15 +119,6 @@ if(BUILD_TESTS)
     target_link_libraries(MagnumShadersTestLib PUBLIC
         Magnum
         MagnumGL)
-
-    # On Windows we need to install first and then run the tests to avoid "DLL
-    # not found" hell, thus we need to install this too
-    if(CORRADE_TARGET_WINDOWS AND NOT CMAKE_CROSSCOMPILING AND NOT BUILD_STATIC)
-        install(TARGETS MagnumShadersTestLib
-            RUNTIME DESTINATION ${MAGNUM_BINARY_INSTALL_DIR}
-            LIBRARY DESTINATION ${MAGNUM_LIBRARY_INSTALL_DIR}
-            ARCHIVE DESTINATION ${MAGNUM_LIBRARY_INSTALL_DIR})
-    endif()
 
     add_subdirectory(Test)
 endif()
